@@ -8,3 +8,15 @@ export { evaluateConditions, evaluateRule } from "./conditions";
 export { validateAnswer } from "./validators";
 export { canSendFreeform, WHATSAPP_WINDOW_MS } from "./window";
 export { encodeReplyId, decodeReplyId } from "./reply-id";
+export {
+  infoSheetVariables,
+  formatWeeklyHours,
+  formatTodayHours,
+  formatRound,
+  formatDateFr,
+  formatHour,
+  upcomingRounds,
+  withUpcomingRounds,
+  NO_ROUND_TEXT,
+  type InfoVariables,
+} from "./info-vars";

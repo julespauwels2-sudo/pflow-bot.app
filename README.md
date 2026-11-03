@@ -103,6 +103,18 @@ Toutes les conditions jour/heure utilisent le fuseau du client (`America/Guadelo
 - Raccourcis : Ctrl+Z / Ctrl+Y, Ctrl+C / Ctrl+V (aussi d'un flux à l'autre), Ctrl+D, Ctrl+A,
   Suppr, Maj + glisser pour sélectionner une zone, `{{` ou le bouton `{x}` pour insérer une variable.
 
+## Fiche d'infos et variables (M2)
+
+Variables calculées dans le **fuseau du client**, utilisables dans toutes les bulles (menu `{x}`) :
+`{{horaires}}` (jours identiques regroupés), `{{horaires_du_jour}}`, `{{adresse}}`, `{{modes_service}}`,
+`{{infos_livraison}}` (zones ou prochaines tournées selon le mode), `{{zones_livraison}}`,
+`{{prochaines_livraisons}}`, `{{points_de_vente}}`, `{{modes_paiement}}`, `{{infos_pratiques}}` (tout en un).
+La fiche d'infos affiche un aperçu de leur valeur.
+
+**Livraison sur planning** : liste de tournées (date, horaire facultatif, zone ou entreprises).
+Seules les tournées à venir sont utilisées : une tournée du jour dont l'horaire est passé est exclue,
+et l'IA ne reçoit jamais les tournées passées. Calculs dans `src/engine/info-vars.ts`.
+
 ## Secrets
 
 Jamais de clé dans le code ni dans Git : `.env.local` en local, variables d'environnement

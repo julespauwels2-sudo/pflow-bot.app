@@ -60,13 +60,32 @@ export interface OpeningDay {
   plages: TimeRange[];
 }
 
+/** Tournée de livraison (mode « sur planning ») : date locale du client. */
+export interface DeliveryRound {
+  id: string;
+  /** "YYYY-MM-DD" (jour dans le fuseau du client). */
+  date: string;
+  /** Plage horaire facultative, "HH:MM". */
+  de?: string;
+  a?: string;
+  /** Zone ou entreprises desservies. */
+  lieux: string;
+}
+
 export interface InfoSheet {
   /** Horaires d'ouverture, exprimés dans le fuseau du client. Un jour absent = fermé. */
   horaires: OpeningDay[];
   horairesNote?: string;
   adresse?: string;
   livraison?: boolean;
+  /**
+   * « zones » : zones fixes (texte libre). « planning » : tournées à des dates précises
+   * (ex. livraison en entreprises) ; seules les tournées à venir sont utilisées.
+   */
+  livraisonMode?: "zones" | "planning";
+  tournees?: DeliveryRound[];
   retrait?: boolean;
+  modesPaiement?: string;
   zonesLivraison?: string;
   pointsDeVente?: string;
   resumeCarte?: string;

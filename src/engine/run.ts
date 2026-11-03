@@ -1,4 +1,5 @@
 import { evaluateConditions } from "./conditions";
+import { infoSheetVariables, withUpcomingRounds } from "./info-vars";
 import { fixedDelayMs, smartDelayMs, textOf } from "./delay";
 import { findDefaultFlow, findTrigger, matchFlowByKeyword, normalize } from "./match";
 import { decodeReplyId, encodeReplyId } from "./reply-id";
@@ -289,7 +290,8 @@ class EngineRun {
           maintenantLocal: `${local.date} ${local.hhmm}`,
           lienCommande: this.orderUrl() ?? "",
         },
-        infoSheet,
+        // L'IA ne voit jamais les tournées de livraison passées.
+        infoSheet: withUpcomingRounds(infoSheet, now, client.timezone),
         flows: flows.map((f) => ({ id: f.id, name: f.name, description: f.description })),
         instructions: opts.instructions,
       });
@@ -593,7 +595,9 @@ class EngineRun {
   }
 
   private vars(): Record<string, string> {
+    const { infoSheet, now, client } = this.input;
     return {
+      ...infoSheetVariables(infoSheet, now, client.timezone),
       prenom: firstName(this.contact.profileName),
       nom_resto: this.input.client.nomResto,
       lien_commande: this.orderUrl() ?? "",

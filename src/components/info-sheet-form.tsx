@@ -1,10 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { WEEKDAY_LABELS, type InfoSheet, type IsoWeekday, type TimeRange } from "@/engine";
+import {
+  WEEKDAY_LABELS,
+  infoSheetVariables,
+  upcomingRounds,
+  type DeliveryRound,
+  type InfoSheet,
+  type IsoWeekday,
+  type TimeRange,
+} from "@/engine";
+import { BUILTIN_VARIABLES } from "@/editor/variables";
 import { errorText, getRepositories } from "@/data/browser";
 import { Button, Card, Field, Input, Notice, Textarea } from "./ui";
-import { LocalClock } from "./local-clock";
+import { LocalClock, useCurrentMinute } from "./local-clock";
 
 const DAYS: IsoWeekday[] = [1, 2, 3, 4, 5, 6, 7];
 
@@ -130,9 +139,14 @@ export function InfoSheetForm({ clientId, timezone, initial }: { clientId: strin
               </label>
             </div>
           </fieldset>
-          <Field label="Zones de livraison">
-            <Textarea placeholder="Le Gosier, Pointe-à-Pitre… frais, minimum de commande" {...text("zonesLivraison")} />
+          <Field label="Moyens de paiement">
+            <Input placeholder="Espèces ou carte bancaire au comptoir" {...text("modesPaiement")} />
           </Field>
+          {sheet.livraison && (
+            <div className="sm:col-span-2">
+              <DeliveryEditor sheet={sheet} timezone={timezone} onChange={change} />
+            </div>
+          )}
           <Field label="Points de vente">
             <Textarea placeholder="Restaurant, food truck le samedi au marché…" {...text("pointsDeVente")} />
           </Field>
@@ -144,8 +158,125 @@ export function InfoSheetForm({ clientId, timezone, initial }: { clientId: strin
           </Field>
         </div>
 
+        <VariablesPreview sheet={sheet} timezone={timezone} />
+
         {status && <Notice tone={status.tone}>{status.text}</Notice>}
       </div>
     </Card>
+  );
+}
+
+const newRoundId = () => `t${Math.random().toString(36).slice(2, 8)}`;
+
+/** Livraison : zones fixes, ou tournées à des dates précises (planning). */
+function DeliveryEditor({ sheet, timezone, onChange }: { sheet: InfoSheet; timezone: string; onChange: (s: InfoSheet) => void }) {
+  const minute = useCurrentMinute();
+  const mode = sheet.livraisonMode ?? "zones";
+  const rounds = sheet.tournees ?? [];
+  const upcoming = minute === null ? null : new Set(upcomingRounds(rounds, new Date(minute * 60_000), timezone).map((r) => r.id));
+  const past = upcoming ? rounds.filter((r) => !upcoming.has(r.id)) : [];
+  const setRounds = (tournees: DeliveryRound[]) => onChange({ ...sheet, tournees });
+  const updateRound = (id: string, patch: Partial<DeliveryRound>) => setRounds(rounds.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+
+  return (
+    <fieldset className="rounded-2xl border border-rule p-3">
+      <legend className="px-1 text-sm font-semibold">Livraison</legend>
+      <div className="flex flex-wrap gap-4 text-sm">
+        {(
+          [
+            ["zones", "Zones fixes"],
+            ["planning", "Sur planning (tournées à des dates précises)"],
+          ] as const
+        ).map(([value, label]) => (
+          <label key={value} className="flex items-center gap-2">
+            <input type="radio" name="livraisonMode" className="accent-pink" checked={mode === value} onChange={() => onChange({ ...sheet, livraisonMode: value })} />
+            {label}
+          </label>
+        ))}
+      </div>
+
+      {mode === "zones" ? (
+        <Field label="Zones de livraison" className="mt-3">
+          <Textarea
+            placeholder="Jarry et Dothémare (livraison offerte)…"
+            value={sheet.zonesLivraison ?? ""}
+            onChange={(e) => onChange({ ...sheet, zonesLivraison: e.target.value || undefined })}
+          />
+        </Field>
+      ) : (
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-muted">
+            L&apos;IA ne propose que les tournées à venir de cette liste : jamais une autre date, jamais une tournée passée. Heures facultatives, dans
+            le fuseau du client.
+          </p>
+          {rounds.length === 0 && <p className="text-sm text-muted">Aucune tournée.</p>}
+          <ul className="space-y-2">
+            {rounds.map((r) => {
+              const isPast = upcoming !== null && !upcoming.has(r.id);
+              return (
+                <li key={r.id} className={`flex flex-wrap items-center gap-2 rounded-xl border border-line p-2 ${isPast ? "opacity-50" : ""}`}>
+                  <input type="date" aria-label="Date de la tournée" className="rounded-lg border border-line px-2 py-1 text-sm" value={r.date} onChange={(e) => updateRound(r.id, { date: e.target.value })} />
+                  <input type="time" aria-label="Début" className="rounded-lg border border-line px-2 py-1 text-sm" value={r.de ?? ""} onChange={(e) => updateRound(r.id, { de: e.target.value || undefined })} />
+                  <span className="text-muted">→</span>
+                  <input type="time" aria-label="Fin" className="rounded-lg border border-line px-2 py-1 text-sm" value={r.a ?? ""} onChange={(e) => updateRound(r.id, { a: e.target.value || undefined })} />
+                  <input
+                    aria-label="Zone ou entreprises desservies"
+                    placeholder="Jarry — Orange, EDF…"
+                    className="min-w-40 flex-1 rounded-lg border border-line px-2 py-1 text-sm"
+                    value={r.lieux}
+                    onChange={(e) => updateRound(r.id, { lieux: e.target.value })}
+                  />
+                  {isPast && <span className="text-xs font-semibold text-muted">passée</span>}
+                  <button type="button" aria-label="Supprimer la tournée" className="px-1 text-coral" onClick={() => setRounds(rounds.filter((x) => x.id !== r.id))}>
+                    ✕
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const today = minute === null ? "" : new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date(minute * 60_000));
+                setRounds([...rounds, { id: newRoundId(), date: today, lieux: "" }]);
+              }}
+            >
+              + Ajouter une tournée
+            </Button>
+            {past.length > 0 && (
+              <Button variant="ghost" onClick={() => setRounds(rounds.filter((r) => upcoming?.has(r.id)))}>
+                Retirer les {past.length} tournée{past.length > 1 ? "s" : ""} passée{past.length > 1 ? "s" : ""}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </fieldset>
+  );
+}
+
+const INFO_VARIABLE_LABELS = new Map(BUILTIN_VARIABLES.map((v) => [v.name, v.label]));
+
+/** Ce que donnent les variables {{...}} avec cette fiche, maintenant, au fuseau du client. */
+function VariablesPreview({ sheet, timezone }: { sheet: InfoSheet; timezone: string }) {
+  const minute = useCurrentMinute();
+  if (minute === null) return null;
+  const vars = infoSheetVariables(sheet, new Date(minute * 60_000), timezone);
+  return (
+    <details className="rounded-2xl border border-rule bg-page p-3">
+      <summary className="cursor-pointer text-sm font-semibold">Aperçu des variables utilisables dans les messages</summary>
+      <dl className="mt-3 space-y-3">
+        {Object.entries(vars).map(([name, value]) => (
+          <div key={name}>
+            <dt className="text-xs">
+              <span className="font-mono font-semibold text-pink">{`{{${name}}}`}</span>
+              <span className="text-muted"> · {INFO_VARIABLE_LABELS.get(name)}</span>
+            </dt>
+            <dd className="mt-1 rounded-xl bg-white px-3 py-2 text-sm whitespace-pre-wrap">{value || <span className="text-muted italic">(vide)</span>}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   );
 }

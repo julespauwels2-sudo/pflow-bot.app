@@ -9,7 +9,7 @@ function subscribe(onChange: () => void) {
 }
 
 /** Minute courante (valeur stable entre deux rendus), null côté serveur. */
-function useCurrentMinute(): number | null {
+export function useCurrentMinute(): number | null {
   return useSyncExternalStore(
     subscribe,
     () => Math.floor(Date.now() / 60_000),

@@ -12,13 +12,14 @@ export const DEMO_INFO_SHEET: InfoSheet = {
     { jour: 6, plages: [{ de: "11:30", a: "15:00" }, { de: "18:30", a: "23:00" }] },
     { jour: 7, plages: [{ de: "11:30", a: "15:00" }] },
   ],
-  horairesNote: "Fermé le lundi. Ouvert les jours fériés sauf le 25 décembre.",
+  horairesNote: "Ouvert les jours fériés sauf le 25 décembre.",
   adresse: "Exemple : 12 rue de la Plage, 97190 Le Gosier",
   livraison: true,
   retrait: true,
   zonesLivraison: "Le Gosier, Pointe-à-Pitre, Les Abymes (livraison offerte dès 25 €)",
-  pointsDeVente: "Un seul restaurant",
+  pointsDeVente: "Le restaurant, et notre food truck le samedi au marché du Gosier",
   resumeCarte: "Tacos, burritos, quesadillas, bowls. Menu enfant. Desserts maison.",
+  modesPaiement: "Espèces ou carte bancaire, au comptoir ou à la livraison",
   reglesSpeciales: "L'agneau n'est disponible que le week-end. Pas de réservation par message.",
 };
 
@@ -87,27 +88,64 @@ const recommandation: FlowGraph = {
   edges: [{ id: "e1", source: "t", target: "ia" }],
 };
 
-/** Provisoire : sera remplacé par la trame de Jules (captures) dans le modèle maître. */
+/** Infos pratiques (trame de Jules) : 3 boutons, réponses tirées de la fiche d'infos. */
 const infosPratiques: FlowGraph = {
   nodes: [
-    { id: "t", type: "trigger", position: { x: 0, y: 60 }, data: { keywords: ["horaires", "adresse", "infos"] } },
-    say("m", "ℹ️ Nous sommes ouverts du mardi au dimanche, midi et soir le vendredi et le samedi. 📍 12 rue de la Plage, Le Gosier.", 340, 40),
-  ],
-  edges: [{ id: "e1", source: "t", target: "m" }],
-};
-
-const agneau: FlowGraph = {
-  nodes: [
-    { id: "t", type: "trigger", position: { x: 0, y: 60 }, data: { keywords: ["agneau"] } },
-    { id: "c", type: "condition", position: { x: 340, y: 40 }, data: { rules: [{ kind: "jour", jours: [6, 7] }] } },
-    say("oui", "Oui, l'agneau est disponible aujourd'hui ! 🐑", 700, -40),
-    say("non", "L'agneau n'est disponible que le week-end (samedi et dimanche).", 700, 160),
+    { id: "t", type: "trigger", position: { x: 0, y: 120 }, data: { keywords: ["horaires", "adresse", "infos", "livraison", "paiement"] } },
+    {
+      id: "m",
+      type: "message",
+      position: { x: 340, y: 80 },
+      data: {
+        bubbles: [
+          {
+            id: "b1",
+            text: "ℹ️ *Infos pratiques*\nQue souhaitez-vous savoir ?",
+            buttons: [
+              { id: "horaires", kind: "reply", title: "🕒 Horaires" },
+              { id: "livraison", kind: "reply", title: "🛵 Livraison" },
+              { id: "paiement", kind: "reply", title: "💳 Paiement" },
+            ],
+          },
+        ],
+      },
+    },
+    say("h", "🕒 *Nos horaires*\n{{horaires}}", 720, -60),
+    say("l", "🛵 *Livraison*\n{{infos_livraison}}\n\n🏪 *Points de vente*\n{{points_de_vente}}", 720, 120),
+    say("p", "💳 *Paiement*\n{{modes_paiement}}", 720, 320),
+    { id: "g", type: "goto_flow", position: { x: 1100, y: 140 }, data: { flowId: "" } },
   ],
   edges: [
-    { id: "e1", source: "t", target: "c" },
-    { id: "e2", source: "c", sourceHandle: "vrai", target: "oui" },
-    { id: "e3", source: "c", sourceHandle: "faux", target: "non" },
+    { id: "e1", source: "t", target: "m" },
+    { id: "e2", source: "m", sourceHandle: "horaires", target: "h" },
+    { id: "e3", source: "m", sourceHandle: "livraison", target: "l" },
+    { id: "e4", source: "m", sourceHandle: "paiement", target: "p" },
+    { id: "e5", source: "h", target: "g" },
+    { id: "e6", source: "l", target: "g" },
+    { id: "e7", source: "p", target: "g" },
   ],
+};
+
+/** CTA - Commander (trame de Jules). */
+const ctaCommander: FlowGraph = {
+  nodes: [
+    { id: "t", type: "trigger", position: { x: 0, y: 40 }, data: { keywords: [] } },
+    {
+      id: "m",
+      type: "message",
+      position: { x: 340, y: 20 },
+      data: {
+        bubbles: [
+          {
+            id: "b1",
+            text: "Ça vous tente ? 😋 Vous pouvez passer votre commande directement ici 👇",
+            buttons: [{ id: "cmd", kind: "link", title: "😋 Je commande", orderLink: true }],
+          },
+        ],
+      },
+    },
+  ],
+  edges: [{ id: "e1", source: "t", target: "m" }],
 };
 
 /** Crée le resto d'exemple avec sa fiche d'infos et deux flux publiés. */
@@ -126,17 +164,14 @@ export async function loadDemo(repos: Repositories): Promise<BotClient> {
     const flow = await repos.flows.create({ clientId: client.id, name, description, draft });
     return flow.id;
   };
-  const recoId = await create("IA - Recommandation", "Conseille un plat de la carte", recommandation);
-  const infosId = await create("Infos pratiques", "Horaires, adresse, livraison", infosPratiques);
-  // Les boutons de l'accueil mènent aux deux sous-flux.
-  const withTargets: FlowGraph = {
-    ...accueil,
-    nodes: accueil.nodes.map((n) =>
-      n.id === "g1" ? { ...n, data: { flowId: recoId } } : n.id === "g2" ? { ...n, data: { flowId: infosId } } : n,
-    ) as FlowGraph["nodes"],
-  };
-  const accueilId = await create("Accueil", "Accueil, lien de commande et aide", withTargets);
-  const agneauId = await create("Agneau du week-end", "Disponibilité de l'agneau (samedi et dimanche)", agneau);
-  for (const id of [recoId, infosId, accueilId, agneauId]) await repos.flows.publish(id);
+  const recoId = await create("IA - Recommandation", "Conseille un produit de la carte", recommandation);
+  const ctaId = await create("CTA - Commander", "Invite à commander (bouton Je commande)", ctaCommander);
+  const withGoto = (graph: FlowGraph, targets: Record<string, string>): FlowGraph => ({
+    ...graph,
+    nodes: graph.nodes.map((n) => (n.id in targets ? { ...n, data: { flowId: targets[n.id] } } : n)) as FlowGraph["nodes"],
+  });
+  const infosId = await create("Infos pratiques", "Horaires, livraison, points de vente, paiement", withGoto(infosPratiques, { g: ctaId }));
+  const accueilId = await create("Accueil", "Accueil, lien de commande et aide", withGoto(accueil, { g1: recoId, g2: infosId }));
+  for (const id of [recoId, ctaId, infosId, accueilId]) await repos.flows.publish(id);
   return client;
 }

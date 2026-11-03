@@ -9,7 +9,7 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 | A1–A4 | Socle, moteur, stockage local, éditeur tableau blanc | Fait |
 | Compléments A4 | Flux par défaut, bloc Délai, mode de déclenchement par client | Fait |
 | M1 | Bloc Message façon UChat (bulles, bouton de réponse / bouton lien) | Fait |
-| M2 | Variables de la fiche d'infos (horaires, livraison, planning…) | En cours |
+| M2 | Variables de la fiche d'infos (horaires, livraison, planning…) | Fait |
 | M3 | Modèle maître, bots liés, personnaliser / détacher, « Créer le bot depuis le modèle » | À faire |
 | A5 | Simulateur : tester le bot en direct dans un chat | À faire |
 | A6 | Agent IA par client (consigne), base de connaissances, réglages du modèle, journal et coût ; fonctions `lancer_commande`, `proposer_commande`, `parler_equipe` | À faire |

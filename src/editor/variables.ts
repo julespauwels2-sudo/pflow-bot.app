@@ -9,6 +9,17 @@ export const BUILTIN_VARIABLES: VariableInfo[] = [
   { name: "prenom", label: "Prénom du client (profil WhatsApp)" },
   { name: "nom_resto", label: "Nom du resto" },
   { name: "lien_commande", label: "Lien de commande" },
+  // Fiche d'infos (calculées au fuseau du client)
+  { name: "horaires", label: "Horaires de la semaine (jours regroupés)" },
+  { name: "horaires_du_jour", label: "Horaires d'aujourd'hui" },
+  { name: "adresse", label: "Adresse" },
+  { name: "modes_service", label: "Livraison et / ou retrait" },
+  { name: "infos_livraison", label: "Livraison : zones ou prochaines tournées" },
+  { name: "zones_livraison", label: "Zones de livraison (mode zones)" },
+  { name: "prochaines_livraisons", label: "Prochaines tournées (mode planning)" },
+  { name: "points_de_vente", label: "Points de vente" },
+  { name: "modes_paiement", label: "Moyens de paiement" },
+  { name: "infos_pratiques", label: "Tout en un : horaires, adresse, livraison, points de vente, paiement" },
 ];
 
 /** Variables disponibles dans un flux : intégrées + réponses aux questions. */

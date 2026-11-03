@@ -267,9 +267,27 @@ describe("de bout en bout : stockage → moteur", () => {
       infoSheet: await repos.infoSheets.get(client.id),
       contact: { id: "x", pause: null, aiUsage: { day: "", calls: 0 } },
       session: null,
-      message: { kind: "text", text: "Il reste de l'agneau ?" },
+      message: { kind: "text", text: "Vos horaires ?" },
     });
-    expect(result.outgoing).toEqual([{ kind: "text", text: "Oui, l'agneau est disponible aujourd'hui ! 🐑" }]);
+    // « horaires » lance Infos pratiques ; le clic sur « 🕒 Horaires » donne la réponse de la fiche.
+    const buttons = result.outgoing[0];
+    if (buttons.kind !== "buttons") throw new Error("boutons attendus");
+    const r2 = await runEngine({
+      now: new Date("2026-11-07T14:00:00Z"),
+      client: { id: client.id, nomResto: client.nomResto, orderSlug: client.orderSlug, timezone: client.timezone },
+      channel: { id: "c", clientId: client.id, triggerMode: "mots_cles_uniquement", ...DEFAULT_CHANNEL_SETTINGS },
+      flows,
+      infoSheet: await repos.infoSheets.get(client.id),
+      contact: result.contact,
+      session: result.session,
+      message: { kind: "button_reply", id: buttons.buttons[0].id, title: "🕒 Horaires" },
+    });
+    expect(r2.outgoing[0]).toEqual({
+      kind: "text",
+      text: "🕒 *Nos horaires*\nDu mardi au jeudi : 11h30 – 14h30\nVendredi : 11h30 – 14h30 et 18h30 – 23h\nSamedi : 11h30 – 15h et 18h30 – 23h\nDimanche : 11h30 – 15h\nFermé le lundi\nOuvert les jours fériés sauf le 25 décembre.",
+    });
+    // Puis « Aller à un flux » → CTA - Commander avec le bouton natif.
+    expect(r2.outgoing[1]).toMatchObject({ kind: "link", buttonLabel: "😋 Je commande", url: "https://order.pflow.fr/c/resto-demo" });
   });
 
   it("charger la démo deux fois ne crée pas de doublon", async () => {

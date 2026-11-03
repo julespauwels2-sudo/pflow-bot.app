@@ -113,7 +113,20 @@ export const infoSheetSchema = z.object({
   horairesNote: z.string().optional(),
   adresse: z.string().optional(),
   livraison: z.boolean().optional(),
+  livraisonMode: z.enum(["zones", "planning"]).optional(),
+  tournees: z
+    .array(
+      z.object({
+        id,
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date au format AAAA-MM-JJ"),
+        de: hhmm.optional(),
+        a: hhmm.optional(),
+        lieux: z.string(),
+      }),
+    )
+    .optional(),
   retrait: z.boolean().optional(),
+  modesPaiement: z.string().optional(),
   zonesLivraison: z.string().optional(),
   pointsDeVente: z.string().optional(),
   resumeCarte: z.string().optional(),

@@ -247,7 +247,10 @@ describe("copier / coller / dupliquer", () => {
 describe("variables", () => {
   it("liste les variables intégrées et celles des questions", () => {
     const names = flowVariables([n({ id: "q", type: "question", data: { text: "", variable: "couverts", validation: "nombre" } })]).map((v) => v.name);
-    expect(names).toEqual(["prenom", "nom_resto", "lien_commande", "couverts"]);
+    expect(names.slice(0, 3)).toEqual(["prenom", "nom_resto", "lien_commande"]);
+    expect(names).toContain("horaires_du_jour");
+    expect(names).toContain("prochaines_livraisons");
+    expect(names.at(-1)).toBe("couverts");
   });
 
   it("insère une variable au curseur", () => {
