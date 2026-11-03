@@ -7,6 +7,7 @@ import type { InfoSheet } from "@/engine";
 import type {
   BotClient,
   BotFolder,
+  BotTemplate,
   ClientPatch,
   FlowPatch,
   NewClient,
@@ -30,7 +31,8 @@ export interface ClientRepository {
 }
 
 export interface FlowRepository {
-  listByClient(clientId: string): Promise<StoredFlow[]>;
+  /** Flux d'un client ou du modèle maître. */
+  listByOwner(ownerId: string): Promise<StoredFlow[]>;
   get(id: string): Promise<StoredFlow | null>;
   create(input: NewFlow): Promise<StoredFlow>;
   /** Modifie le brouillon (la version publiée n'est pas touchée). */
@@ -38,6 +40,13 @@ export interface FlowRepository {
   /** Copie le brouillon dans la version publiée. */
   publish(id: string): Promise<StoredFlow>;
   delete(id: string): Promise<void>;
+}
+
+export interface TemplateRepository {
+  list(): Promise<BotTemplate[]>;
+  get(id: string): Promise<BotTemplate | null>;
+  create(input: { name: string }): Promise<BotTemplate>;
+  rename(id: string, name: string): Promise<BotTemplate>;
 }
 
 export interface FolderRepository {
@@ -67,6 +76,7 @@ export interface Repositories {
   clients: ClientRepository;
   flows: FlowRepository;
   folders: FolderRepository;
+  templates: TemplateRepository;
   infoSheets: InfoSheetRepository;
   workspace: WorkspaceRepository;
 }

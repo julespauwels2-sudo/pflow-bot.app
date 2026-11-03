@@ -17,7 +17,7 @@ type Message = { tone: "error" | "success"; text: string } | null;
 export default function ClientsPage() {
   const { state, reload } = useLoad(async (repos) => {
     const clients = await repos.clients.list();
-    const counts = await Promise.all(clients.map((c) => repos.flows.listByClient(c.id).then((f) => f.length)));
+    const counts = await Promise.all(clients.map((c) => repos.flows.listByOwner(c.id).then((f) => f.length)));
     return clients.map((client, i) => ({ client, flowCount: counts[i] }));
   }, []);
   const [message, setMessage] = useState<Message>(null);

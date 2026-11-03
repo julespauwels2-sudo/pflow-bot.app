@@ -1,0 +1,93 @@
+"use client";
+
+import { useState } from "react";
+import { AppShell } from "@/components/app-shell";
+import { FlowsCard } from "@/components/flows-card";
+import { Button, Card, Loading, Notice } from "@/components/ui";
+import { errorText, getRepositories, useLoad } from "@/data/browser";
+import { createMasterTemplate } from "@/data/template-seed";
+import { BUILTIN_VARIABLES } from "@/editor/variables";
+
+export default function TemplatePage() {
+  const { state, reload } = useLoad(async (repos) => {
+    const template = (await repos.templates.list())[0] ?? null;
+    if (!template) return null;
+    const [flows, folders] = await Promise.all([repos.flows.listByOwner(template.id), repos.folders.listByOwner(template.id)]);
+    return { template, flows, folders };
+  }, []);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <AppShell>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold">Modèle maître</h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted">
+            Ta trame commune à tous les bots, écrite uniquement avec des variables (nom du resto, lien de commande, horaires…) : rien de propre à
+            un client. Les bots liés au modèle utiliseront ses flux <strong>publiés</strong> (branchement à l&apos;étape M3d).
+          </p>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mt-4">
+          <Notice tone="error" onClose={() => setError(null)}>
+            {error}
+          </Notice>
+        </div>
+      )}
+
+      <div className="mt-6">
+        {state.status === "loading" && <Loading />}
+        {state.status === "error" && <Notice tone="error">{state.error}</Notice>}
+        {state.status === "ready" && !state.data && (
+          <Card title="Pas encore de modèle maître">
+            <p className="text-sm text-muted">
+              Crée-le à partir de ta trame UChat : Accueil, Infos pratiques, CTA - Commander et les fonctions IA, rangés dans « Principales PFlow
+              Order », « Fonctions IA » et « Commande ». Tout est modifiable ensuite.
+            </p>
+            <Button
+              className="mt-4"
+              onClick={async () => {
+                try {
+                  await createMasterTemplate(getRepositories());
+                  reload();
+                } catch (err) {
+                  setError(errorText(err));
+                }
+              }}
+            >
+              Créer le modèle maître à partir de la trame PFlow
+            </Button>
+          </Card>
+        )}
+        {state.status === "ready" && state.data && (
+          <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+            <FlowsCard
+              owner={{ kind: "template", id: state.data.template.id }}
+              flows={state.data.flows}
+              folders={state.data.folders}
+              onChange={reload}
+              description="Chaque flux se publie séparément. Une modification publiée s'appliquera à tous les bots liés."
+            />
+            <div className="space-y-6">
+              <Card title="Agent IA" description="Consigne générale, réglages du modèle et fonctions (chaque fonction = un flux du dossier « Fonctions IA »).">
+                <p className="rounded-xl bg-page p-3 text-sm text-muted">Se configure ici à l&apos;étape A6.</p>
+              </Card>
+              <Card title="Variables disponibles" description="Remplacées par les infos de chaque client au moment de l'envoi.">
+                <ul className="space-y-1.5 text-xs">
+                  {BUILTIN_VARIABLES.map((v) => (
+                    <li key={v.name}>
+                      <span className="font-mono font-semibold text-pink">{`{{${v.name}}}`}</span>
+                      <span className="block text-muted">{v.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
+            </div>
+          </div>
+        )}
+      </div>
+    </AppShell>
+  );
+}

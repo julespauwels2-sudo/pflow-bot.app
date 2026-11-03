@@ -159,9 +159,33 @@ export const folderSchema = z.object({
   order: z.number().int().min(0),
 });
 
-export const storedFlowSchema = z.object({
+/** Anciennes données : `clientId` devient le propriétaire « client ». */
+function migrateFlowOwner(raw: unknown): unknown {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return raw;
+  const flow = raw as Record<string, unknown>;
+  if (flow.ownerId !== undefined || typeof flow.clientId !== "string") return raw;
+  const { clientId, ...rest } = flow;
+  return { ...rest, ownerKind: "client", ownerId: clientId };
+}
+
+export const templateSchema = z.object({
   id,
-  clientId: id,
+  name: z.string().min(1),
+  agent: z
+    .object({
+      consigne: z.string().optional(),
+      model: z.string().optional(),
+      functions: z.array(z.object({ name: z.string(), flowId: z.string(), description: z.string() })).optional(),
+    })
+    .optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const storedFlowObject = z.object({
+  id,
+  ownerKind: z.enum(["client", "template"]),
+  ownerId: id,
   folderId: id.optional(),
   name: z.string().min(1),
   description: z.string().optional(),
@@ -174,11 +198,15 @@ export const storedFlowSchema = z.object({
   updatedAt: timestamp,
 });
 
+export const storedFlowSchema = z.preprocess(migrateFlowOwner, storedFlowObject);
+
 export const workspaceSchema = z.object({
   clients: z.array(clientSchema),
   flows: z.array(storedFlowSchema),
   /** Absent dans les sauvegardes d'avant les dossiers. */
   folders: z.array(folderSchema).default([]),
+  /** Absent dans les sauvegardes d'avant le modèle maître. */
+  templates: z.array(templateSchema).default([]),
   infoSheets: z.record(z.string(), infoSheetSchema),
 });
 

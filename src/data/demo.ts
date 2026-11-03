@@ -163,7 +163,7 @@ export async function loadDemo(repos: Repositories): Promise<BotClient> {
   const principales = await repos.folders.create({ ownerId: client.id, name: "Principales PFlow Order" });
   const fonctionsIa = await repos.folders.create({ ownerId: client.id, name: "Fonctions IA" });
   const create = async (name: string, description: string, draft: FlowGraph, folderId: string) => {
-    const flow = await repos.flows.create({ clientId: client.id, name, description, draft, folderId });
+    const flow = await repos.flows.create({ ownerId: client.id, name, description, draft, folderId });
     return flow.id;
   };
   const recoId = await create("IA - Recommandation", "Conseille un produit de la carte", recommandation, fonctionsIa.id);

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { FlowEditor } from "@/components/editor/flow-editor";
+import { FlowEditor, type EditorOwner } from "@/components/editor/flow-editor";
 import { Loading, Notice } from "@/components/ui";
 import { useLoad } from "@/data/browser";
 import { findTrigger } from "@/engine";
@@ -13,14 +13,21 @@ export default function FlowPage() {
     async (repos) => {
       const flow = await repos.flows.get(id);
       if (!flow) return null;
-      const client = await repos.clients.get(flow.clientId);
-      if (!client) return null;
-      const flows = (await repos.flows.listByClient(client.id)).map((f) => ({
+      let owner: EditorOwner | null = null;
+      if (flow.ownerKind === "template") {
+        const template = await repos.templates.get(flow.ownerId);
+        if (template) owner = { kind: "template", template };
+      } else {
+        const client = await repos.clients.get(flow.ownerId);
+        if (client) owner = { kind: "client", client };
+      }
+      if (!owner) return null;
+      const flows = (await repos.flows.listByOwner(flow.ownerId)).map((f) => ({
         id: f.id,
         name: f.name,
         isDefault: findTrigger({ id: f.id, name: f.name, ...f.draft })?.data.isDefault ?? false,
       }));
-      return { flow, client, flows };
+      return { flow, owner, flows };
     },
     [id],
   );
@@ -40,7 +47,7 @@ export default function FlowPage() {
     );
   }
   // Chargé une seule fois : l'éditeur gère ensuite lui-même l'état et la sauvegarde.
-  return <FlowEditor key={state.data.flow.id} flow={state.data.flow} client={state.data.client} flows={state.data.flows} />;
+  return <FlowEditor key={state.data.flow.id} flow={state.data.flow} owner={state.data.owner} flows={state.data.flows} />;
 }
 
 function Centered({ children }: { children: React.ReactNode }) {

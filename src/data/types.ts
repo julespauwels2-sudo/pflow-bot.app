@@ -27,9 +27,32 @@ export interface FlowGraph {
   edges: FlowEdge[];
 }
 
+/** Propriétaire d'un flux ou d'un dossier : un client, ou le modèle maître. */
+export type OwnerKind = "client" | "template";
+
 /**
- * Dossier de flux (un seul niveau, comme dans UChat). `ownerId` = id du client ;
- * le modèle maître (M3b) aura ses propres dossiers.
+ * Modèle maître : la trame commune à tous les bots, écrite uniquement avec des variables.
+ * Un seul pour l'instant (le format en permet plusieurs).
+ */
+export interface BotTemplate {
+  id: string;
+  name: string;
+  /** Agent IA du modèle (consigne, réglages, fonctions) : configuré à l'étape A6. */
+  agent?: TemplateAgent;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Emplacement réservé (A6) : rien n'est encore utilisé par le moteur. */
+export interface TemplateAgent {
+  consigne?: string;
+  model?: string;
+  functions?: { name: string; flowId: string; description: string }[];
+}
+
+/**
+ * Dossier de flux (un seul niveau, comme dans UChat). `ownerId` = id du client
+ * ou du modèle maître.
  */
 export interface BotFolder {
   id: string;
@@ -41,7 +64,9 @@ export interface BotFolder {
 
 export interface StoredFlow {
   id: string;
-  clientId: string;
+  ownerKind: OwnerKind;
+  /** Id du client ou du modèle maître. */
+  ownerId: string;
   /** Dossier du flux (absent = « Sans dossier »). */
   folderId?: string;
   name: string;
@@ -59,12 +84,20 @@ export interface StoredFlow {
   updatedAt: string;
 }
 
-export type NewFlow = { clientId: string; name: string; description?: string; draft?: FlowGraph; folderId?: string };
+export type NewFlow = {
+  ownerId: string;
+  /** Par défaut : client. */
+  ownerKind?: OwnerKind;
+  name: string;
+  description?: string;
+  draft?: FlowGraph;
+  folderId?: string;
+};
 /** `folderId: null` sort le flux de son dossier. */
 export type FlowPatch = Partial<Pick<StoredFlow, "name" | "description" | "draft">> & { folderId?: string | null };
 
 /** Flux publié, au format attendu par le moteur. */
-export function toEngineFlow(flow: StoredFlow): Flow | null {
+export function toEngineFlow(flow: Pick<StoredFlow, "id" | "published" | "publishedMeta">): Flow | null {
   if (!flow.published || !flow.publishedMeta) return null;
   return {
     id: flow.id,
@@ -101,5 +134,6 @@ export interface WorkspaceData {
   clients: BotClient[];
   flows: StoredFlow[];
   folders: BotFolder[];
+  templates: BotTemplate[];
   infoSheets: Record<string, InfoSheet>;
 }

@@ -23,6 +23,9 @@ export function AppShell({ children, breadcrumb }: { children: ReactNode; breadc
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
           <Logo />
           <nav className="flex items-center gap-1 text-sm font-semibold">
+            <Link href="/modele" className="rounded-full px-3 py-1.5 hover:bg-navy/5">
+              Modèle maître
+            </Link>
             <Link href="/clients" className="rounded-full px-3 py-1.5 hover:bg-navy/5">
               Clients
             </Link>

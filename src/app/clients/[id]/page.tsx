@@ -19,7 +19,7 @@ export default function ClientPage() {
     async (repos) => {
       const client = await repos.clients.get(id);
       if (!client) return null;
-      const [flows, folders, infoSheet] = await Promise.all([repos.flows.listByClient(id), repos.folders.listByOwner(id), repos.infoSheets.get(id)]);
+      const [flows, folders, infoSheet] = await Promise.all([repos.flows.listByOwner(id), repos.folders.listByOwner(id), repos.infoSheets.get(id)]);
       return { client, flows, folders, infoSheet };
     },
     [id],
@@ -44,7 +44,7 @@ export default function ClientPage() {
           <h1 className="text-3xl font-semibold">{state.data.client.nomResto}</h1>
           <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
             <ClientSettings key={state.data.client.updatedAt} client={state.data.client} onSaved={reload} />
-            <FlowsCard clientId={id} flows={state.data.flows} folders={state.data.folders} onChange={reload} />
+            <FlowsCard owner={{ kind: "client", id }} flows={state.data.flows} folders={state.data.folders} onChange={reload} />
           </div>
           <InfoSheetForm key={id} clientId={id} timezone={state.data.client.timezone} initial={state.data.infoSheet} />
           <DangerZone client={state.data.client} />

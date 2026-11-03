@@ -64,13 +64,13 @@ describe("clients", () => {
     const { repos } = setup();
     const a = await repos.clients.create({ nomResto: "A", orderSlug: "a" });
     const b = await repos.clients.create({ nomResto: "B", orderSlug: "b" });
-    await repos.flows.create({ clientId: a.id, name: "Flux A" });
-    await repos.flows.create({ clientId: b.id, name: "Flux B" });
+    await repos.flows.create({ ownerId: a.id, name: "Flux A" });
+    await repos.flows.create({ ownerId: b.id, name: "Flux B" });
     await repos.infoSheets.save(a.id, { horaires: [], adresse: "ici" });
     await repos.clients.delete(a.id);
     expect(await repos.clients.list()).toHaveLength(1);
-    expect(await repos.flows.listByClient(a.id)).toEqual([]);
-    expect(await repos.flows.listByClient(b.id)).toHaveLength(1);
+    expect(await repos.flows.listByOwner(a.id)).toEqual([]);
+    expect(await repos.flows.listByOwner(b.id)).toHaveLength(1);
     expect(await repos.infoSheets.get(a.id)).toEqual({ horaires: [] });
   });
 });
@@ -79,7 +79,7 @@ describe("flux : brouillon et publication", () => {
   it("un nouveau flux contient un déclencheur et n'est pas publié", async () => {
     const { repos } = setup();
     const c = await repos.clients.create({ nomResto: "Mexico", orderSlug: "mexico" });
-    const f = await repos.flows.create({ clientId: c.id, name: "Accueil" });
+    const f = await repos.flows.create({ ownerId: c.id, name: "Accueil" });
     expect(f.draft.nodes.map((n) => n.type)).toEqual(["trigger"]);
     expect(f.published).toBeNull();
     expect(toEngineFlow(f)).toBeNull();
@@ -89,7 +89,7 @@ describe("flux : brouillon et publication", () => {
   it("modifier le brouillon ne touche pas la version publiée", async () => {
     const { repos } = setup();
     const c = await repos.clients.create({ nomResto: "Mexico", orderSlug: "mexico" });
-    const f = await repos.flows.create({ clientId: c.id, name: "Accueil" });
+    const f = await repos.flows.create({ ownerId: c.id, name: "Accueil" });
     const p = await repos.flows.publish(f.id);
     expect(p.version).toBe(1);
     expect(hasUnpublishedChanges(p)).toBe(false);
@@ -111,8 +111,7 @@ describe("flux : brouillon et publication", () => {
     const storage = new FakeStorage();
     const repos = createLocalRepositories(createLocalStorageStore(storage));
     const c = await repos.clients.create({ nomResto: "Mexico", orderSlug: "mexico" });
-    const f = await repos.flows.create({
-      clientId: c.id,
+    const f = await repos.flows.create({ ownerId: c.id,
       name: "Accueil",
       draft: { nodes: [{ id: "t", type: "trigger", position: { x: 0, y: 0 }, data: { keywords: [] } }], edges: [] },
     });
@@ -125,7 +124,7 @@ describe("flux : brouillon et publication", () => {
   it("les données renvoyées sont des copies (pas de modification par accident)", async () => {
     const { repos } = setup();
     const c = await repos.clients.create({ nomResto: "Mexico", orderSlug: "mexico" });
-    const f = await repos.flows.create({ clientId: c.id, name: "Accueil" });
+    const f = await repos.flows.create({ ownerId: c.id, name: "Accueil" });
     f.draft.nodes = [];
     expect((await repos.flows.get(f.id))?.draft.nodes).toHaveLength(1);
   });
@@ -148,7 +147,7 @@ describe("export / import JSON", () => {
   it("un flux exporté se réimporte à l'identique", async () => {
     const { repos } = setup();
     const c = await repos.clients.create({ nomResto: "Mexico", orderSlug: "mexico" });
-    const f = await repos.flows.create({ clientId: c.id, name: "Accueil", description: "Bienvenue" });
+    const f = await repos.flows.create({ ownerId: c.id, name: "Accueil", description: "Bienvenue" });
     const text = JSON.stringify(exportFlow(f));
     const parsed = parseFlowImport(text);
     expect(parsed.ok).toBe(true);
@@ -238,6 +237,7 @@ describe("stockage navigateur", () => {
     const repos = createLocalRepositories(createLocalStorageStore(storage));
     const flow = await repos.flows.get("f");
     expect(flow?.draft.nodes[0].type).toBe("message");
+    expect(flow).toMatchObject({ ownerKind: "client", ownerId: "c" });
     expect((await repos.clients.get("c"))?.triggerMode).toBe("mots_cles_uniquement");
     expect(JSON.parse(storage.getItem(STORAGE_KEY)!).flows[0].draft.nodes[0].type).toBe("message");
     expect(JSON.parse(storage.getItem(`${STORAGE_KEY}:avant-conversion-bulles`)!)).toEqual(old);
@@ -258,7 +258,7 @@ describe("de bout en bout : stockage → moteur", () => {
   it("les flux publiés de la démo tournent dans le moteur", async () => {
     const { repos } = setup();
     const client = await loadDemo(repos);
-    const flows = (await repos.flows.listByClient(client.id)).map(toEngineFlow).filter((f) => f !== null);
+    const flows = (await repos.flows.listByOwner(client.id)).map(toEngineFlow).filter((f) => f !== null);
     const result = await runEngine({
       now: new Date("2026-11-07T14:00:00Z"), // samedi 10h en Guadeloupe
       client: { id: client.id, nomResto: client.nomResto, orderSlug: client.orderSlug, timezone: client.timezone },
@@ -332,7 +332,7 @@ describe("dossiers", () => {
   it("range un flux, le sort du dossier, et supprimer un dossier ne supprime jamais ses flux", async () => {
     const { repos, client } = await withClient();
     const folder = await repos.folders.create({ ownerId: client.id, name: "Commande" });
-    const f = await repos.flows.create({ clientId: client.id, name: "Statut - Prête", folderId: folder.id });
+    const f = await repos.flows.create({ ownerId: client.id, name: "Statut - Prête", folderId: folder.id });
     expect(f.folderId).toBe(folder.id);
     expect((await repos.flows.update(f.id, { folderId: null })).folderId).toBeUndefined();
     await repos.flows.update(f.id, { folderId: folder.id });
@@ -347,7 +347,7 @@ describe("dossiers", () => {
     const { repos, client } = await withClient();
     const other = await repos.clients.create({ nomResto: "Autre", orderSlug: "autre" });
     const folder = await repos.folders.create({ ownerId: other.id, name: "Ailleurs" });
-    const f = await repos.flows.create({ clientId: client.id, name: "Accueil" });
+    const f = await repos.flows.create({ ownerId: client.id, name: "Accueil" });
     await expect(repos.flows.update(f.id, { folderId: folder.id })).rejects.toThrow("autre client");
   });
 

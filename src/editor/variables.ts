@@ -20,6 +20,7 @@ export const BUILTIN_VARIABLES: VariableInfo[] = [
   { name: "points_de_vente", label: "Points de vente" },
   { name: "modes_paiement", label: "Moyens de paiement" },
   { name: "infos_pratiques", label: "Tout en un : horaires, adresse, livraison, points de vente, paiement" },
+  { name: "ia_reponse", label: "Réponse de l'IA (fonction proposer_commande, étape A6)" },
 ];
 
 /** Variables disponibles dans un flux : intégrées + réponses aux questions. */

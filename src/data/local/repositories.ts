@@ -1,7 +1,16 @@
 import { DEFAULT_TIMEZONE, isValidTimezone, type InfoSheet } from "@/engine";
 import { DataError, type Repositories } from "../repositories";
 import { infoSheetSchema, slugSchema } from "../schemas";
-import { EMPTY_INFO_SHEET, type BotClient, type BotFolder, type FlowGraph, type StoredFlow, type WorkspaceData } from "../types";
+import {
+  EMPTY_INFO_SHEET,
+  type BotClient,
+  type BotFolder,
+  type BotTemplate,
+  type FlowGraph,
+  type OwnerKind,
+  type StoredFlow,
+  type WorkspaceData,
+} from "../types";
 import { workspaceSchema } from "../schemas";
 import type { JsonStore } from "./store";
 
@@ -75,9 +84,24 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
       .forEach((f, i) => (f.order = i));
   }
 
-  function checkFolderOwner(data: WorkspaceData, folderId: string, clientId: string) {
-    if (findFolder(data, folderId).ownerId !== clientId) throw new DataError("Ce dossier appartient à un autre client");
+  function checkFolderOwner(data: WorkspaceData, folderId: string, ownerId: string) {
+    if (findFolder(data, folderId).ownerId !== ownerId) throw new DataError("Ce dossier appartient à un autre client ou au modèle");
   }
+
+  function findTemplate(data: WorkspaceData, id: string): BotTemplate {
+    const template = data.templates.find((t) => t.id === id);
+    if (!template) throw new DataError("Modèle introuvable");
+    return template;
+  }
+
+  /** Vérifie que le propriétaire (client ou modèle) existe. */
+  function checkOwner(data: WorkspaceData, kind: OwnerKind, ownerId: string) {
+    if (kind === "template") findTemplate(data, ownerId);
+    else findClient(data, ownerId);
+  }
+
+  const ownerKindOf = (data: WorkspaceData, ownerId: string): OwnerKind =>
+    data.templates.some((t) => t.id === ownerId) ? "template" : "client";
 
   function ensureUniqueSlug(data: WorkspaceData, slug: string, exceptId?: string) {
     if (data.clients.some((c) => c.orderSlug === slug && c.id !== exceptId)) {
@@ -139,7 +163,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
       async delete(id) {
         mutate((data) => {
           data.clients = data.clients.filter((c) => c.id !== id);
-          data.flows = data.flows.filter((f) => f.clientId !== id);
+          data.flows = data.flows.filter((f) => f.ownerId !== id);
           data.folders = data.folders.filter((f) => f.ownerId !== id);
           delete data.infoSheets[id];
         });
@@ -147,10 +171,10 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
     },
 
     flows: {
-      async listByClient(clientId) {
+      async listByOwner(ownerId) {
         return store
           .read()
-          .flows.filter((f) => f.clientId === clientId)
+          .flows.filter((f) => f.ownerId === ownerId)
           .sort((a, b) => a.name.localeCompare(b.name, "fr"));
       },
 
@@ -160,13 +184,15 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
 
       async create(input) {
         return mutate((data) => {
-          findClient(data, input.clientId);
+          const ownerKind = input.ownerKind ?? "client";
+          checkOwner(data, ownerKind, input.ownerId);
           const name = input.name.trim();
           if (!name) throw new DataError("Nom du flux obligatoire");
-          if (input.folderId) checkFolderOwner(data, input.folderId, input.clientId);
+          if (input.folderId) checkFolderOwner(data, input.folderId, input.ownerId);
           const flow: StoredFlow = {
             id: newId(),
-            clientId: input.clientId,
+            ownerKind,
+            ownerId: input.ownerId,
             ...(input.folderId ? { folderId: input.folderId } : {}),
             name,
             description: input.description?.trim() || undefined,
@@ -194,7 +220,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
           if (patch.draft !== undefined) flow.draft = structuredClone(patch.draft);
           if (patch.folderId === null) delete flow.folderId;
           else if (patch.folderId !== undefined) {
-            checkFolderOwner(data, patch.folderId, flow.clientId);
+            checkFolderOwner(data, patch.folderId, flow.ownerId);
             flow.folderId = patch.folderId;
           }
           flow.updatedAt = now();
@@ -231,7 +257,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
 
       async create(input) {
         return mutate((data) => {
-          findClient(data, input.ownerId);
+          checkOwner(data, ownerKindOf(data, input.ownerId), input.ownerId);
           const name = checkFolderName(data, input.ownerId, input.name);
           const order = data.folders.filter((f) => f.ownerId === input.ownerId).length;
           const folder: BotFolder = { id: newId(), ownerId: input.ownerId, name, order };
@@ -265,6 +291,36 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
           for (const flow of data.flows) if (flow.folderId === id) delete flow.folderId;
           data.folders = data.folders.filter((f) => f.id !== id);
           renumber(data, folder.ownerId);
+        });
+      },
+    },
+
+    templates: {
+      async list() {
+        return store.read().templates;
+      },
+
+      async get(id) {
+        return store.read().templates.find((t) => t.id === id) ?? null;
+      },
+
+      async create(input) {
+        return mutate((data) => {
+          const name = input.name.trim();
+          if (!name) throw new DataError("Nom du modèle obligatoire");
+          const template: BotTemplate = { id: newId(), name, createdAt: now(), updatedAt: now() };
+          data.templates.push(template);
+          return template;
+        });
+      },
+
+      async rename(id, name) {
+        return mutate((data) => {
+          const template = findTemplate(data, id);
+          if (!name.trim()) throw new DataError("Nom du modèle obligatoire");
+          template.name = name.trim();
+          template.updatedAt = now();
+          return template;
         });
       },
     },

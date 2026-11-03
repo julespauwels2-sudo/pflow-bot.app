@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { errorText, getRepositories } from "@/data/browser";
 import { exportFileName, exportFlow, parseFlowImport } from "@/data/transfer";
-import { hasUnpublishedChanges, type BotFolder, type StoredFlow } from "@/data/types";
+import { hasUnpublishedChanges, type BotFolder, type OwnerKind, type StoredFlow } from "@/data/types";
 import { findTrigger } from "@/engine";
 import { downloadJson } from "@/lib/files";
 import { Badge, Button, ButtonLink, Card, FileButton, Input, Notice, Select } from "./ui";
@@ -18,14 +18,16 @@ function flowStatus(flow: StoredFlow) {
   return <Badge tone="success">Publié v{flow.version}</Badge>;
 }
 
-/** Liste des flux d'un client, rangés par dossiers (un seul niveau, comme dans UChat). */
+/** Liste des flux d'un client ou du modèle maître, rangés par dossiers (un seul niveau, comme dans UChat). */
 export function FlowsCard({
-  clientId,
+  owner,
   flows,
   folders,
   onChange,
+  description = "Un flux démarre par un déclencheur. Seule la version publiée est utilisée par le bot.",
 }: {
-  clientId: string;
+  owner: { kind: OwnerKind; id: string };
+  description?: string;
   flows: StoredFlow[];
   folders: BotFolder[];
   onChange: () => void;
@@ -50,7 +52,7 @@ export function FlowsCard({
   async function createFlow(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const flow = await repos().flows.create({ clientId, name, folderId: newFolderId || undefined });
+      const flow = await repos().flows.create({ ownerKind: owner.kind, ownerId: owner.id, name, folderId: newFolderId || undefined });
       router.push(`/flows/${flow.id}`);
     } catch (error) {
       setMessage({ tone: "error", text: errorText(error) });
@@ -65,7 +67,8 @@ export function FlowsCard({
     }
     try {
       const flow = await repos().flows.create({
-        clientId,
+        ownerKind: owner.kind,
+        ownerId: owner.id,
         name: parsed.value.name,
         description: parsed.value.description,
         draft: parsed.value.graph,
@@ -87,14 +90,14 @@ export function FlowsCard({
     <Card
       className="min-w-0"
       title="Flux"
-      description="Un flux démarre par un déclencheur. Seule la version publiée est utilisée par le bot."
+      description={description}
       actions={
         <FileButton accept="application/json,.json" onFile={importFile}>
           Importer un flux
         </FileButton>
       }
     >
-      {flows.length === 0 && folders.length === 0 && <p className="text-sm text-muted">Aucun flux pour ce client.</p>}
+      {flows.length === 0 && folders.length === 0 && <p className="text-sm text-muted">Aucun flux pour l&apos;instant.</p>}
 
       <div className="space-y-3">
         {sections.map(({ folder, flows: inFolder }, index) =>
@@ -117,7 +120,7 @@ export function FlowsCard({
         onSubmit={(e) => {
           e.preventDefault();
           const clean = folderName;
-          run(() => repos().folders.create({ ownerId: clientId, name: clean }), `Dossier « ${clean.trim()} » créé.`).then(() => setFolderName(""));
+          run(() => repos().folders.create({ ownerId: owner.id, name: clean }), `Dossier « ${clean.trim()} » créé.`).then(() => setFolderName(""));
         }}
       >
         <Input aria-label="Nom du nouveau dossier" value={folderName} placeholder="Nouveau dossier (ex. Fonctions IA)" onChange={(e) => setFolderName(e.target.value)} />

@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { DEFAULT_ORDER_BASE_URL, type FlowNode, type NodeType } from "@/engine";
 import { getRepositories, errorText } from "@/data/browser";
 import { exportFileName, exportFlow } from "@/data/transfer";
-import { hasUnpublishedChanges, stableStringify, type BotClient, type FlowGraph, type StoredFlow } from "@/data/types";
+import { hasUnpublishedChanges, stableStringify, type BotClient, type BotTemplate, type FlowGraph, type StoredFlow } from "@/data/types";
 import { BLOCKS, PALETTE, createNode } from "@/editor/catalog";
 import { CLIPBOARD_KEY, parseClipboard } from "@/editor/clipboard";
 import { issuesByNode, lintFlow, type Issue } from "@/editor/lint";
@@ -43,8 +43,8 @@ const AUTOSAVE_MS = 600;
 
 interface Props {
   flow: StoredFlow;
-  client: BotClient;
-  /** Tous les flux du client (id, nom, flux par défaut ou non). */
+  owner: EditorOwner;
+  /** Tous les flux du même propriétaire (id, nom, flux par défaut ou non). */
   flows: { id: string; name: string; isDefault?: boolean }[];
 }
 
@@ -74,7 +74,37 @@ const isTyping = (target: EventTarget | null) =>
 
 const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
-function EditorInner({ flow: initialFlow, client, flows }: Props) {
+/** Propriétaire du flux édité : un client, ou le modèle maître. */
+export type EditorOwner = { kind: "client"; client: BotClient } | { kind: "template"; template: BotTemplate };
+
+/**
+ * Ce qui change selon le propriétaire. Le modèle maître est vérifié de façon générique :
+ * ce qui dépend d'un client (slug, mode de déclenchement) est vérifié client par client (M3d).
+ */
+function ownerSettings(owner: EditorOwner) {
+  if (owner.kind === "client") {
+    const c = owner.client;
+    return {
+      backHref: `/clients/${c.id}`,
+      backLabel: c.nomResto,
+      orderUrl: `${DEFAULT_ORDER_BASE_URL}${c.orderSlug}`,
+      orderSlug: c.orderSlug,
+      triggerMode: c.triggerMode,
+      badge: null as string | null,
+    };
+  }
+  return {
+    backHref: "/modele",
+    backLabel: owner.template.name,
+    orderUrl: `${DEFAULT_ORDER_BASE_URL}<slug du client>`,
+    orderSlug: "slug-du-client",
+    triggerMode: "toujours" as const,
+    badge: "Flux du modèle",
+  };
+}
+
+function EditorInner({ flow: initialFlow, owner, flows }: Props) {
+  const settings = ownerSettings(owner);
   const [state, dispatch] = useReducer(editorReducer, initialFlow.draft, initEditor);
   const [flow, setFlow] = useState(initialFlow);
   const [name, setName] = useState(initialFlow.name);
@@ -88,8 +118,9 @@ function EditorInner({ flow: initialFlow, client, flows }: Props) {
 
   const graph = state.history.present;
   const graphJson = useMemo(() => stableStringify(graph), [graph]);
-  const issues = useMemo(() => lintFlow(graph, { flowId: flow.id, flows, orderSlug: client.orderSlug, triggerMode: client.triggerMode }),
-    [graph, flow.id, flows, client.orderSlug, client.triggerMode],
+  const { orderSlug, triggerMode, orderUrl } = settings;
+  const issues = useMemo(() => lintFlow(graph, { flowId: flow.id, flows, orderSlug, triggerMode }),
+    [graph, flow.id, flows, orderSlug, triggerMode],
   );
   const byNode = useMemo(() => issuesByNode(issues), [issues]);
   const errorCount = issues.filter((i) => i.level === "error").length;
@@ -257,11 +288,11 @@ function EditorInner({ flow: initialFlow, client, flows }: Props) {
       variables: flowVariables(graph.nodes),
       flows,
       flowId: flow.id,
-      orderUrl: `${DEFAULT_ORDER_BASE_URL}${client.orderSlug}`,
+      orderUrl,
       updateData: (id, data, key) => dispatch({ type: "updateData", id, data, key, now: Date.now() }),
       deleteEdge: (id) => dispatch({ type: "deleteEdge", id, now: Date.now() }),
     }),
-    [byNode, graph.nodes, flows, flow.id, client.orderSlug],
+    [byNode, graph.nodes, flows, flow.id, orderUrl],
   );
 
   const edges = useMemo(
@@ -277,9 +308,10 @@ function EditorInner({ flow: initialFlow, client, flows }: Props) {
       <div className="flex min-h-dvh flex-col lg:h-dvh">
         {/* Barre du haut */}
         <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-rule bg-white px-3 py-2 sm:px-4">
-          <Link href={`/clients/${client.id}`} className="shrink-0 text-sm font-semibold text-muted hover:text-navy">
-            ← {client.nomResto}
+          <Link href={settings.backHref} className="shrink-0 text-sm font-semibold text-muted hover:text-navy">
+            ← {settings.backLabel}
           </Link>
+          {settings.badge && <span className="rounded-full bg-navy px-2.5 py-0.5 text-xs font-semibold text-white">{settings.badge}</span>}
           <input
             aria-label="Nom du flux"
             value={name}

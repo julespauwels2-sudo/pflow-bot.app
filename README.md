@@ -103,6 +103,15 @@ Toutes les conditions jour/heure utilisent le fuseau du client (`America/Guadelo
 - Raccourcis : Ctrl+Z / Ctrl+Y, Ctrl+C / Ctrl+V (aussi d'un flux à l'autre), Ctrl+D, Ctrl+A,
   Suppr, Maj + glisser pour sélectionner une zone, `{{` ou le bouton `{x}` pour insérer une variable.
 
+## Modèle maître (M3b)
+
+Page « Modèle maître » : ta trame commune à tous les bots, écrite uniquement avec des variables,
+rangée dans « Principales PFlow Order », « Fonctions IA » et « Commande ». Créée en un clic à partir
+de la trame PFlow (`src/data/template-seed.ts`, d'après `docs/reference/template-uchat.md`), puis
+modifiable dans le même éditeur. Chaque flux se publie séparément. La vérification du modèle est
+générique ; ce qui dépend d'un client (slug, mode de déclenchement, fiche incomplète) sera vérifié
+client par client (M3d). Un flux appartient soit à un client, soit au modèle (`ownerKind`).
+
 ## Dossiers (M3a)
 
 Les flux se rangent dans des dossiers (un seul niveau, comme dans UChat), par client : créer,
