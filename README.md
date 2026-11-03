@@ -14,6 +14,10 @@ npm run dev          # http://localhost:3000
 Sans `BASIC_AUTH_PASSWORD`, l'accès est libre en local. En production, l'app refuse
 tout (503) tant que le mot de passe n'est pas défini.
 
+Connexion : si `BASIC_AUTH_USER` n'est pas défini, **n'importe quel nom d'utilisateur** est
+accepté (seul le mot de passe compte). S'il est défini, le nom doit correspondre.
+Après avoir modifié une variable d'environnement sur Vercel, il faut **redéployer**.
+
 ## Installation et Vercel
 
 - Node 22 (`engines.node` = `22.x`, respecté par Vercel). npm 10 ou 11.
