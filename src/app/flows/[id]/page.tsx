@@ -26,6 +26,7 @@ export default function FlowPage() {
         id: f.id,
         name: f.name,
         isDefault: findTrigger({ id: f.id, name: f.name, ...f.draft })?.data.isDefault ?? false,
+        event: findTrigger({ id: f.id, name: f.name, ...f.draft })?.data.event,
       }));
       return { flow, owner, flows };
     },

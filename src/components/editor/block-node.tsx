@@ -3,7 +3,7 @@
 import { Handle, Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react";
 import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import type { FlowNode, MessageBubble } from "@/engine";
-import { TEXTS, smartDelayMs } from "@/engine";
+import { ORDER_EVENTS, TEXTS, smartDelayMs } from "@/engine";
 import { addBubble, addLinkButton, addReplyButton, canAddBubble, canAddLink, canAddReply } from "@/editor/bubbles";
 import { BLOCKS, hasInput, nodeOutputs } from "@/editor/catalog";
 import { describeRule } from "@/editor/describe";
@@ -158,6 +158,17 @@ function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
   const { flows } = useEditor();
   switch (node.type) {
     case "trigger":
+      if (node.data.event) {
+        const info = ORDER_EVENTS[node.data.event];
+        return (
+          <div className="space-y-1">
+            <span className="inline-block rounded-full bg-navy px-2 py-0.5 text-[11px] font-semibold text-white">
+              {info.icon} Événement : {info.label}
+            </span>
+            <p className="text-[11px] text-muted">Envoyé par PFlow Order, seulement si le client a écrit au bot depuis moins de 24 h.</p>
+          </div>
+        );
+      }
       if (node.data.isDefault) {
         return (
           <div className="space-y-1">

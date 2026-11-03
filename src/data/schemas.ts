@@ -4,6 +4,7 @@
  */
 import { z } from "zod";
 import { migrateRawGraph, migrateRawNode } from "./migrate";
+import { ORDER_EVENT_TYPES, type OrderEvent } from "@/engine/events";
 
 const id = z.string().min(1).max(200);
 const hhmm = z.string().regex(/^([01]?\d|2[0-4]):[0-5]\d$/, "Heure au format HH:MM");
@@ -33,6 +34,7 @@ export const flowNodeSchema = z.discriminatedUnion("type", [
       keywords: z.array(z.string()),
       matchMode: z.enum(["contient", "exact"]).optional(),
       isDefault: z.boolean().optional(),
+      event: z.enum(ORDER_EVENT_TYPES as [OrderEvent, ...OrderEvent[]]).optional(),
     }),
   }),
   z.object({

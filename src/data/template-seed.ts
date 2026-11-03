@@ -2,7 +2,7 @@
  * Contenu de départ du modèle maître : la trame UChat de Jules (docs/reference/template-uchat.md),
  * écrite uniquement avec des variables — rien de propre à un client.
  */
-import type { BubbleButton, FlowNode } from "@/engine";
+import type { BubbleButton, FlowNode, OrderEvent } from "@/engine";
 import type { Repositories } from "./repositories";
 import type { BotTemplate, FlowGraph } from "./types";
 
@@ -29,14 +29,13 @@ const trigger = (keywords: string[], extra: { isDefault?: boolean } = {}): FlowN
   data: { keywords, ...extra },
 });
 const goto = (id: string, x: number, y: number): FlowNode => ({ id, type: "goto_flow", position: at(x, y), data: { flowId: "" } });
-
-/** Remplace les cibles des blocs « Aller à un flux » une fois les flux créés. */
-function withTargets(graph: FlowGraph, targets: Record<string, string>): FlowGraph {
-  return {
-    ...graph,
-    nodes: graph.nodes.map((n) => (n.type === "goto_flow" && targets[n.id] ? { ...n, data: { flowId: targets[n.id] } } : n)),
-  };
-}
+const eventTrigger = (event: OrderEvent): FlowNode => ({ id: "t", type: "trigger", position: at(0, 80), data: { keywords: [], event } });
+const ifVariable = (id: string, x: number, y: number, variable: string, value: string): FlowNode => ({
+  id,
+  type: "condition",
+  position: at(x, y),
+  data: { rules: [{ kind: "variable", variable, operator: "egal", value }], match: "toutes" },
+});
 
 // --- Principales PFlow Order ---------------------------------------------------
 
@@ -162,27 +161,175 @@ const recommandation: FlowGraph = {
   edges: [{ id: "e1", source: "t", target: "ia" }],
 };
 
-/** Crée le modèle maître avec sa trame, ses dossiers, et publie tous ses flux. */
+// --- Commande (événements PFlow Order ; branchement à l'étape C) ---------------
+
+const recap = "🧾 *Commande #{{commande_numero}}* — {{commande_mode}}\n{{commande_recap}}\n\n💰 *Total : {{commande_total}}*";
+
+const paiementValide: FlowGraph = {
+  nodes: [
+    eventTrigger("commande_validee"),
+    ifVariable("c_paiement", 340, 60, "paiement_mode", "en_ligne"),
+    message("paye", 700, -80, [
+      { text: `✅ *Paiement validé !*\nMerci {{client_nom}} 🙏 Votre paiement est bien confirmé.\n\n${recap}\n\nOn vous prévient ici dès que votre commande avance 😊` },
+    ]),
+    message("enregistre", 700, 200, [
+      {
+        text: `✅ *Commande enregistrée !*\nMerci {{client_nom}} 🙏 Nous avons bien reçu votre commande.\n\n${recap}\n💳 Paiement : {{modes_paiement}}\n\nOn vous prévient ici dès que votre commande avance 😊`,
+      },
+    ]),
+    // Si la commande a déjà avancé au moment de l'envoi, on enchaîne sur le bon statut.
+    ifVariable("c_prep", 1080, 60, "commande_statut", "en_preparation"),
+    goto("g_prep", 1440, -40),
+    ifVariable("c_prete", 1440, 160, "commande_statut", "prete"),
+    goto("g_prete", 1800, 120),
+    { id: "fin", type: "end", position: at(1800, 320), data: {} },
+  ],
+  edges: [
+    { id: "e1", source: "t", target: "c_paiement" },
+    { id: "e2", source: "c_paiement", sourceHandle: "vrai", target: "paye" },
+    { id: "e3", source: "c_paiement", sourceHandle: "faux", target: "enregistre" },
+    { id: "e4", source: "paye", target: "c_prep" },
+    { id: "e5", source: "enregistre", target: "c_prep" },
+    { id: "e6", source: "c_prep", sourceHandle: "vrai", target: "g_prep" },
+    { id: "e7", source: "c_prep", sourceHandle: "faux", target: "c_prete" },
+    { id: "e8", source: "c_prete", sourceHandle: "vrai", target: "g_prete" },
+    { id: "e9", source: "c_prete", sourceHandle: "faux", target: "fin" },
+  ],
+};
+
+const enPreparation: FlowGraph = {
+  nodes: [
+    eventTrigger("commande_en_preparation"),
+    message("m", 340, 60, [
+      {
+        text: "👨‍🍳 *Votre commande est en préparation*\n\nLa cuisine vient de commencer la préparation de votre commande #{{commande_numero}} 🔥\n\nOn vous prévient ici dès qu'elle est prête.",
+      },
+    ]),
+  ],
+  edges: [{ id: "e1", source: "t", target: "m" }],
+};
+
+const prete: FlowGraph = {
+  nodes: [
+    eventTrigger("commande_prete"),
+    ifVariable("c_mode", 340, 60, "commande_mode", "livraison"),
+    message("livraison", 700, -40, [
+      { text: "✅ *Votre commande est prête !*\n\nBonne nouvelle {{client_nom}} 🎉 Votre commande #{{commande_numero}} est prête et part en livraison 🛵" },
+    ]),
+    message("retrait", 700, 180, [
+      { text: "✅ *Votre commande est prête !*\n\nBonne nouvelle {{client_nom}} 🎉 Votre commande #{{commande_numero}} est prête.\n\nVous pouvez venir la récupérer 😊" },
+    ]),
+  ],
+  edges: [
+    { id: "e1", source: "t", target: "c_mode" },
+    { id: "e2", source: "c_mode", sourceHandle: "vrai", target: "livraison" },
+    { id: "e3", source: "c_mode", sourceHandle: "faux", target: "retrait" },
+  ],
+};
+
+/** Deux bulles : WhatsApp ne mélange pas bouton lien et bouton de réponse dans un même message. */
+const panierAbandonne: FlowGraph = {
+  nodes: [
+    eventTrigger("panier_abandonne"),
+    message("m", 340, 40, [
+      {
+        text: "🛒 *Votre panier vous attend…*\n\nVous avez commencé votre commande mais vous ne l'avez pas encore terminée 😊\n\n{{panier_recap}}\n💰 *Total : {{panier_total}}*\n\nVous pouvez reprendre exactement là où vous étiez 👇",
+        buttons: [{ id: "reprendre", kind: "link", title: "🛒 Reprendre", url: "{{lien_panier}}" }],
+      },
+      { text: "Pas envie ?", buttons: [reply("abandon", "❌ Laisser tomber")] },
+    ]),
+    // Étape C : marquer aussi le panier comme abandonné dans PFlow Order.
+    message("ok", 740, 120, [{ text: "Pas de souci 😊 À bientôt chez {{nom_resto}} !" }]),
+  ],
+  edges: [
+    { id: "e1", source: "t", target: "m" },
+    { id: "e2", source: "m", sourceHandle: "abandon", target: "ok" },
+  ],
+};
+
+// --- Liste des flux de la trame ------------------------------------------------
+
+type FolderName = (typeof TEMPLATE_FOLDERS)[number];
+
+interface SeedFlow {
+  name: string;
+  description: string;
+  folder: FolderName;
+  graph: FlowGraph;
+  /** Cibles des blocs « Aller à un flux » : id du bloc → nom du flux visé. */
+  gotos?: Record<string, string>;
+}
+
+export const SEED_FLOWS: SeedFlow[] = [
+  { name: "Accueil", description: "Accueil, lien de commande et aide", folder: "Principales PFlow Order", graph: accueil, gotos: { g_reco: "IA - Recommandation", g_infos: "Infos pratiques" } },
+  { name: "Infos pratiques", description: "Horaires, livraison, points de vente, paiement", folder: "Principales PFlow Order", graph: infosPratiques, gotos: { g_cta: "CTA - Commander" } },
+  { name: "CTA - Commander", description: "Invite à commander (bouton Je commande)", folder: "Principales PFlow Order", graph: ctaCommander },
+  { name: "IA - Lancer commande", description: "Le client veut commander : bouton Je commande", folder: "Fonctions IA", graph: lancerCommande },
+  { name: "IA - Proposer commande", description: "Réponse de l'IA puis proposition de commander", folder: "Fonctions IA", graph: proposerCommande },
+  { name: "IA - Parler équipe", description: "Le client veut parler à une personne : transfert humain", folder: "Fonctions IA", graph: parlerEquipe },
+  { name: "IA - Recommandation", description: "Conseille des produits de la carte selon l'envie du client", folder: "Fonctions IA", graph: recommandation },
+  { name: "Commande - Paiement validé", description: "Confirmation de commande (payée en ligne ou à régler)", folder: "Commande", graph: paiementValide, gotos: { g_prep: "Statut - En préparation", g_prete: "Statut - Prête" } },
+  { name: "Statut - En préparation", description: "La commande passe en préparation", folder: "Commande", graph: enPreparation },
+  { name: "Statut - Prête", description: "La commande est prête (retrait ou livraison)", folder: "Commande", graph: prete },
+  { name: "Panier abandonné", description: "Relance 20 min après un panier non validé (envoyé par PFlow Order)", folder: "Commande", graph: panierAbandonne },
+];
+
+/** Flux de la trame absents du modèle (comparaison par nom). */
+export function missingSeedFlows(existingNames: string[]): SeedFlow[] {
+  const names = new Set(existingNames.map((n) => n.trim().toLowerCase()));
+  return SEED_FLOWS.filter((f) => !names.has(f.name.toLowerCase()));
+}
+
+/**
+ * Ajoute au modèle les dossiers et flux de la trame qui manquent, et les publie.
+ * Ne modifie jamais un flux existant. Renvoie les noms des flux ajoutés.
+ */
+export async function completeMasterTemplate(repos: Repositories, templateId: string): Promise<string[]> {
+  const folders = await repos.folders.listByOwner(templateId);
+  const folderIds = new Map(folders.map((f) => [f.name, f.id]));
+  for (const name of TEMPLATE_FOLDERS) {
+    if (!folderIds.has(name)) folderIds.set(name, (await repos.folders.create({ ownerId: templateId, name })).id);
+  }
+
+  const existing = await repos.flows.listByOwner(templateId);
+  const toAdd = missingSeedFlows(existing.map((f) => f.name));
+  const created: { seed: SeedFlow; id: string }[] = [];
+  for (const seed of toAdd) {
+    const flow = await repos.flows.create({
+      ownerKind: "template",
+      ownerId: templateId,
+      name: seed.name,
+      description: seed.description,
+      draft: seed.graph,
+      folderId: folderIds.get(seed.folder),
+    });
+    created.push({ seed, id: flow.id });
+  }
+
+  // Cibles des « Aller à un flux », résolues par nom parmi tous les flux du modèle.
+  const all = await repos.flows.listByOwner(templateId);
+  const idByName = new Map(all.map((f) => [f.name.toLowerCase(), f.id]));
+  for (const { seed, id } of created) {
+    if (seed.gotos) {
+      const draft: FlowGraph = {
+        ...seed.graph,
+        nodes: seed.graph.nodes.map((n): FlowNode => {
+          if (n.type !== "goto_flow" || !seed.gotos![n.id]) return n;
+          return { ...n, data: { flowId: idByName.get(seed.gotos![n.id].toLowerCase()) ?? "" } };
+        }),
+      };
+      await repos.flows.update(id, { draft });
+    }
+    await repos.flows.publish(id);
+  }
+  return created.map((c) => c.seed.name);
+}
+
+/** Crée le modèle maître avec toute la trame (dossiers et flux publiés). */
 export async function createMasterTemplate(repos: Repositories): Promise<BotTemplate> {
   const existing = (await repos.templates.list())[0];
   if (existing) return existing;
-
   const template = await repos.templates.create({ name: MASTER_TEMPLATE_NAME });
-  const folders = [];
-  for (const name of TEMPLATE_FOLDERS) folders.push(await repos.folders.create({ ownerId: template.id, name }));
-  // « Commande » reste vide pour l'instant : ses flux arrivent avec les événements PFlow Order (M3c).
-  const [principales, fonctionsIa] = folders;
-  const create = async (name: string, description: string, draft: FlowGraph, folderId: string) =>
-    (await repos.flows.create({ ownerKind: "template", ownerId: template.id, name, description, draft, folderId })).id;
-
-  const recoId = await create("IA - Recommandation", "Conseille des produits de la carte selon l'envie du client", recommandation, fonctionsIa.id);
-  await create("IA - Lancer commande", "Le client veut commander : bouton Je commande", lancerCommande, fonctionsIa.id);
-  await create("IA - Proposer commande", "Réponse de l'IA puis proposition de commander", proposerCommande, fonctionsIa.id);
-  await create("IA - Parler équipe", "Le client veut parler à une personne : transfert humain", parlerEquipe, fonctionsIa.id);
-  const ctaId = await create("CTA - Commander", "Invite à commander (bouton Je commande)", ctaCommander, principales.id);
-  const infosId = await create("Infos pratiques", "Horaires, livraison, points de vente, paiement", withTargets(infosPratiques, { g_cta: ctaId }), principales.id);
-  await create("Accueil", "Accueil, lien de commande et aide", withTargets(accueil, { g_reco: recoId, g_infos: infosId }), principales.id);
-
-  for (const flow of await repos.flows.listByOwner(template.id)) await repos.flows.publish(flow.id);
+  await completeMasterTemplate(repos, template.id);
   return template;
 }

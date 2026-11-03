@@ -32,7 +32,15 @@ export function findTrigger(flow: Flow): FlowNodeOf<"trigger"> | undefined {
 
 /** Flux par défaut du client (le premier si, par erreur, il y en a plusieurs). */
 export function findDefaultFlow(flows: Flow[]): Flow | undefined {
-  return flows.find((f) => findTrigger(f)?.data.isDefault);
+  return flows.find((f) => {
+    const data = findTrigger(f)?.data;
+    return data?.isDefault && !data.event;
+  });
+}
+
+/** Flux déclenché par un événement PFlow Order. */
+export function findEventFlow(flows: Flow[], event: string): Flow | undefined {
+  return flows.find((f) => findTrigger(f)?.data.event === event);
 }
 
 /**
@@ -44,7 +52,8 @@ export function matchFlowByKeyword(flows: Flow[], message: string): Flow | undef
   let best: { flow: Flow; length: number } | undefined;
   for (const flow of flows) {
     const trigger = findTrigger(flow);
-    if (!trigger) continue;
+    // Un flux d'événement ne se lance jamais sur un message.
+    if (!trigger || trigger.data.event) continue;
     for (const keyword of trigger.data.keywords) {
       if (!keywordMatches(message, keyword, trigger.data.matchMode)) continue;
       const length = normalize(keyword).length;

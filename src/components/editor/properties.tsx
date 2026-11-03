@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { DELAY_MAX_SECONDS, TEXTS, WEEKDAY_LABELS, smartDelayMs, type ChoiceOption, type ConditionRule, type FlowNode, type IsoWeekday } from "@/engine";
+import { DELAY_MAX_SECONDS, ORDER_EVENTS, ORDER_EVENT_TYPES, TEXTS, WEEKDAY_LABELS, smartDelayMs, type ChoiceOption, type ConditionRule, type FlowNode, type IsoWeekday } from "@/engine";
 import { BLOCKS, shortId } from "@/editor/catalog";
 import {
   addBubble,
@@ -395,35 +395,80 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
   );
 
   switch (node.type) {
-    case "trigger":
+    case "trigger": {
+      const event = node.data.event;
       return (
         <>
-          <label className="flex items-start gap-2 rounded-xl border border-line p-2.5">
-            <input
-              type="checkbox"
-              className="mt-0.5 size-4 accent-pink"
-              checked={node.data.isDefault ?? false}
-              onChange={(e) => set({ isDefault: e.target.checked || undefined }, "isDefault")}
-            />
-            <span>
-              <span className="block text-sm font-semibold">Flux par défaut</span>
-              <span className="block text-[11px] text-muted">
-                Se lance sur n&apos;importe quel message quand aucun mot-clé ne correspond et qu&apos;aucune conversation n&apos;est
-                en cours. Un seul par client. Interdit en mode « mots-clés uniquement » (numéro perso du gérant).
-              </span>
-            </span>
-          </label>
-          <Row label="Mots-clés" hint="Casse et accents ignorés. « commander » reconnaît « Je veux COMMANDER ! ».">
-            <KeywordsEditor keywords={node.data.keywords} onChange={(keywords) => set({ keywords }, "keywords")} />
-          </Row>
-          <Row label="Correspondance">
-            <select className={inputCls} value={node.data.matchMode ?? "contient"} onChange={(e) => set({ matchMode: e.target.value }, "matchMode")}>
-              <option value="contient">Le message contient le mot-clé</option>
-              <option value="exact">Le message est exactement le mot-clé</option>
+          <Row label="Type de déclencheur">
+            <select
+              className={inputCls}
+              aria-label="Type de déclencheur"
+              value={event ? "evenement" : "mots_cles"}
+              onChange={(e) =>
+                set(e.target.value === "evenement" ? { event: "commande_validee", isDefault: undefined } : { event: undefined }, "triggerType")
+              }
+            >
+              <option value="mots_cles">Message du client (mots-clés)</option>
+              <option value="evenement">Événement PFlow Order (commande validée, prête…)</option>
             </select>
           </Row>
+
+          {event ? (
+            <>
+              <Row label="Événement" hint={ORDER_EVENTS[event].description}>
+                <select className={inputCls} aria-label="Événement" value={event} onChange={(e) => set({ event: e.target.value }, "event")}>
+                  {ORDER_EVENT_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {ORDER_EVENTS[t].icon} {ORDER_EVENTS[t].label}
+                    </option>
+                  ))}
+                </select>
+              </Row>
+              <p className="rounded-xl bg-page p-2.5 text-[11px] text-muted">
+                Envoyé seulement si le client a écrit au bot depuis moins de 24 h (sinon : rien). Envoyé même si le bot est en pause pour ce
+                contact, sans relancer la conversation. Branchement avec PFlow Order à l&apos;étape C.
+              </p>
+              <Row label="Variables apportées par l'événement">
+                <ul className="space-y-1 text-[11px]">
+                  {ORDER_EVENTS[event].variables.map((v) => (
+                    <li key={v.name}>
+                      <span className="font-mono font-semibold text-pink">{`{{${v.name}}}`}</span> <span className="text-muted">· {v.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Row>
+            </>
+          ) : (
+            <>
+              <label className="flex items-start gap-2 rounded-xl border border-line p-2.5">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-4 accent-pink"
+                  checked={node.data.isDefault ?? false}
+                  onChange={(e) => set({ isDefault: e.target.checked || undefined }, "isDefault")}
+                />
+                <span>
+                  <span className="block text-sm font-semibold">Flux par défaut</span>
+                  <span className="block text-[11px] text-muted">
+                    Se lance sur n&apos;importe quel message quand aucun mot-clé ne correspond et qu&apos;aucune conversation n&apos;est en cours.
+                    Un seul par client. Interdit en mode « mots-clés uniquement » (numéro perso du gérant).
+                  </span>
+                </span>
+              </label>
+              <Row label="Mots-clés" hint="Casse et accents ignorés. « commander » reconnaît « Je veux COMMANDER ! ».">
+                <KeywordsEditor keywords={node.data.keywords} onChange={(keywords) => set({ keywords }, "keywords")} />
+              </Row>
+              <Row label="Correspondance">
+                <select className={inputCls} value={node.data.matchMode ?? "contient"} onChange={(e) => set({ matchMode: e.target.value }, "matchMode")}>
+                  <option value="contient">Le message contient le mot-clé</option>
+                  <option value="exact">Le message est exactement le mot-clé</option>
+                </select>
+              </Row>
+            </>
+          )}
         </>
       );
+    }
 
     case "message":
       return <MessageFields node={node} />;

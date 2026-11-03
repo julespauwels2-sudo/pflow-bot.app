@@ -1,4 +1,4 @@
-import type { FlowNode } from "@/engine";
+import { ORDER_EVENTS, type FlowNode } from "@/engine";
 
 export interface VariableInfo {
   name: string;
@@ -25,12 +25,17 @@ export const BUILTIN_VARIABLES: VariableInfo[] = [
 
 /** Variables disponibles dans un flux : intégrées + réponses aux questions. */
 export function flowVariables(nodes: FlowNode[]): VariableInfo[] {
+  // Flux déclenché par un événement PFlow Order : ses données sont des variables.
+  const trigger = nodes.find((n): n is Extract<FlowNode, { type: "trigger" }> => n.type === "trigger");
+  const event = trigger?.data.event ? ORDER_EVENTS[trigger.data.event] : undefined;
+  const fromEvent = (event?.variables ?? []).map((v) => ({ name: v.name, label: `${v.label} (${event!.label})` }));
   const fromQuestions = nodes
     .filter((n): n is Extract<FlowNode, { type: "question" }> => n.type === "question")
     .map((n) => n.data.variable.trim())
     .filter(Boolean);
-  const unique = [...new Set(fromQuestions)].filter((v) => !BUILTIN_VARIABLES.some((b) => b.name === v));
-  return [...BUILTIN_VARIABLES, ...unique.map((name) => ({ name, label: "Réponse à une question" }))];
+  const taken = new Set([...BUILTIN_VARIABLES, ...fromEvent].map((v) => v.name));
+  const unique = [...new Set(fromQuestions)].filter((v) => !taken.has(v));
+  return [...BUILTIN_VARIABLES, ...fromEvent, ...unique.map((name) => ({ name, label: "Réponse à une question" }))];
 }
 
 /** Variables {{...}} utilisées dans un texte. */

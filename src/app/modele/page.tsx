@@ -5,7 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { FlowsCard } from "@/components/flows-card";
 import { Button, Card, Loading, Notice } from "@/components/ui";
 import { errorText, getRepositories, useLoad } from "@/data/browser";
-import { createMasterTemplate } from "@/data/template-seed";
+import { completeMasterTemplate, createMasterTemplate, missingSeedFlows } from "@/data/template-seed";
 import { BUILTIN_VARIABLES } from "@/editor/variables";
 
 export default function TemplatePage() {
@@ -13,9 +13,10 @@ export default function TemplatePage() {
     const template = (await repos.templates.list())[0] ?? null;
     if (!template) return null;
     const [flows, folders] = await Promise.all([repos.flows.listByOwner(template.id), repos.folders.listByOwner(template.id)]);
-    return { template, flows, folders };
+    return { template, flows, folders, missing: missingSeedFlows(flows.map((f) => f.name)).map((f) => f.name) };
   }, []);
   const [error, setError] = useState<string | null>(null);
+  const [added, setAdded] = useState<string[] | null>(null);
 
   return (
     <AppShell>
@@ -60,6 +61,37 @@ export default function TemplatePage() {
               Créer le modèle maître à partir de la trame PFlow
             </Button>
           </Card>
+        )}
+        {added && (
+          <div className="mb-4">
+            <Notice tone="success" onClose={() => setAdded(null)}>
+              Ajouté{added.length > 1 ? "s" : ""} et publié{added.length > 1 ? "s" : ""} : {added.join(", ")}.
+            </Notice>
+          </div>
+        )}
+        {state.status === "ready" && state.data && state.data.missing.length > 0 && (
+          <div className="mb-4">
+            <Notice tone="info">
+              <span className="block">
+                La trame PFlow contient {state.data.missing.length} flux absent{state.data.missing.length > 1 ? "s" : ""} de ton modèle :{" "}
+                {state.data.missing.join(", ")}. Les flux existants ne sont pas modifiés.
+              </span>
+              <Button
+                className="mt-2"
+                variant="secondary"
+                onClick={async () => {
+                  try {
+                    setAdded(await completeMasterTemplate(getRepositories(), state.data!.template.id));
+                    reload();
+                  } catch (err) {
+                    setError(errorText(err));
+                  }
+                }}
+              >
+                Ajouter les flux manquants
+              </Button>
+            </Notice>
+          </div>
         )}
         {state.status === "ready" && state.data && (
           <div className="grid gap-6 lg:grid-cols-[1fr_320px]">

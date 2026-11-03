@@ -1,7 +1,8 @@
 import { evaluateConditions } from "./conditions";
 import { infoSheetVariables, withUpcomingRounds } from "./info-vars";
 import { fixedDelayMs, smartDelayMs, textOf } from "./delay";
-import { findDefaultFlow, findTrigger, matchFlowByKeyword, normalize } from "./match";
+import { findDefaultFlow, findEventFlow, findTrigger, matchFlowByKeyword, normalize } from "./match";
+import { canSendFreeform } from "./window";
 import { decodeReplyId, encodeReplyId } from "./reply-id";
 import { firstName, renderTemplate } from "./template";
 import { localTime } from "./time";
@@ -102,6 +103,12 @@ class EngineRun {
       return;
     }
 
+    // Événement PFlow Order (commande validée, prête…) : ce n'est pas un message du contact.
+    if (message.kind === "event") {
+      this.processEvent(message.event, message.data);
+      return;
+    }
+
     this.contact.lastInboundAt = now.toISOString();
 
     // 1. Contact en pause : on ne fait rien.
@@ -168,6 +175,32 @@ class EngineRun {
 
     // 5. Mode « mots-clés uniquement » sans session : on ignore complètement.
     this.events.push({ type: "ignored", reason: "aucun_declencheur" });
+  }
+
+  /**
+   * Règles des événements de commande :
+   * - envoyés seulement si la fenêtre de 24 h est ouverte (pas de templates) ;
+   * - envoyés même si le contact est en pause (transfert humain, gérant), sans lever la pause ;
+   * - sans relancer le bot : la conversation en cours reprend ensuite telle quelle.
+   */
+  private processEvent(event: string, data: Record<string, string>): void {
+    const { now, flows } = this.input;
+    if (!canSendFreeform(this.contact, now)) {
+      this.events.push({ type: "ignored", reason: "fenetre_fermee" });
+      return;
+    }
+    const flow = findEventFlow(flows, event);
+    if (!flow) {
+      this.events.push({ type: "ignored", reason: "aucun_flux_evenement" });
+      return;
+    }
+    const vars: Record<string, string> = {};
+    for (const [key, value] of Object.entries(data)) if (typeof value === "string") vars[key] = value;
+    if (event === "panier_abandonne" && !vars.lien_panier) vars.lien_panier = this.orderUrl() ?? "";
+
+    const previous = this.session;
+    this.startFlow(flow, "evenement", vars);
+    if (!this.session) this.session = previous;
   }
 
   // -------------------------------------------------------------------------
@@ -348,7 +381,7 @@ class EngineRun {
 
   private startFlow(
     flow: Flow,
-    via: "mot_cle" | "defaut" | "ia" | "aller_au_flux" | "bouton",
+    via: "mot_cle" | "defaut" | "ia" | "aller_au_flux" | "bouton" | "evenement",
     vars: Record<string, string> = {},
   ): void {
     const trigger = findTrigger(flow);

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { errorText, getRepositories } from "@/data/browser";
 import { exportFileName, exportFlow, parseFlowImport } from "@/data/transfer";
 import { hasUnpublishedChanges, type BotFolder, type OwnerKind, type StoredFlow } from "@/data/types";
-import { findTrigger } from "@/engine";
+import { ORDER_EVENTS, findTrigger } from "@/engine";
 import { downloadJson } from "@/lib/files";
 import { Badge, Button, ButtonLink, Card, FileButton, Input, Notice, Select } from "./ui";
 
@@ -256,10 +256,14 @@ function FlowRow({ flow, folders, run }: { flow: StoredFlow; folders: BotFolder[
             {flow.name}
           </Link>
           {flowStatus(flow)}
-          {trigger?.isDefault && <Badge tone="info">Par défaut</Badge>}
+          {trigger?.isDefault && !trigger.event && <Badge tone="info">Par défaut</Badge>}
         </div>
         <p className="mt-0.5 truncate text-xs text-muted">
-          {keywords.length ? `Mots-clés : ${keywords.join(", ")}` : "Aucun mot-clé"}
+          {trigger?.event
+            ? `Événement : ${ORDER_EVENTS[trigger.event].icon} ${ORDER_EVENTS[trigger.event].label}`
+            : keywords.length
+              ? `Mots-clés : ${keywords.join(", ")}`
+              : "Aucun mot-clé"}
           {flow.description ? ` · ${flow.description}` : ""}
         </p>
       </div>

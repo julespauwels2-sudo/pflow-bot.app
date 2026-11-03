@@ -3,7 +3,7 @@
  * les avertissements sont affichés mais n'empêchent pas de publier.
  */
 import type { FlowNode, TriggerMode } from "@/engine";
-import { DELAY_MAX_SECONDS, parseHhmm } from "@/engine";
+import { DELAY_MAX_SECONDS, ORDER_EVENTS, parseHhmm } from "@/engine";
 import type { FlowGraph } from "@/data/types";
 import { BLOCKS, MAX_BUBBLES, nodeOutputs } from "./catalog";
 import { handleOf, reachableFrom } from "./graph";
@@ -20,8 +20,8 @@ export interface Issue {
 export interface LintContext {
   /** Id du flux vérifié (pour repérer un « Aller à un flux » vers lui-même). */
   flowId: string;
-  /** Flux du client : « Aller à un flux », et unicité du flux par défaut. */
-  flows: { id: string; name: string; isDefault?: boolean }[];
+  /** Flux du client : « Aller à un flux », unicité du flux par défaut et des événements. */
+  flows: { id: string; name: string; isDefault?: boolean; event?: string }[];
   orderSlug: string;
   /** Mode de déclenchement du canal du client. */
   triggerMode: TriggerMode;
@@ -139,6 +139,12 @@ export function lintFlow(graph: FlowGraph, ctx: LintContext): Issue[] {
 
     switch (node.type) {
       case "trigger":
+        if (node.data.event) {
+          const other = ctx.flows.find((f) => f.event === node.data.event && f.id !== ctx.flowId);
+          if (other) error(`Le flux « ${other.name} » réagit déjà à l'événement « ${ORDER_EVENTS[node.data.event].label} ».`, id);
+          if (!connected.has("next")) error("Le déclencheur n'est relié à rien.", id);
+          break;
+        }
         if (node.data.isDefault) {
           if (ctx.triggerMode === "mots_cles_uniquement") {
             error(
@@ -146,11 +152,10 @@ export function lintFlow(graph: FlowGraph, ctx: LintContext): Issue[] {
               id,
             );
           }
-          const other = ctx.flows.find((f) => f.isDefault && f.id !== ctx.flowId);
+          const other = ctx.flows.find((f) => f.isDefault && !f.event && f.id !== ctx.flowId);
           if (other) error(`Le flux « ${other.name} » est déjà le flux par défaut : un seul par client.`, id);
-        } else if (!node.data.keywords.some((k) => k.trim())) {
-          warning("Aucun mot-clé : ce flux ne sera lancé que par l'IA ou « Aller à un flux ».", id);
         }
+        // Pas de mot-clé : normal pour un sous-flux (lancé par « Aller à un flux » ou par l'IA).
         if (!connected.has("next")) error("Le déclencheur n'est relié à rien.", id);
         break;
 

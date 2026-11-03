@@ -103,6 +103,17 @@ Toutes les conditions jour/heure utilisent le fuseau du client (`America/Guadelo
 - Raccourcis : Ctrl+Z / Ctrl+Y, Ctrl+C / Ctrl+V (aussi d'un flux à l'autre), Ctrl+D, Ctrl+A,
   Suppr, Maj + glisser pour sélectionner une zone, `{{` ou le bouton `{x}` pour insérer une variable.
 
+## Événements de commande (M3c)
+
+Déclencheur « Événement PFlow Order » (au lieu des mots-clés) : commande validée, en préparation,
+prête, panier abandonné (`src/engine/events.ts`). Les données de l'événement sont des variables
+(`{{client_nom}}`, `{{commande_numero}}`, `{{commande_recap}}`, `{{commande_total}}`,
+`{{commande_mode}}`, `{{paiement_mode}}`, `{{commande_statut}}`, `{{panier_recap}}`,
+`{{panier_total}}`, `{{lien_panier}}`). Règles : pas de templates, **rien n'est envoyé si la fenêtre
+de 24 h est fermée** ; envoyé même si le contact est en pause, sans lever la pause ni relancer la
+conversation ; un seul flux par événement. Flux prêts dans le dossier « Commande » du modèle ;
+branchement avec PFlow Order à l'étape C. « Ajouter les flux manquants » complète un modèle existant.
+
 ## Modèle maître (M3b)
 
 Page « Modèle maître » : ta trame commune à tous les bots, écrite uniquement avec des variables,

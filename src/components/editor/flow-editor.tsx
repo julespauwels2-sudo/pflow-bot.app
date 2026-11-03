@@ -45,7 +45,7 @@ interface Props {
   flow: StoredFlow;
   owner: EditorOwner;
   /** Tous les flux du même propriétaire (id, nom, flux par défaut ou non). */
-  flows: { id: string; name: string; isDefault?: boolean }[];
+  flows: { id: string; name: string; isDefault?: boolean; event?: string }[];
 }
 
 export function FlowEditor(props: Props) {

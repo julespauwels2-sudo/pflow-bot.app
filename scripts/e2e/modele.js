@@ -22,9 +22,9 @@ const BASE = 'http://localhost:3123';
   if (order.join() !== 'Principales PFlow Order,Fonctions IA,Commande') throw new Error('ordre des dossiers : ' + order);
   if ((await flowsIn('Principales PFlow Order')).join() !== 'Accueil,CTA - Commander,Infos pratiques') throw new Error('principales');
   if ((await flowsIn('Fonctions IA')).length !== 4) throw new Error('fonctions IA');
-  await folder('Commande').getByText('Dossier vide').waitFor();
-  if ((await p.getByText('Publié v1').count()) !== 7) throw new Error('7 flux publiés attendus');
-  step('modèle créé depuis la trame : 3 dossiers dans l\'ordre, 7 flux publiés, « Commande » vide');
+  if ((await flowsIn('Commande')).length !== 4) throw new Error('4 flux de commande attendus');
+  if ((await p.getByText('Publié v1').count()) !== 11) throw new Error('11 flux publiés attendus');
+  step('modèle créé depuis la trame : 3 dossiers dans l\'ordre, 11 flux publiés');
   await p.screenshot({ path: OUT + '/m3b-modele.png', fullPage: true });
 
   await p.getByRole('link', { name: 'Accueil', exact: true }).click();
@@ -48,13 +48,13 @@ const BASE = 'http://localhost:3123';
 
   await p.getByRole('link', { name: '← Modèle maître' }).click();
   await folder('Principales PFlow Order').getByText('Publié v2').waitFor();
-  await p.getByPlaceholder('Nom du nouveau flux').fill('Commande - Paiement validé');
+  await p.getByPlaceholder('Nom du nouveau flux').fill('Mon flux test');
   await p.getByLabel('Dossier du nouveau flux').selectOption({ label: 'Commande' });
   await p.getByRole('button', { name: 'Créer', exact: true }).click();
   await p.waitForURL(/\/flows\//);
   await p.getByRole('link', { name: '← Modèle maître' }).click();
-  await folder('Commande').locator('li[data-flow]').first().waitFor();
-  if ((await flowsIn('Commande')).join() !== 'Commande - Paiement validé') throw new Error('flux non créé dans Commande');
+  await folder('Commande').locator('li[data-flow="Mon flux test"]').waitFor();
+  if (!(await flowsIn('Commande')).includes('Mon flux test')) throw new Error('flux non créé dans Commande');
   step('nouveau flux créé dans le dossier « Commande » du modèle');
 
   // Les clients ne voient pas les dossiers du modèle (branchement en M3d).

@@ -5,6 +5,8 @@
  * ni base de données. Le simulateur et le webhook WhatsApp l'utilisent tels quels.
  */
 
+import type { OrderEvent } from "./events";
+
 // ---------------------------------------------------------------------------
 // Client, canal, fiche d'infos
 // ---------------------------------------------------------------------------
@@ -163,6 +165,11 @@ export interface NodeDataMap {
      * en mode « mots-clés uniquement ».
      */
     isDefault?: boolean;
+    /**
+     * Déclencheur « Événement PFlow Order » : le flux est lancé par cet événement (commande
+     * validée, prête…), jamais par un message. Mots-clés et flux par défaut sont alors ignorés.
+     */
+    event?: OrderEvent;
   };
   /**
    * Plusieurs bulles envoyées à la suite (comme dans UChat). Sorties : une par bouton de
@@ -253,7 +260,9 @@ export type IncomingMessage =
   /** Message envoyé par le gérant lui-même depuis l'appli WhatsApp Business. */
   | { kind: "echo"; text?: string }
   /** Image, audio, localisation… non gérés en phase 1. */
-  | { kind: "unsupported"; mediaType: string };
+  | { kind: "unsupported"; mediaType: string }
+  /** Événement envoyé par PFlow Order (pas un message du contact). */
+  | { kind: "event"; event: OrderEvent; data: Record<string, string> };
 
 export type OutgoingMessage =
   /** Pause avant le message suivant, avec l'indicateur « en train d'écrire ». */
@@ -311,10 +320,13 @@ export interface EngineDeps {
 }
 
 export type EngineEvent =
-  | { type: "ignored"; reason: "pause" | "aucun_declencheur" | "media_non_gere" | "echo" }
+  | {
+      type: "ignored";
+      reason: "pause" | "aucun_declencheur" | "media_non_gere" | "echo" | "fenetre_fermee" | "aucun_flux_evenement";
+    }
   | { type: "pause_expired" }
   | { type: "session_expired"; flowId: string }
-  | { type: "flow_started"; flowId: string; via: "mot_cle" | "defaut" | "ia" | "aller_au_flux" | "bouton" }
+  | { type: "flow_started"; flowId: string; via: "mot_cle" | "defaut" | "ia" | "aller_au_flux" | "bouton" | "evenement" }
   | { type: "flow_ended"; flowId: string }
   | { type: "paused"; reason: PauseReason; until: string | null }
   | { type: "handoff"; source: "bloc" | "ia" | "limite_ia" | "erreur_ia"; message?: string }
