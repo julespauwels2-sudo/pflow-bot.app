@@ -112,7 +112,11 @@ Jules a des instructions et des descriptions propres à chaque fonction dans UCh
 
 Variables utilisées : `customer_name`, `order_number`, `order_mode_display`, `order_summary`,
 `order_total_display`, `payment_method`, `order_status`, `cart_status`, `cart_summary`, `cart_total`.
-→ Webhook entrant + templates : phase 2 (voir le plan).
+→ **Décision de Jules : pas de templates.** Le système PFlow Order répond tout de suite, donc un
+client venu du bot est toujours dans sa fenêtre de 24 h. Si la fenêtre est fermée (client arrivé
+directement sur le mini-site sans écrire au bot), le bot n'envoie rien. Ces flux sont préparés dans
+le modèle maître en M3 ; le branchement avec PFlow Order (qui prévient le bot) se fait à l'étape C,
+modification de PFlow Order montrée avant.
 
 ## Agent IA « Cookies An Nou - Assistant »
 
@@ -309,7 +313,7 @@ Avant de recommander ou de confirmer qu'un produit existe, vérifier qu'il est e
 >   de la liste, ni une tournée passée.
 > - **Points de vente physiques** : stations Vito au Gosier, Total La Jaille, Esso Petit-Pérou aux
 >   Abymes, Le Boudin de Saint-Félix.
-> - **Retrait sur place** : oui / non — **à confirmer par Jules**.
+> - **Retrait sur place : non.** Seule exception : les points de vente en stations-service, en quantité limitée.
 > - Le texte collé (« que de la livraison, pas de magasin réel », zones Jarry / Dothémare,
 >   « paiement au comptoir ») est donc à reprendre lors de la création de sa fiche d'infos.
 

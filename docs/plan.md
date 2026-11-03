@@ -30,14 +30,15 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   des commandes au bot pour les stats. **Montrer la modification prévue dans PFlow Order avant de la faire.**
 
 ### Étape C
+- Branchement des événements de commande : PFlow Order prévient le bot (paiement validé, statuts,
+  panier abandonné). **Pas de templates** : si la fenêtre de 24 h est fermée, le bot n'envoie rien.
+  Montrer la modification de PFlow Order avant de la faire. Flux préparés dans le modèle maître en M3.
 - Bouton « Retour sur WhatsApp » (`wa.me`) sur la page de confirmation de PFlow Order.
 - Transfert humain : alerte dans la boîte de réception + WhatsApp au gérant si sa fenêtre de 24 h est
   ouverte. Notification par e-mail (présente dans le template UChat) : proposer une solution gratuite.
 - Décision Vercel (plan Hobby non commercial) et webhook isolé pour pouvoir l'héberger ailleurs.
 
 ### Phase 2
-- Événements PFlow Order (webhook entrant) : paiement validé, statuts, panier abandonné, avec templates
-  Meta hors fenêtre de 24 h (un template peut mélanger bouton lien et bouton de réponse).
 - Fonctions IA `annuler_commande` et `suivre_commande` (API PFlow Order), avec accord de Jules sur ce
   que l'app peut modifier.
 - Messages vocaux : transcription (service payant à proposer, exception à la règle « coût quasi nul »).
