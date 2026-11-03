@@ -302,6 +302,17 @@ Avant de recommander ou de confirmer qu'un produit existe, vérifier qu'il est e
 
 ### Base de connaissances (exemple Cookies An Nou, collé par Jules)
 
+> **Corrections de Jules (à jour, prioritaires sur le texte collé ci-dessous) :**
+> - **Livraison sur planning** : la gérante livre elle-même dans des entreprises, selon des jours et
+>   des dates précises qui changent. → mode de livraison « sur planning » de la fiche d'infos
+>   (liste de tournées : date, horaire, zone ou entreprises). L'IA ne propose jamais une date absente
+>   de la liste, ni une tournée passée.
+> - **Points de vente physiques** : stations Vito au Gosier, Total La Jaille, Esso Petit-Pérou aux
+>   Abymes, Le Boudin de Saint-Félix.
+> - **Retrait sur place** : oui / non — **à confirmer par Jules**.
+> - Le texte collé (« que de la livraison, pas de magasin réel », zones Jarry / Dothémare,
+>   « paiement au comptoir ») est donc à reprendre lors de la création de sa fiche d'infos.
+
 > Partie **propre au client** : dans le modèle maître, elle sera générée depuis la fiche d'infos
 > et la carte (CRM à l'étape B), pas écrite à la main.
 
