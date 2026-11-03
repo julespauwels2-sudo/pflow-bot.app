@@ -27,9 +27,23 @@ export interface FlowGraph {
   edges: FlowEdge[];
 }
 
+/**
+ * Dossier de flux (un seul niveau, comme dans UChat). `ownerId` = id du client ;
+ * le modèle maître (M3b) aura ses propres dossiers.
+ */
+export interface BotFolder {
+  id: string;
+  ownerId: string;
+  name: string;
+  /** Ordre d'affichage (0, 1, 2…). */
+  order: number;
+}
+
 export interface StoredFlow {
   id: string;
   clientId: string;
+  /** Dossier du flux (absent = « Sans dossier »). */
+  folderId?: string;
   name: string;
   description?: string;
   /** Version en cours d'édition. */
@@ -45,8 +59,9 @@ export interface StoredFlow {
   updatedAt: string;
 }
 
-export type NewFlow = { clientId: string; name: string; description?: string; draft?: FlowGraph };
-export type FlowPatch = Partial<Pick<StoredFlow, "name" | "description" | "draft">>;
+export type NewFlow = { clientId: string; name: string; description?: string; draft?: FlowGraph; folderId?: string };
+/** `folderId: null` sort le flux de son dossier. */
+export type FlowPatch = Partial<Pick<StoredFlow, "name" | "description" | "draft">> & { folderId?: string | null };
 
 /** Flux publié, au format attendu par le moteur. */
 export function toEngineFlow(flow: StoredFlow): Flow | null {
@@ -85,5 +100,6 @@ export const EMPTY_INFO_SHEET: InfoSheet = { horaires: [] };
 export interface WorkspaceData {
   clients: BotClient[];
   flows: StoredFlow[];
+  folders: BotFolder[];
   infoSheets: Record<string, InfoSheet>;
 }

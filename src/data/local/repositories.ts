@@ -1,7 +1,7 @@
 import { DEFAULT_TIMEZONE, isValidTimezone, type InfoSheet } from "@/engine";
 import { DataError, type Repositories } from "../repositories";
 import { infoSheetSchema, slugSchema } from "../schemas";
-import { EMPTY_INFO_SHEET, type BotClient, type FlowGraph, type StoredFlow, type WorkspaceData } from "../types";
+import { EMPTY_INFO_SHEET, type BotClient, type BotFolder, type FlowGraph, type StoredFlow, type WorkspaceData } from "../types";
 import { workspaceSchema } from "../schemas";
 import type { JsonStore } from "./store";
 
@@ -51,6 +51,32 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
     const flow = data.flows.find((f) => f.id === id);
     if (!flow) throw new DataError("Flux introuvable");
     return flow;
+  }
+
+  function findFolder(data: WorkspaceData, id: string) {
+    const folder = data.folders.find((f) => f.id === id);
+    if (!folder) throw new DataError("Dossier introuvable");
+    return folder;
+  }
+
+  function checkFolderName(data: WorkspaceData, ownerId: string, name: string, exceptId?: string): string {
+    const clean = name.trim();
+    if (!clean) throw new DataError("Nom du dossier obligatoire");
+    const taken = data.folders.some((f) => f.ownerId === ownerId && f.id !== exceptId && f.name.toLowerCase() === clean.toLowerCase());
+    if (taken) throw new DataError(`Le dossier « ${clean} » existe déjà`);
+    return clean;
+  }
+
+  /** Réécrit l'ordre 0, 1, 2… des dossiers d'un propriétaire. */
+  function renumber(data: WorkspaceData, ownerId: string) {
+    data.folders
+      .filter((f) => f.ownerId === ownerId)
+      .sort((a, b) => a.order - b.order)
+      .forEach((f, i) => (f.order = i));
+  }
+
+  function checkFolderOwner(data: WorkspaceData, folderId: string, clientId: string) {
+    if (findFolder(data, folderId).ownerId !== clientId) throw new DataError("Ce dossier appartient à un autre client");
   }
 
   function ensureUniqueSlug(data: WorkspaceData, slug: string, exceptId?: string) {
@@ -114,6 +140,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
         mutate((data) => {
           data.clients = data.clients.filter((c) => c.id !== id);
           data.flows = data.flows.filter((f) => f.clientId !== id);
+          data.folders = data.folders.filter((f) => f.ownerId !== id);
           delete data.infoSheets[id];
         });
       },
@@ -136,9 +163,11 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
           findClient(data, input.clientId);
           const name = input.name.trim();
           if (!name) throw new DataError("Nom du flux obligatoire");
+          if (input.folderId) checkFolderOwner(data, input.folderId, input.clientId);
           const flow: StoredFlow = {
             id: newId(),
             clientId: input.clientId,
+            ...(input.folderId ? { folderId: input.folderId } : {}),
             name,
             description: input.description?.trim() || undefined,
             draft: input.draft ? structuredClone(input.draft) : newFlowGraph(newId),
@@ -163,6 +192,11 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
           }
           if (patch.description !== undefined) flow.description = patch.description.trim() || undefined;
           if (patch.draft !== undefined) flow.draft = structuredClone(patch.draft);
+          if (patch.folderId === null) delete flow.folderId;
+          else if (patch.folderId !== undefined) {
+            checkFolderOwner(data, patch.folderId, flow.clientId);
+            flow.folderId = patch.folderId;
+          }
           flow.updatedAt = now();
           return flow;
         });
@@ -183,6 +217,54 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
       async delete(id) {
         mutate((data) => {
           data.flows = data.flows.filter((f) => f.id !== id);
+        });
+      },
+    },
+
+    folders: {
+      async listByOwner(ownerId) {
+        return store
+          .read()
+          .folders.filter((f) => f.ownerId === ownerId)
+          .sort((a, b) => a.order - b.order);
+      },
+
+      async create(input) {
+        return mutate((data) => {
+          findClient(data, input.ownerId);
+          const name = checkFolderName(data, input.ownerId, input.name);
+          const order = data.folders.filter((f) => f.ownerId === input.ownerId).length;
+          const folder: BotFolder = { id: newId(), ownerId: input.ownerId, name, order };
+          data.folders.push(folder);
+          return folder;
+        });
+      },
+
+      async rename(id, name) {
+        return mutate((data) => {
+          const folder = findFolder(data, id);
+          folder.name = checkFolderName(data, folder.ownerId, name, id);
+          return folder;
+        });
+      },
+
+      async move(id, delta) {
+        mutate((data) => {
+          const folder = findFolder(data, id);
+          renumber(data, folder.ownerId);
+          const siblings = data.folders.filter((f) => f.ownerId === folder.ownerId).sort((a, b) => a.order - b.order);
+          const other = siblings.find((f) => f.order === folder.order + delta);
+          if (!other) return;
+          [folder.order, other.order] = [other.order, folder.order];
+        });
+      },
+
+      async delete(id) {
+        mutate((data) => {
+          const folder = findFolder(data, id);
+          for (const flow of data.flows) if (flow.folderId === id) delete flow.folderId;
+          data.folders = data.folders.filter((f) => f.id !== id);
+          renumber(data, folder.ownerId);
         });
       },
     },

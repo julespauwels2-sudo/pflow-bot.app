@@ -297,3 +297,66 @@ describe("de bout en bout : stockage → moteur", () => {
     expect(await repos.clients.list()).toHaveLength(1);
   });
 });
+
+describe("dossiers", () => {
+  async function withClient() {
+    const { repos } = setup();
+    const client = await repos.clients.create({ nomResto: "Mexico", orderSlug: "mexico" });
+    return { repos, client };
+  }
+
+  it("crée des dossiers dans l'ordre, refuse un nom vide ou en double", async () => {
+    const { repos, client } = await withClient();
+    await repos.folders.create({ ownerId: client.id, name: "Principales PFlow Order" });
+    await repos.folders.create({ ownerId: client.id, name: "Fonctions IA" });
+    expect((await repos.folders.listByOwner(client.id)).map((f) => [f.name, f.order])).toEqual([
+      ["Principales PFlow Order", 0],
+      ["Fonctions IA", 1],
+    ]);
+    await expect(repos.folders.create({ ownerId: client.id, name: "  " })).rejects.toThrow("obligatoire");
+    await expect(repos.folders.create({ ownerId: client.id, name: "fonctions ia" })).rejects.toThrow("existe déjà");
+  });
+
+  it("renomme et réordonne", async () => {
+    const { repos, client } = await withClient();
+    const a = await repos.folders.create({ ownerId: client.id, name: "A" });
+    const b = await repos.folders.create({ ownerId: client.id, name: "B" });
+    await repos.folders.move(b.id, -1);
+    expect((await repos.folders.listByOwner(client.id)).map((f) => f.name)).toEqual(["B", "A"]);
+    await repos.folders.move(b.id, -1); // déjà en tête : rien ne bouge
+    expect((await repos.folders.listByOwner(client.id)).map((f) => f.name)).toEqual(["B", "A"]);
+    await repos.folders.rename(a.id, "Commande");
+    expect((await repos.folders.listByOwner(client.id)).map((f) => f.name)).toEqual(["B", "Commande"]);
+  });
+
+  it("range un flux, le sort du dossier, et supprimer un dossier ne supprime jamais ses flux", async () => {
+    const { repos, client } = await withClient();
+    const folder = await repos.folders.create({ ownerId: client.id, name: "Commande" });
+    const f = await repos.flows.create({ clientId: client.id, name: "Statut - Prête", folderId: folder.id });
+    expect(f.folderId).toBe(folder.id);
+    expect((await repos.flows.update(f.id, { folderId: null })).folderId).toBeUndefined();
+    await repos.flows.update(f.id, { folderId: folder.id });
+    await repos.folders.delete(folder.id);
+    const after = await repos.flows.get(f.id);
+    expect(after).not.toBeNull();
+    expect(after?.folderId).toBeUndefined();
+    expect(await repos.folders.listByOwner(client.id)).toEqual([]);
+  });
+
+  it("un flux ne peut pas aller dans le dossier d'un autre client", async () => {
+    const { repos, client } = await withClient();
+    const other = await repos.clients.create({ nomResto: "Autre", orderSlug: "autre" });
+    const folder = await repos.folders.create({ ownerId: other.id, name: "Ailleurs" });
+    const f = await repos.flows.create({ clientId: client.id, name: "Accueil" });
+    await expect(repos.flows.update(f.id, { folderId: folder.id })).rejects.toThrow("autre client");
+  });
+
+  it("supprimer le client supprime ses dossiers ; une ancienne sauvegarde sans dossiers reste lisible", async () => {
+    const { repos, client } = await withClient();
+    await repos.folders.create({ ownerId: client.id, name: "A" });
+    await repos.clients.delete(client.id);
+    expect((await repos.workspace.exportAll()).folders).toEqual([]);
+    const parsed = parseBackup(JSON.stringify({ format: "pflow-bots/backup", version: 1, exportedAt: "x", data: { clients: [], flows: [], infoSheets: {} } }));
+    expect(parsed.ok && parsed.value.folders).toEqual([]);
+  });
+});

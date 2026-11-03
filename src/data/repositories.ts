@@ -6,6 +6,7 @@
 import type { InfoSheet } from "@/engine";
 import type {
   BotClient,
+  BotFolder,
   ClientPatch,
   FlowPatch,
   NewClient,
@@ -39,6 +40,17 @@ export interface FlowRepository {
   delete(id: string): Promise<void>;
 }
 
+export interface FolderRepository {
+  /** Dossiers d'un propriétaire (client), dans l'ordre d'affichage. */
+  listByOwner(ownerId: string): Promise<BotFolder[]>;
+  create(input: { ownerId: string; name: string }): Promise<BotFolder>;
+  rename(id: string, name: string): Promise<BotFolder>;
+  /** Monte (-1) ou descend (+1) le dossier. */
+  move(id: string, delta: -1 | 1): Promise<void>;
+  /** Supprime le dossier ; ses flux passent dans « Sans dossier » (jamais supprimés). */
+  delete(id: string): Promise<void>;
+}
+
 export interface InfoSheetRepository {
   get(clientId: string): Promise<InfoSheet>;
   save(clientId: string, sheet: InfoSheet): Promise<InfoSheet>;
@@ -54,6 +66,7 @@ export interface WorkspaceRepository {
 export interface Repositories {
   clients: ClientRepository;
   flows: FlowRepository;
+  folders: FolderRepository;
   infoSheets: InfoSheetRepository;
   workspace: WorkspaceRepository;
 }

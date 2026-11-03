@@ -4,14 +4,13 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { FlowsCard } from "@/components/flows-card";
 import { InfoSheetForm } from "@/components/info-sheet-form";
 import { LocalClock } from "@/components/local-clock";
-import { Badge, Button, ButtonLink, Card, Field, FileButton, Input, Loading, Notice, Select } from "@/components/ui";
+import { Button, Card, Field, Input, Loading, Notice, Select } from "@/components/ui";
 import { errorText, getRepositories, useLoad } from "@/data/browser";
-import { exportFileName, exportFlow, parseFlowImport } from "@/data/transfer";
-import { hasUnpublishedChanges, type BotClient, type StoredFlow } from "@/data/types";
-import { DEFAULT_ORDER_BASE_URL, findTrigger } from "@/engine";
-import { downloadJson } from "@/lib/files";
+import type { BotClient } from "@/data/types";
+import { DEFAULT_ORDER_BASE_URL } from "@/engine";
 import { TIMEZONES } from "@/lib/timezones";
 
 export default function ClientPage() {
@@ -20,8 +19,8 @@ export default function ClientPage() {
     async (repos) => {
       const client = await repos.clients.get(id);
       if (!client) return null;
-      const [flows, infoSheet] = await Promise.all([repos.flows.listByClient(id), repos.infoSheets.get(id)]);
-      return { client, flows, infoSheet };
+      const [flows, folders, infoSheet] = await Promise.all([repos.flows.listByClient(id), repos.folders.listByOwner(id), repos.infoSheets.get(id)]);
+      return { client, flows, folders, infoSheet };
     },
     [id],
   );
@@ -45,7 +44,7 @@ export default function ClientPage() {
           <h1 className="text-3xl font-semibold">{state.data.client.nomResto}</h1>
           <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
             <ClientSettings key={state.data.client.updatedAt} client={state.data.client} onSaved={reload} />
-            <FlowsCard clientId={id} flows={state.data.flows} onChange={reload} />
+            <FlowsCard clientId={id} flows={state.data.flows} folders={state.data.folders} onChange={reload} />
           </div>
           <InfoSheetForm key={id} clientId={id} timezone={state.data.client.timezone} initial={state.data.infoSheet} />
           <DangerZone client={state.data.client} />
@@ -124,120 +123,6 @@ function ClientSettings({ client, onSaved }: { client: BotClient; onSaved: () =>
           Enregistrer
         </Button>
       </form>
-    </Card>
-  );
-}
-
-function flowStatus(flow: StoredFlow) {
-  if (!flow.published) return <Badge>Jamais publié</Badge>;
-  if (hasUnpublishedChanges(flow)) return <Badge tone="warning">Publié v{flow.version} · brouillon modifié</Badge>;
-  return <Badge tone="success">Publié v{flow.version}</Badge>;
-}
-
-function FlowsCard({ clientId, flows, onChange }: { clientId: string; flows: StoredFlow[]; onChange: () => void }) {
-  const router = useRouter();
-  const [name, setName] = useState("");
-  const [message, setMessage] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
-
-  async function create(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      const flow = await getRepositories().flows.create({ clientId, name });
-      router.push(`/flows/${flow.id}`);
-    } catch (error) {
-      setMessage({ tone: "error", text: errorText(error) });
-    }
-  }
-
-  async function importFile(file: File) {
-    const parsed = parseFlowImport(await file.text(), flows.map((f) => f.id));
-    if (!parsed.ok) {
-      setMessage({ tone: "error", text: parsed.error });
-      return;
-    }
-    try {
-      const flow = await getRepositories().flows.create({
-        clientId,
-        name: parsed.value.name,
-        description: parsed.value.description,
-        draft: parsed.value.graph,
-      });
-      const warn = parsed.warnings.length ? ` Attention : ${parsed.warnings.join(" ")}` : "";
-      setMessage({ tone: parsed.warnings.length ? "info" : "success", text: `Flux « ${flow.name} » importé en brouillon.${warn}` });
-      onChange();
-    } catch (error) {
-      setMessage({ tone: "error", text: errorText(error) });
-    }
-  }
-
-  async function remove(flow: StoredFlow) {
-    if (!window.confirm(`Supprimer le flux « ${flow.name} » ? Cette action est définitive.`)) return;
-    await getRepositories().flows.delete(flow.id);
-    onChange();
-  }
-
-  return (
-    <Card
-      title="Flux"
-      description="Un flux démarre par un déclencheur (mots-clés). Seule la version publiée est utilisée par le bot."
-      actions={
-        <FileButton accept="application/json,.json" onFile={importFile}>
-          Importer un flux
-        </FileButton>
-      }
-    >
-      {flows.length === 0 ? (
-        <p className="text-sm text-muted">Aucun flux pour ce client.</p>
-      ) : (
-        <ul className="divide-y divide-rule">
-          {flows.map((flow) => {
-            const trigger = findTrigger({ id: flow.id, name: flow.name, ...flow.draft })?.data;
-            const keywords = trigger?.keywords ?? [];
-            return (
-              <li key={flow.id} className="flex flex-wrap items-center gap-3 py-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Link href={`/flows/${flow.id}`} className="font-semibold hover:text-pink">
-                      {flow.name}
-                    </Link>
-                    {flowStatus(flow)}
-                    {trigger?.isDefault && <Badge tone="info">Par défaut</Badge>}
-                  </div>
-                  <p className="mt-0.5 truncate text-xs text-muted">
-                    {keywords.length ? `Mots-clés : ${keywords.join(", ")}` : "Aucun mot-clé"}
-                    {flow.description ? ` · ${flow.description}` : ""}
-                  </p>
-                </div>
-                <div className="flex gap-1">
-                  <ButtonLink href={`/flows/${flow.id}`} variant="secondary">
-                    Ouvrir
-                  </ButtonLink>
-                  <Button variant="ghost" onClick={() => downloadJson(exportFileName("flux", flow.name), exportFlow(flow))}>
-                    Exporter
-                  </Button>
-                  <Button variant="ghost" className="text-coral" onClick={() => remove(flow)}>
-                    Supprimer
-                  </Button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      <form onSubmit={create} className="mt-4 flex gap-2 border-t border-rule pt-4">
-        <Input required value={name} placeholder="Nom du nouveau flux (ex. Accueil)" onChange={(e) => setName(e.target.value)} />
-        <Button type="submit" className="shrink-0">
-          Créer
-        </Button>
-      </form>
-      {message && (
-        <div className="mt-3">
-          <Notice tone={message.tone} onClose={() => setMessage(null)}>
-            {message.text}
-          </Notice>
-        </div>
-      )}
     </Card>
   );
 }

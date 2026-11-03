@@ -103,6 +103,13 @@ Toutes les conditions jour/heure utilisent le fuseau du client (`America/Guadelo
 - Raccourcis : Ctrl+Z / Ctrl+Y, Ctrl+C / Ctrl+V (aussi d'un flux à l'autre), Ctrl+D, Ctrl+A,
   Suppr, Maj + glisser pour sélectionner une zone, `{{` ou le bouton `{x}` pour insérer une variable.
 
+## Dossiers (M3a)
+
+Les flux se rangent dans des dossiers (un seul niveau, comme dans UChat), par client : créer,
+renommer, monter / descendre, « Déplacer… » sur chaque flux, choix du dossier à la création.
+Supprimer un dossier ne supprime jamais ses flux : ils passent dans « Sans dossier ».
+Le modèle maître (M3b) aura ses propres dossiers.
+
 ## Fiche d'infos et variables (M2)
 
 Variables calculées dans le **fuseau du client**, utilisables dans toutes les bulles (menu `{x}`) :

@@ -152,9 +152,17 @@ export const clientSchema = z.object({
   updatedAt: timestamp,
 });
 
+export const folderSchema = z.object({
+  id,
+  ownerId: id,
+  name: z.string().min(1),
+  order: z.number().int().min(0),
+});
+
 export const storedFlowSchema = z.object({
   id,
   clientId: id,
+  folderId: id.optional(),
   name: z.string().min(1),
   description: z.string().optional(),
   draft: flowGraphSchema,
@@ -169,6 +177,8 @@ export const storedFlowSchema = z.object({
 export const workspaceSchema = z.object({
   clients: z.array(clientSchema),
   flows: z.array(storedFlowSchema),
+  /** Absent dans les sauvegardes d'avant les dossiers. */
+  folders: z.array(folderSchema).default([]),
   infoSheets: z.record(z.string(), infoSheetSchema),
 });
 

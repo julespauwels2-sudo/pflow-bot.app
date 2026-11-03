@@ -160,18 +160,20 @@ export async function loadDemo(repos: Repositories): Promise<BotClient> {
     triggerMode: "toujours",
   });
   await repos.infoSheets.save(client.id, DEMO_INFO_SHEET);
-  const create = async (name: string, description: string, draft: FlowGraph) => {
-    const flow = await repos.flows.create({ clientId: client.id, name, description, draft });
+  const principales = await repos.folders.create({ ownerId: client.id, name: "Principales PFlow Order" });
+  const fonctionsIa = await repos.folders.create({ ownerId: client.id, name: "Fonctions IA" });
+  const create = async (name: string, description: string, draft: FlowGraph, folderId: string) => {
+    const flow = await repos.flows.create({ clientId: client.id, name, description, draft, folderId });
     return flow.id;
   };
-  const recoId = await create("IA - Recommandation", "Conseille un produit de la carte", recommandation);
-  const ctaId = await create("CTA - Commander", "Invite à commander (bouton Je commande)", ctaCommander);
+  const recoId = await create("IA - Recommandation", "Conseille un produit de la carte", recommandation, fonctionsIa.id);
+  const ctaId = await create("CTA - Commander", "Invite à commander (bouton Je commande)", ctaCommander, principales.id);
   const withGoto = (graph: FlowGraph, targets: Record<string, string>): FlowGraph => ({
     ...graph,
     nodes: graph.nodes.map((n) => (n.id in targets ? { ...n, data: { flowId: targets[n.id] } } : n)) as FlowGraph["nodes"],
   });
-  const infosId = await create("Infos pratiques", "Horaires, livraison, points de vente, paiement", withGoto(infosPratiques, { g: ctaId }));
-  const accueilId = await create("Accueil", "Accueil, lien de commande et aide", withGoto(accueil, { g1: recoId, g2: infosId }));
+  const infosId = await create("Infos pratiques", "Horaires, livraison, points de vente, paiement", withGoto(infosPratiques, { g: ctaId }), principales.id);
+  const accueilId = await create("Accueil", "Accueil, lien de commande et aide", withGoto(accueil, { g1: recoId, g2: infosId }), principales.id);
   for (const id of [recoId, ctaId, infosId, accueilId]) await repos.flows.publish(id);
   return client;
 }

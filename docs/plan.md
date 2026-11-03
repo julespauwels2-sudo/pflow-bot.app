@@ -10,7 +10,7 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 | Compléments A4 | Flux par défaut, bloc Délai, mode de déclenchement par client | Fait |
 | M1 | Bloc Message façon UChat (bulles, bouton de réponse / bouton lien) | Fait |
 | M2 | Variables de la fiche d'infos (horaires, livraison, planning…) | Fait |
-| M3 | M3a dossiers · M3b modèle maître · M3c événements de commande · M3d bots liés | En cours (M3a) |
+| M3 | M3a dossiers (fait) · M3b modèle maître · M3c événements de commande · M3d bots liés | En cours |
 | A5 | Simulateur : tester le bot en direct dans un chat | À faire |
 | A6 | Agent IA par client (consigne), base de connaissances, réglages du modèle, journal et coût ; fonctions `lancer_commande`, `proposer_commande`, `parler_equipe` | À faire |
 | B | Supabase (tables `bot_` uniquement, SQL montré avant), auth, lecture seule du CRM | À faire |

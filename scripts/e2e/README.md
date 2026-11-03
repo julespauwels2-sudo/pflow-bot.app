@@ -15,6 +15,7 @@ Puis, dans un autre terminal (le dossier passé en argument reçoit les captures
 node scripts/e2e/clients.js /tmp
 node scripts/e2e/message-bulles.js /tmp
 node scripts/e2e/fiche-infos.js /tmp
+node scripts/e2e/dossiers.js /tmp
 ```
 
 Chaque script part d'un navigateur vierge et charge le resto d'exemple.

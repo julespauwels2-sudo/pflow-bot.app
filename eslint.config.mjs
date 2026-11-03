@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Scripts Playwright autonomes (Node, CommonJS), hors de l'application.
+    "scripts/**",
   ]),
 ]);
 
