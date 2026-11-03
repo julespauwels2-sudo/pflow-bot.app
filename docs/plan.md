@@ -10,7 +10,7 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 | Compléments A4 | Flux par défaut, bloc Délai, mode de déclenchement par client | Fait |
 | M1 | Bloc Message façon UChat (bulles, bouton de réponse / bouton lien) | Fait |
 | M2 | Variables de la fiche d'infos (horaires, livraison, planning…) | Fait |
-| M3 | Modèle maître, bots liés, personnaliser / détacher, « Créer le bot depuis le modèle » | À faire |
+| M3 | M3a dossiers · M3b modèle maître · M3c événements de commande · M3d bots liés | En cours (M3a) |
 | A5 | Simulateur : tester le bot en direct dans un chat | À faire |
 | A6 | Agent IA par client (consigne), base de connaissances, réglages du modèle, journal et coût ; fonctions `lancer_commande`, `proposer_commande`, `parler_equipe` | À faire |
 | B | Supabase (tables `bot_` uniquement, SQL montré avant), auth, lecture seule du CRM | À faire |
@@ -33,6 +33,16 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - Branchement des événements de commande : PFlow Order prévient le bot (paiement validé, statuts,
   panier abandonné). **Pas de templates** : si la fenêtre de 24 h est fermée, le bot n'envoie rien.
   Montrer la modification de PFlow Order avant de la faire. Flux préparés dans le modèle maître en M3.
+  - Les événements de commande sont envoyés **même si le contact est en pause** (transfert humain,
+    gérant qui a répondu), toujours soumis aux 24 h, et sans relancer la conversation du bot.
+- **Modifications à prévoir dans PFlow Order** (à montrer à Jules avant de les faire) :
+  - prévenir le bot à chaque événement de commande (validée, en préparation, prête) ;
+  - envoyer l'événement **« panier abandonné » après 20 minutes** sans validation (c'est PFlow Order
+    qui connaît l'état du panier : pas de tâche planifiée côté bot) ;
+  - bouton « Retour sur WhatsApp » sur la page de confirmation ;
+  - option 3 du lien de commande : pré-remplissage téléphone / prénom et rattachement des commandes au bot ;
+  - API pour les fonctions IA `annuler_commande` et `suivre_commande`, et pour marquer un panier
+    « laissé tomber ».
 - Bouton « Retour sur WhatsApp » (`wa.me`) sur la page de confirmation de PFlow Order.
 - Transfert humain : alerte dans la boîte de réception + WhatsApp au gérant si sa fenêtre de 24 h est
   ouverte. Notification par e-mail (présente dans le template UChat) : proposer une solution gratuite.
