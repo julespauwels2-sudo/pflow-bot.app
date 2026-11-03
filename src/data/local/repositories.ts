@@ -103,6 +103,37 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
   const ownerKindOf = (data: WorkspaceData, ownerId: string): OwnerKind =>
     data.templates.some((t) => t.id === ownerId) ? "template" : "client";
 
+  /** Copie publiée d'un flux du modèle chez un client, rangée dans un dossier du même nom. */
+  function copyFlowForClient(data: WorkspaceData, source: StoredFlow, clientId: string): StoredFlow {
+    const sourceFolder = source.folderId ? data.folders.find((f) => f.id === source.folderId) : undefined;
+    let folderId: string | undefined;
+    if (sourceFolder) {
+      let folder = data.folders.find((f) => f.ownerId === clientId && f.name.toLowerCase() === sourceFolder.name.toLowerCase());
+      if (!folder) {
+        folder = { id: newId(), ownerId: clientId, name: sourceFolder.name, order: data.folders.filter((f) => f.ownerId === clientId).length };
+        data.folders.push(folder);
+      }
+      folderId = folder.id;
+    }
+    const graph = structuredClone(source.published ?? source.draft);
+    const meta = source.publishedMeta ?? { name: source.name, description: source.description };
+    return {
+      id: newId(),
+      ownerKind: "client",
+      ownerId: clientId,
+      ...(folderId ? { folderId } : {}),
+      name: meta.name,
+      ...(meta.description ? { description: meta.description } : {}),
+      draft: graph,
+      published: structuredClone(graph),
+      publishedMeta: { ...meta },
+      publishedAt: now(),
+      version: 1,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+  }
+
   function ensureUniqueSlug(data: WorkspaceData, slug: string, exceptId?: string) {
     if (data.clients.some((c) => c.orderSlug === slug && c.id !== exceptId)) {
       throw new DataError(`Le slug « ${slug} » est déjà utilisé par un autre client`);
@@ -155,6 +186,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
           }
           if (patch.timezone !== undefined) client.timezone = checkTimezone(patch.timezone);
           if (patch.triggerMode !== undefined) client.triggerMode = patch.triggerMode;
+          if (patch.options !== undefined) client.options = { ...client.options, ...patch.options };
           client.updatedAt = now();
           return client;
         });
@@ -291,6 +323,83 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
           for (const flow of data.flows) if (flow.folderId === id) delete flow.folderId;
           data.folders = data.folders.filter((f) => f.id !== id);
           renumber(data, folder.ownerId);
+        });
+      },
+    },
+
+    bots: {
+      async link(clientId, templateId) {
+        return mutate((data) => {
+          const client = findClient(data, clientId);
+          findTemplate(data, templateId);
+          client.template = { templateId, linkedAt: now() };
+          client.updatedAt = now();
+          return client;
+        });
+      },
+
+      async personalize(clientId, templateFlowId) {
+        return mutate((data) => {
+          const client = findClient(data, clientId);
+          if (!client.template) throw new DataError("Ce client n'est pas lié au modèle maître");
+          const source = findFlow(data, templateFlowId);
+          if (source.ownerKind !== "template" || source.ownerId !== client.template.templateId) {
+            throw new DataError("Ce flux n'appartient pas au modèle de ce client");
+          }
+          if (!source.published || !source.publishedMeta) throw new DataError("Ce flux du modèle n'est pas encore publié");
+          if (data.flows.some((f) => f.ownerId === clientId && f.overridesTemplateFlowId === templateFlowId)) {
+            throw new DataError("Ce flux est déjà personnalisé pour ce client");
+          }
+          const copy = copyFlowForClient(data, source, clientId);
+          copy.overridesTemplateFlowId = source.id;
+          copy.basedOnTemplateVersion = source.version;
+          data.flows.push(copy);
+          return copy;
+        });
+      },
+
+      async revert(flowId) {
+        mutate((data) => {
+          const flow = findFlow(data, flowId);
+          if (!flow.overridesTemplateFlowId) throw new DataError("Ce flux n'est pas une personnalisation du modèle");
+          data.flows = data.flows.filter((f) => f.id !== flowId);
+        });
+      },
+
+      async detach(clientId) {
+        mutate((data) => {
+          const client = findClient(data, clientId);
+          const templateId = client.template?.templateId;
+          if (!templateId) throw new DataError("Ce client n'est pas lié au modèle maître");
+          const own = data.flows.filter((f) => f.ownerId === clientId);
+          // id du flux du modèle → id de la copie chez le client
+          const idMap = new Map<string, string>();
+          for (const flow of own) {
+            if (!flow.overridesTemplateFlowId) continue;
+            idMap.set(flow.overridesTemplateFlowId, flow.id);
+            delete flow.overridesTemplateFlowId;
+            delete flow.basedOnTemplateVersion;
+          }
+          const templateFlows = data.flows.filter((f) => f.ownerKind === "template" && f.ownerId === templateId && f.published);
+          for (const source of templateFlows) {
+            if (idMap.has(source.id)) continue;
+            const copy = copyFlowForClient(data, source, clientId);
+            idMap.set(source.id, copy.id);
+            data.flows.push(copy);
+          }
+          // Les « Aller à un flux » visaient les flux du modèle : on les remet sur les copies.
+          const remap = (graph: FlowGraph | null): FlowGraph | null =>
+            graph && {
+              ...graph,
+              nodes: graph.nodes.map((n) => (n.type === "goto_flow" && idMap.has(n.data.flowId) ? { ...n, data: { flowId: idMap.get(n.data.flowId)! } } : n)),
+            };
+          for (const flow of data.flows) {
+            if (flow.ownerId !== clientId) continue;
+            flow.draft = remap(flow.draft)!;
+            flow.published = remap(flow.published);
+          }
+          delete client.template;
+          client.updatedAt = now();
         });
       },
     },

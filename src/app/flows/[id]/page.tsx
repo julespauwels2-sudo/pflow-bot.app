@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { FlowEditor, type EditorOwner } from "@/components/editor/flow-editor";
 import { Loading, Notice } from "@/components/ui";
 import { useLoad } from "@/data/browser";
+import { botFlowList, resolveBot } from "@/data/resolve";
 import { findTrigger } from "@/engine";
 
 export default function FlowPage() {
@@ -22,12 +23,16 @@ export default function FlowPage() {
         if (client) owner = { kind: "client", client };
       }
       if (!owner) return null;
-      const flows = (await repos.flows.listByOwner(flow.ownerId)).map((f) => ({
-        id: f.id,
-        name: f.name,
-        isDefault: findTrigger({ id: f.id, name: f.name, ...f.draft })?.data.isDefault ?? false,
-        event: findTrigger({ id: f.id, name: f.name, ...f.draft })?.data.event,
-      }));
+      const own = await repos.flows.listByOwner(flow.ownerId);
+      let flows: { id: string; name: string; isDefault?: boolean; event?: string }[] = own.map((f) => {
+        const trigger = findTrigger({ id: f.id, name: f.name, ...f.draft })?.data;
+        return { id: f.id, name: f.name, isDefault: trigger?.isDefault ?? false, event: trigger?.event };
+      });
+      // Client lié au modèle : on raisonne sur le bot assemblé (flux du modèle + flux du client).
+      if (owner.kind === "client" && owner.client.template) {
+        const templateFlows = await repos.flows.listByOwner(owner.client.template.templateId);
+        flows = botFlowList(resolveBot({ client: owner.client, templateFlows, clientFlows: own }).entries);
+      }
       return { flow, owner, flows };
     },
     [id],

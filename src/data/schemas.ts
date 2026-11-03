@@ -150,6 +150,8 @@ export const clientSchema = z.object({
   timezone: z.string().min(1),
   /** Anciennes sauvegardes sans ce champ : mode le plus prudent. */
   triggerMode: z.enum(["mots_cles_uniquement", "toujours"]).default("mots_cles_uniquement"),
+  template: z.object({ templateId: id, linkedAt: z.string() }).optional(),
+  options: z.object({ panier_abandonne: z.boolean().optional() }).optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
 });
@@ -189,6 +191,8 @@ const storedFlowObject = z.object({
   ownerKind: z.enum(["client", "template"]),
   ownerId: id,
   folderId: id.optional(),
+  overridesTemplateFlowId: id.optional(),
+  basedOnTemplateVersion: z.number().int().min(0).optional(),
   name: z.string().min(1),
   description: z.string().optional(),
   draft: flowGraphSchema,

@@ -10,7 +10,7 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 | Compléments A4 | Flux par défaut, bloc Délai, mode de déclenchement par client | Fait |
 | M1 | Bloc Message façon UChat (bulles, bouton de réponse / bouton lien) | Fait |
 | M2 | Variables de la fiche d'infos (horaires, livraison, planning…) | Fait |
-| M3 | M3a dossiers (fait) · M3b modèle maître (fait) · M3c événements de commande (fait) · M3d bots liés | En cours |
+| M3 | Dossiers, modèle maître, événements de commande, bots liés, options payantes | Fait |
 | A5 | Simulateur : tester le bot en direct dans un chat | À faire |
 | A6 | Agent IA par client (consigne), base de connaissances, réglages du modèle, journal et coût ; fonctions `lancer_commande`, `proposer_commande`, `parler_equipe` | À faire |
 | B | Supabase (tables `bot_` uniquement, SQL montré avant), auth, lecture seule du CRM | À faire |
@@ -19,6 +19,8 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 ## Points notés pour plus tard
 
 ### Étape B
+- **Options payantes** (ex. relance panier abandonné) : aujourd'hui cochées sur la fiche client du
+  bot ; à terme, lues dans le CRM (ce que le client paie).
 - Fiche d'infos lue **directement** dans le CRM (atelier) et le dashboard PFlow Order : horaires, carte…
   Les champs propres au bot (consigne IA, FAQ) restent dans les tables `bot_`. Regarder le CRM en
   lecture seule et proposer comment faire.

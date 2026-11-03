@@ -1,4 +1,5 @@
 import type { Flow, FlowEdge, FlowNode, InfoSheet, TriggerMode } from "@/engine";
+import type { BotOption } from "./options";
 
 /** Client (resto) tel que vu par l'app bots. À l'étape B : lu depuis le CRM + réglages bot_. */
 export interface BotClient {
@@ -14,12 +15,16 @@ export interface BotClient {
    * (numéro perso du gérant) : le bot ne répond qu'aux mots-clés.
    */
   triggerMode: TriggerMode;
+  /** Bot lié au modèle maître : ses flux publiés s'ajoutent à ceux du client. Absent = non lié. */
+  template?: { templateId: string; linkedAt: string };
+  /** Options payantes activées (ex. relance panier abandonné). */
+  options?: Partial<Record<BotOption, boolean>>;
   createdAt: string;
   updatedAt: string;
 }
 
 export type NewClient = Pick<BotClient, "nomResto" | "orderSlug"> & Partial<Pick<BotClient, "timezone" | "triggerMode">>;
-export type ClientPatch = Partial<Pick<BotClient, "nomResto" | "orderSlug" | "timezone" | "triggerMode">>;
+export type ClientPatch = Partial<Pick<BotClient, "nomResto" | "orderSlug" | "timezone" | "triggerMode" | "options">>;
 
 /** Contenu d'un flux (format React Flow). */
 export interface FlowGraph {
@@ -69,6 +74,13 @@ export interface StoredFlow {
   ownerId: string;
   /** Dossier du flux (absent = « Sans dossier »). */
   folderId?: string;
+  /**
+   * Flux personnalisé : copie d'un flux du modèle qui le remplace pour ce client seulement.
+   * Il garde l'id du flux du modèle dans le bot, pour que les « Aller à un flux » restent bons.
+   */
+  overridesTemplateFlowId?: string;
+  /** Version du flux du modèle au moment de la personnalisation. */
+  basedOnTemplateVersion?: number;
   name: string;
   description?: string;
   /** Version en cours d'édition. */

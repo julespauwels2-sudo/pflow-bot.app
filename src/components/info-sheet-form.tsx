@@ -27,7 +27,18 @@ function withPlages(sheet: InfoSheet, jour: IsoWeekday, plages: TimeRange[]): In
   return { ...sheet, horaires: horaires.sort((a, b) => a.jour - b.jour) };
 }
 
-export function InfoSheetForm({ clientId, timezone, initial }: { clientId: string; timezone: string; initial: InfoSheet }) {
+export function InfoSheetForm({
+  clientId,
+  timezone,
+  initial,
+  onSaved,
+}: {
+  clientId: string;
+  timezone: string;
+  initial: InfoSheet;
+  /** Appelé après l'enregistrement (ex. pour recalculer la liste de contrôle du bot). */
+  onSaved?: () => void;
+}) {
   const [sheet, setSheet] = useState<InfoSheet>(initial);
   const [status, setStatus] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -51,6 +62,7 @@ export function InfoSheetForm({ clientId, timezone, initial }: { clientId: strin
       setSheet(saved);
       setDirty(false);
       setStatus({ tone: "success", text: "Fiche d'infos enregistrée." });
+      onSaved?.();
     } catch (error) {
       setStatus({ tone: "error", text: errorText(error) });
     }

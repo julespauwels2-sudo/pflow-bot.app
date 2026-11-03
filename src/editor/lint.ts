@@ -36,7 +36,8 @@ function strictest(platforms: Platform[], key: keyof Omit<PlatformLimits, "name"
     .reduce((a, b) => (b.value < a.value ? b : a));
 }
 
-function texts(node: FlowNode): (string | undefined)[] {
+/** Textes d'un bloc où des variables {{...}} peuvent apparaître. */
+export function nodeTexts(node: FlowNode): (string | undefined)[] {
   switch (node.type) {
     case "message":
       return node.data.bubbles.flatMap((b) => [b.text, ...b.buttons.map((x) => x.title), ...b.buttons.map((x) => (x.kind === "link" ? x.url : undefined))]);
@@ -131,7 +132,7 @@ export function lintFlow(graph: FlowGraph, ctx: LintContext): Issue[] {
     const connected = new Set(graph.edges.filter((e) => e.source === id).map(handleOf));
     const outputs = nodeOutputs(node);
 
-    for (const text of texts(node)) {
+    for (const text of nodeTexts(node)) {
       for (const v of usedVariables(text)) {
         if (!known.has(v)) warning(`Variable {{${v}}} jamais définie : elle sera vide.`, id);
       }

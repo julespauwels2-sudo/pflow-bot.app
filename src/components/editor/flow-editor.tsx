@@ -119,8 +119,10 @@ function EditorInner({ flow: initialFlow, owner, flows }: Props) {
   const graph = state.history.present;
   const graphJson = useMemo(() => stableStringify(graph), [graph]);
   const { orderSlug, triggerMode, orderUrl } = settings;
-  const issues = useMemo(() => lintFlow(graph, { flowId: flow.id, flows, orderSlug, triggerMode }),
-    [graph, flow.id, flows, orderSlug, triggerMode],
+  // Dans le bot, une copie personnalisée garde l'id du flux du modèle qu'elle remplace.
+  const botFlowId = initialFlow.overridesTemplateFlowId ?? initialFlow.id;
+  const issues = useMemo(() => lintFlow(graph, { flowId: botFlowId, flows, orderSlug, triggerMode }),
+    [graph, botFlowId, flows, orderSlug, triggerMode],
   );
   const byNode = useMemo(() => issuesByNode(issues), [issues]);
   const errorCount = issues.filter((i) => i.level === "error").length;
@@ -287,12 +289,12 @@ function EditorInner({ flow: initialFlow, owner, flows }: Props) {
       issues: byNode,
       variables: flowVariables(graph.nodes),
       flows,
-      flowId: flow.id,
+      flowId: botFlowId,
       orderUrl,
       updateData: (id, data, key) => dispatch({ type: "updateData", id, data, key, now: Date.now() }),
       deleteEdge: (id) => dispatch({ type: "deleteEdge", id, now: Date.now() }),
     }),
-    [byNode, graph.nodes, flows, flow.id, orderUrl],
+    [byNode, graph.nodes, flows, botFlowId, orderUrl],
   );
 
   const edges = useMemo(
@@ -312,6 +314,11 @@ function EditorInner({ flow: initialFlow, owner, flows }: Props) {
             ← {settings.backLabel}
           </Link>
           {settings.badge && <span className="rounded-full bg-navy px-2.5 py-0.5 text-xs font-semibold text-white">{settings.badge}</span>}
+          {initialFlow.overridesTemplateFlowId && (
+            <span className="rounded-full bg-blue/10 px-2.5 py-0.5 text-xs font-semibold text-blue" title="Copie d'un flux du modèle, pour ce client seulement">
+              Personnalisé
+            </span>
+          )}
           <input
             aria-label="Nom du flux"
             value={name}

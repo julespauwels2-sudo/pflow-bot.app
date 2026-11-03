@@ -42,6 +42,21 @@ export interface FlowRepository {
   delete(id: string): Promise<void>;
 }
 
+/** Lien entre un bot client et le modèle maître (opérations atomiques). */
+export interface BotRepository {
+  /** « Créer le bot depuis le modèle » : relie le client au modèle (rien n'est copié). */
+  link(clientId: string, templateId: string): Promise<BotClient>;
+  /** Copie un flux publié du modèle chez ce client ; la copie le remplace pour lui seul (publiée). */
+  personalize(clientId: string, templateFlowId: string): Promise<StoredFlow>;
+  /** « Revenir au modèle » : supprime la copie personnalisée. */
+  revert(flowId: string): Promise<void>;
+  /**
+   * « Détacher » : copie chez le client tous les flux du modèle non personnalisés, transforme les
+   * personnalisations en flux normaux, remet les « Aller à un flux » sur les copies, et coupe le lien.
+   */
+  detach(clientId: string): Promise<void>;
+}
+
 export interface TemplateRepository {
   list(): Promise<BotTemplate[]>;
   get(id: string): Promise<BotTemplate | null>;
@@ -77,6 +92,7 @@ export interface Repositories {
   flows: FlowRepository;
   folders: FolderRepository;
   templates: TemplateRepository;
+  bots: BotRepository;
   infoSheets: InfoSheetRepository;
   workspace: WorkspaceRepository;
 }

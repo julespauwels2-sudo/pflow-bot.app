@@ -103,6 +103,25 @@ Toutes les conditions jour/heure utilisent le fuseau du client (`America/Guadelo
 - Raccourcis : Ctrl+Z / Ctrl+Y, Ctrl+C / Ctrl+V (aussi d'un flux à l'autre), Ctrl+D, Ctrl+A,
   Suppr, Maj + glisser pour sélectionner une zone, `{{` ou le bouton `{x}` pour insérer une variable.
 
+## Bots liés au modèle (M3d)
+
+- **« Créer le bot depuis le modèle »** (page client) : le client est relié au modèle, rien n'est
+  copié. Son bot = flux **publiés** du modèle + ses flux propres, assemblés par `resolveBot`
+  (`src/data/resolve.ts`), seule source des flux donnés au moteur (simulateur, webhook).
+  Republier un flux du modèle l'applique immédiatement à tous les bots liés.
+- **« Personnaliser »** : copie d'un flux du modèle chez ce client seulement (même dossier) ; elle
+  garde l'id du flux du modèle dans le bot, donc les « Aller à un flux » restent bons. Jamais
+  écrasée par le modèle ; une alerte signale que le modèle a changé depuis.
+  **« Revenir au modèle »** supprime la copie.
+- **« Détacher »** : copie tous les flux du modèle chez le client, remet les « Aller à un flux »
+  sur les copies, coupe le lien.
+- Flux propres au client prioritaires en cas de mot-clé identique.
+- **Options payantes** (fiche client) : sans « Relance panier abandonné », le flux qui réagit à
+  l'événement « panier abandonné » est inactif et rien n'est envoyé (`src/data/options.ts`).
+- **Liste de contrôle** (carte « Bot ») : variables de la fiche d'infos vides mais utilisées, slug
+  manquant, flux par défaut inactif en mode mots-clés, option non activée, modèle modifié depuis
+  une personnalisation, erreurs des flux avec les réglages du client.
+
 ## Événements de commande (M3c)
 
 Déclencheur « Événement PFlow Order » (au lieu des mots-clés) : commande validée, en préparation,

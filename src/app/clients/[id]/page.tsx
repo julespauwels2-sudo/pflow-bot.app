@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { BotCard } from "@/components/bot-card";
 import { FlowsCard } from "@/components/flows-card";
 import { InfoSheetForm } from "@/components/info-sheet-form";
 import { LocalClock } from "@/components/local-clock";
 import { Button, Card, Field, Input, Loading, Notice, Select } from "@/components/ui";
 import { errorText, getRepositories, useLoad } from "@/data/browser";
+import { BOT_OPTIONS, BOT_OPTION_KEYS, type BotOption } from "@/data/options";
 import type { BotClient } from "@/data/types";
 import { DEFAULT_ORDER_BASE_URL } from "@/engine";
 import { TIMEZONES } from "@/lib/timezones";
@@ -19,8 +21,17 @@ export default function ClientPage() {
     async (repos) => {
       const client = await repos.clients.get(id);
       if (!client) return null;
-      const [flows, folders, infoSheet] = await Promise.all([repos.flows.listByOwner(id), repos.folders.listByOwner(id), repos.infoSheets.get(id)]);
-      return { client, flows, folders, infoSheet };
+      const [flows, folders, infoSheet, templates] = await Promise.all([
+        repos.flows.listByOwner(id),
+        repos.folders.listByOwner(id),
+        repos.infoSheets.get(id),
+        repos.templates.list(),
+      ]);
+      const template = templates.find((t) => t.id === client.template?.templateId) ?? templates[0] ?? null;
+      const [templateFlows, templateFolders] = template
+        ? await Promise.all([repos.flows.listByOwner(template.id), repos.folders.listByOwner(template.id)])
+        : [[], []];
+      return { client, flows, folders, infoSheet, template, templateFlows, templateFolders };
     },
     [id],
   );
@@ -42,11 +53,30 @@ export default function ClientPage() {
       {state.status === "ready" && state.data && (
         <div className="space-y-6">
           <h1 className="text-3xl font-semibold">{state.data.client.nomResto}</h1>
+          <BotCard
+            input={{
+              client: state.data.client,
+              templateFlows: state.data.templateFlows,
+              templateFolders: state.data.templateFolders,
+              clientFlows: state.data.flows,
+              clientFolders: state.data.folders,
+            }}
+            template={state.data.template}
+            infoSheet={state.data.infoSheet}
+            onChange={reload}
+          />
           <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
             <ClientSettings key={state.data.client.updatedAt} client={state.data.client} onSaved={reload} />
-            <FlowsCard owner={{ kind: "client", id }} flows={state.data.flows} folders={state.data.folders} onChange={reload} />
+            <FlowsCard
+              owner={{ kind: "client", id }}
+              flows={state.data.flows}
+              folders={state.data.folders}
+              onChange={reload}
+              title={state.data.client.template ? "Flux propres au client" : "Flux"}
+              templateFlowNames={Object.fromEntries(state.data.templateFlows.map((f) => [f.id, f.name]))}
+            />
           </div>
-          <InfoSheetForm key={id} clientId={id} timezone={state.data.client.timezone} initial={state.data.infoSheet} />
+          <InfoSheetForm key={id} clientId={id} timezone={state.data.client.timezone} initial={state.data.infoSheet} onSaved={reload} />
           <DangerZone client={state.data.client} />
         </div>
       )}
@@ -60,13 +90,15 @@ function ClientSettings({ client, onSaved }: { client: BotClient; onSaved: () =>
     orderSlug: client.orderSlug,
     timezone: client.timezone,
     triggerMode: client.triggerMode,
+    options: { ...client.options } as Partial<Record<BotOption, boolean>>,
   });
   const [status, setStatus] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const dirty =
     form.nomResto !== client.nomResto ||
     form.orderSlug !== client.orderSlug ||
     form.timezone !== client.timezone ||
-    form.triggerMode !== client.triggerMode;
+    form.triggerMode !== client.triggerMode ||
+    BOT_OPTION_KEYS.some((k) => Boolean(form.options[k]) !== Boolean(client.options?.[k]));
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -118,6 +150,23 @@ function ClientSettings({ client, onSaved }: { client: BotClient; onSaved: () =>
           </Select>
         </Field>
         <p className="-mt-2 text-[11px] text-muted">Provisoire : à l&apos;étape C, ce réglage sera fait numéro par numéro.</p>
+        <fieldset>
+          <legend className="text-sm font-semibold">Options payantes</legend>
+          {BOT_OPTION_KEYS.map((key) => (
+            <label key={key} className="mt-2 flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 accent-pink"
+                checked={Boolean(form.options[key])}
+                onChange={(e) => setForm({ ...form, options: { ...form.options, [key]: e.target.checked } })}
+              />
+              <span>
+                <span className="block font-semibold">{BOT_OPTIONS[key].label}</span>
+                <span className="block text-[11px] text-muted">{BOT_OPTIONS[key].description}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
         {status && <Notice tone={status.tone}>{status.text}</Notice>}
         <Button type="submit" disabled={!dirty} className="w-full">
           Enregistrer

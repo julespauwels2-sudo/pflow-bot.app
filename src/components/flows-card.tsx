@@ -25,7 +25,12 @@ export function FlowsCard({
   folders,
   onChange,
   description = "Un flux démarre par un déclencheur. Seule la version publiée est utilisée par le bot.",
+  title = "Flux",
+  templateFlowNames = {},
 }: {
+  title?: string;
+  /** Noms des flux du modèle (pour signaler les personnalisations). */
+  templateFlowNames?: Record<string, string>;
   owner: { kind: OwnerKind; id: string };
   description?: string;
   flows: StoredFlow[];
@@ -89,7 +94,7 @@ export function FlowsCard({
   return (
     <Card
       className="min-w-0"
-      title="Flux"
+      title={title}
       description={description}
       actions={
         <FileButton accept="application/json,.json" onFile={importFile}>
@@ -101,7 +106,7 @@ export function FlowsCard({
 
       <div className="space-y-3">
         {sections.map(({ folder, flows: inFolder }, index) =>
-          folder === null && inFolder.length === 0 && folders.length > 0 ? null : (
+          folder === null && inFolder.length === 0 ? null : (
             <FolderSection
               key={folder?.id ?? "sans-dossier"}
               folder={folder}
@@ -110,6 +115,7 @@ export function FlowsCard({
               isFirst={index === 0}
               isLast={index === folders.length - 1}
               run={run}
+              templateFlowNames={templateFlowNames}
             />
           ),
         )}
@@ -164,7 +170,9 @@ function FolderSection({
   isFirst,
   isLast,
   run,
+  templateFlowNames,
 }: {
+  templateFlowNames: Record<string, string>;
   folder: BotFolder | null;
   flows: StoredFlow[];
   folders: BotFolder[];
@@ -235,7 +243,7 @@ function FolderSection({
       ) : (
         <ul className="divide-y divide-rule px-3">
           {flows.map((flow) => (
-            <FlowRow key={flow.id} flow={flow} folders={folders} run={run} />
+            <FlowRow key={flow.id} flow={flow} folders={folders} run={run} templateFlowNames={templateFlowNames} />
           ))}
         </ul>
       )}
@@ -243,7 +251,17 @@ function FolderSection({
   );
 }
 
-function FlowRow({ flow, folders, run }: { flow: StoredFlow; folders: BotFolder[]; run: (action: () => Promise<unknown>, success?: string) => Promise<void> }) {
+function FlowRow({
+  flow,
+  folders,
+  run,
+  templateFlowNames,
+}: {
+  flow: StoredFlow;
+  folders: BotFolder[];
+  run: (action: () => Promise<unknown>, success?: string) => Promise<void>;
+  templateFlowNames: Record<string, string>;
+}) {
   const trigger = findTrigger({ id: flow.id, name: flow.name, ...flow.draft })?.data;
   const keywords = trigger?.keywords ?? [];
   const repos = () => getRepositories();
@@ -257,6 +275,9 @@ function FlowRow({ flow, folders, run }: { flow: StoredFlow; folders: BotFolder[
           </Link>
           {flowStatus(flow)}
           {trigger?.isDefault && !trigger.event && <Badge tone="info">Par défaut</Badge>}
+          {flow.overridesTemplateFlowId && (
+            <Badge tone="info">Personnalisé · remplace « {templateFlowNames[flow.overridesTemplateFlowId] ?? flow.name} » du modèle</Badge>
+          )}
         </div>
         <p className="mt-0.5 truncate text-xs text-muted">
           {trigger?.event
@@ -302,6 +323,17 @@ function FlowRow({ flow, folders, run }: { flow: StoredFlow; folders: BotFolder[
         >
           ⤓
         </Button>
+        {flow.overridesTemplateFlowId && (
+          <Button
+            variant="ghost"
+            className="px-2 text-xs"
+            onClick={() => {
+              if (window.confirm(`Revenir au flux du modèle ? La personnalisation « ${flow.name} » sera supprimée.`)) run(() => repos().bots.revert(flow.id));
+            }}
+          >
+            Revenir au modèle
+          </Button>
+        )}
         <Button
           variant="ghost"
           className="px-2 text-coral"
