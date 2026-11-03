@@ -6,13 +6,21 @@ Application indépendante du CRM : une panne de l'un ne fait jamais tomber l'aut
 ## Démarrer en local
 
 ```bash
-npm install          # npm 11 recommandé (npx npm@11 install si npm 10 plante)
+npm ci               # installe exactement les versions du package-lock.json
 cp .env.example .env.local
 npm run dev          # http://localhost:3000
 ```
 
 Sans `BASIC_AUTH_PASSWORD`, l'accès est libre en local. En production, l'app refuse
 tout (503) tant que le mot de passe n'est pas défini.
+
+## Installation et Vercel
+
+- Node 22 (`engines.node` = `22.x`, respecté par Vercel). npm 10 ou 11.
+- **Le `package-lock.json` doit rester versionné.** npm 10.9 a un bug qui le fait planter
+  quand il construit l'arbre de dépendances *sans* lockfile (dépendances optionnelles de Vitest).
+  Avec le lockfile, `npm ci` et `npm install <paquet>` fonctionnent normalement, en local comme sur Vercel.
+- Si le lockfile devait être recréé de zéro, le faire avec `npx npm@11 install`.
 
 ## Commandes
 
