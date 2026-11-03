@@ -36,13 +36,27 @@ tout (503) tant que le mot de passe n'est pas défini.
 ```
 src/engine/   Moteur pur : flux + session + message entrant → nouvel état + messages à envoyer.
               Aucune dépendance (ni Next, ni WhatsApp, ni base). Testé dans __tests__/.
-src/lib/      Utilitaires serveur (protection provisoire par mot de passe).
+src/data/     Accès aux données. repositories.ts = interfaces uniques (clients, flux, fiches d'infos,
+              sauvegarde). local/ = implémentation localStorage (étape A). browser.ts = le seul
+              endroit à changer pour brancher Supabase (étape B). schemas.ts = validation zod de
+              tout JSON importé. transfer.ts = export / import.
+src/lib/      Utilitaires (protection par mot de passe, fuseaux, fichiers).
 src/proxy.ts  Protection de toutes les pages sauf /api/webhooks/.
-src/app/      Interface Next.js (App Router).
+src/app/      Interface Next.js : /clients, /clients/[id], /flows/[id].
 ```
 
-À venir : `src/data/` (repositories localStorage puis Supabase), `src/components/editor`,
+À venir : `src/components/editor` (A4), simulateur (A5), IA (A6),
 `src/channels/whatsapp` (webhook isolé, hébergeable ailleurs si besoin), `supabase/migrations/`.
+
+## Données (étape A)
+
+- Tout est dans le `localStorage` du navigateur (clé `pflow-bots:v1`). Des données illisibles ne sont
+  jamais écrasées : elles sont copiées sous `pflow-bots:v1:corrompu:<date>`.
+- **Flux** : un brouillon (édité) et une version publiée (utilisée par le bot). « Publier » copie le
+  brouillon dans la version publiée et incrémente le numéro de version.
+- **Export / import** : un flux seul (format `pflow-bots/flow`, importé en brouillon), ou la
+  sauvegarde complète (format `pflow-bots/backup`, remplace tout).
+- **Client** : nom, slug du mini-site (unique), fuseau horaire (`America/Guadeloupe` par défaut).
 
 ## Moteur : ordre de traitement
 

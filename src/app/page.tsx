@@ -1,7 +1,9 @@
+import Link from "next/link";
+
 const steps = [
   { id: "A1", title: "Socle", detail: "Next.js, Tailwind, DA PFlow, accès protégé", done: true },
   { id: "A2", title: "Moteur", detail: "Exécution des flux, testée unitairement", done: true },
-  { id: "A3", title: "Stockage local", detail: "Clients, fiches d'infos, import / export JSON", done: false },
+  { id: "A3", title: "Stockage local", detail: "Clients, fiches d'infos, import / export JSON", done: true },
   { id: "A4", title: "Éditeur", detail: "Tableau blanc React Flow, brouillon et publication", done: false },
   { id: "A5", title: "Simulateur", detail: "Tester un flux sans WhatsApp", done: false },
   { id: "A6", title: "IA de secours", detail: "Claude Haiku, fiche d'infos, limites", done: false },
@@ -36,6 +38,12 @@ export default function Home() {
           Le moteur tourne déjà : déclencheurs, boutons, listes, questions, conditions au fuseau du resto, lien de
           commande, IA de secours, transfert humain et pause quand le gérant répond lui-même.
         </p>
+        <Link
+          href="/clients"
+          className="mt-6 inline-flex rounded-full bg-pink px-5 py-2.5 text-sm font-semibold text-white hover:bg-pink-2"
+        >
+          Gérer les clients →
+        </Link>
       </section>
 
       <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

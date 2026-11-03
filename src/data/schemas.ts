@@ -1,0 +1,157 @@
+/**
+ * Schémas de validation (zod) : tout JSON qui entre dans l'app (import, et plus tard API)
+ * passe par ici. Ils reflètent les types de `src/engine/types.ts`.
+ */
+import { z } from "zod";
+
+const id = z.string().min(1).max(200);
+const hhmm = z.string().regex(/^([01]?\d|2[0-4]):[0-5]\d$/, "Heure au format HH:MM");
+const weekday = z.literal([1, 2, 3, 4, 5, 6, 7]);
+const position = z.object({ x: z.number(), y: z.number() });
+const option = z.object({ id, title: z.string(), description: z.string().optional() });
+
+export const conditionRuleSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("variable"),
+    variable: z.string(),
+    operator: z.enum(["egal", "different", "contient", "existe", "vide", "superieur", "inferieur"]),
+    value: z.string().optional(),
+  }),
+  z.object({ kind: z.literal("jour"), jours: z.array(weekday) }),
+  z.object({ kind: z.literal("heure"), de: hhmm, a: hhmm }),
+  z.object({ kind: z.literal("ouvert_maintenant") }),
+]);
+
+const nodeBase = { id, position };
+
+export const flowNodeSchema = z.discriminatedUnion("type", [
+  z.object({
+    ...nodeBase,
+    type: z.literal("trigger"),
+    data: z.object({ keywords: z.array(z.string()), matchMode: z.enum(["contient", "exact"]).optional() }),
+  }),
+  z.object({ ...nodeBase, type: z.literal("message"), data: z.object({ text: z.string() }) }),
+  z.object({
+    ...nodeBase,
+    type: z.literal("buttons"),
+    data: z.object({ text: z.string(), buttons: z.array(option) }),
+  }),
+  z.object({
+    ...nodeBase,
+    type: z.literal("list"),
+    data: z.object({ text: z.string(), buttonLabel: z.string(), items: z.array(option) }),
+  }),
+  z.object({
+    ...nodeBase,
+    type: z.literal("question"),
+    data: z.object({
+      text: z.string(),
+      variable: z.string(),
+      validation: z.enum(["texte", "nombre", "telephone", "oui_non"]),
+      errorText: z.string().optional(),
+      maxRetries: z.number().int().min(0).max(10).optional(),
+    }),
+  }),
+  z.object({
+    ...nodeBase,
+    type: z.literal("condition"),
+    data: z.object({ rules: z.array(conditionRuleSchema), match: z.enum(["toutes", "une"]).optional() }),
+  }),
+  z.object({
+    ...nodeBase,
+    type: z.literal("order_link"),
+    data: z.object({ text: z.string().optional(), buttonLabel: z.string().optional() }),
+  }),
+  z.object({
+    ...nodeBase,
+    type: z.literal("ai"),
+    data: z.object({ intro: z.string().optional(), instructions: z.string().optional() }),
+  }),
+  z.object({ ...nodeBase, type: z.literal("handoff"), data: z.object({ text: z.string().optional() }) }),
+  z.object({ ...nodeBase, type: z.literal("goto_flow"), data: z.object({ flowId: z.string() }) }),
+  z.object({ ...nodeBase, type: z.literal("end"), data: z.object({ text: z.string().optional() }) }),
+]);
+
+export const flowEdgeSchema = z.object({
+  id,
+  source: id,
+  sourceHandle: z.string().nullable().optional(),
+  target: id,
+});
+
+export const flowGraphSchema = z.object({
+  nodes: z.array(flowNodeSchema),
+  edges: z.array(flowEdgeSchema),
+});
+
+export const infoSheetSchema = z.object({
+  horaires: z.array(z.object({ jour: weekday, plages: z.array(z.object({ de: hhmm, a: hhmm })) })),
+  horairesNote: z.string().optional(),
+  adresse: z.string().optional(),
+  livraison: z.boolean().optional(),
+  retrait: z.boolean().optional(),
+  zonesLivraison: z.string().optional(),
+  pointsDeVente: z.string().optional(),
+  resumeCarte: z.string().optional(),
+  reglesSpeciales: z.string().optional(),
+});
+
+export const slugSchema = z
+  .string()
+  .min(1, "Slug obligatoire")
+  .max(80)
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Slug : minuscules, chiffres et tirets uniquement (ex. chez-paul)");
+
+const timestamp = z.string();
+
+export const clientSchema = z.object({
+  id,
+  nomResto: z.string().min(1),
+  orderSlug: slugSchema,
+  timezone: z.string().min(1),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+});
+
+export const storedFlowSchema = z.object({
+  id,
+  clientId: id,
+  name: z.string().min(1),
+  description: z.string().optional(),
+  draft: flowGraphSchema,
+  published: flowGraphSchema.nullable(),
+  publishedMeta: z.object({ name: z.string(), description: z.string().optional() }).nullable(),
+  publishedAt: timestamp.nullable(),
+  version: z.number().int().min(0),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+});
+
+export const workspaceSchema = z.object({
+  clients: z.array(clientSchema),
+  flows: z.array(storedFlowSchema),
+  infoSheets: z.record(z.string(), infoSheetSchema),
+});
+
+/** Fichier d'export d'un flux. */
+export const FLOW_EXPORT_FORMAT = "pflow-bots/flow";
+export const flowExportSchema = z.object({
+  format: z.literal(FLOW_EXPORT_FORMAT),
+  version: z.literal(1),
+  exportedAt: z.string(),
+  flow: z.object({
+    id: z.string().optional(),
+    name: z.string().min(1),
+    description: z.string().optional(),
+    graph: flowGraphSchema,
+  }),
+});
+
+/** Fichier de sauvegarde complète. */
+export const BACKUP_FORMAT = "pflow-bots/backup";
+export const backupSchema = z.object({
+  format: z.literal(BACKUP_FORMAT),
+  version: z.literal(1),
+  exportedAt: z.string(),
+  data: workspaceSchema,
+});
