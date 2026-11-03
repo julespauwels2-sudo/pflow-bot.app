@@ -2,12 +2,12 @@
  * Vérification d'un flux avant publication. Les erreurs bloquent « Publier » ;
  * les avertissements sont affichés mais n'empêchent pas de publier.
  */
-import type { FlowNode } from "@/engine";
-import { parseHhmm } from "@/engine";
+import type { ChoiceOption, FlowNode, TriggerMode } from "@/engine";
+import { DELAY_MAX_SECONDS, parseHhmm } from "@/engine";
 import type { FlowGraph } from "@/data/types";
 import { BLOCKS, nodeOutputs } from "./catalog";
 import { handleOf, reachableFrom } from "./graph";
-import { WA_LIMITS } from "./limits";
+import { PLATFORM_LIMITS, type Platform, type PlatformLimits } from "./limits";
 import { VARIABLE_NAME, flowVariables, usedVariables } from "./variables";
 
 export interface Issue {
@@ -20,9 +20,20 @@ export interface Issue {
 export interface LintContext {
   /** Id du flux vérifié (pour repérer un « Aller à un flux » vers lui-même). */
   flowId: string;
-  /** Autres flux du client, pour « Aller à un flux ». */
-  flows: { id: string; name: string }[];
+  /** Flux du client : « Aller à un flux », et unicité du flux par défaut. */
+  flows: { id: string; name: string; isDefault?: boolean }[];
   orderSlug: string;
+  /** Mode de déclenchement du canal du client. */
+  triggerMode: TriggerMode;
+  /** Plateformes des canaux du client (WhatsApp seulement en phase 1). */
+  platforms?: Platform[];
+}
+
+/** Limite la plus stricte parmi les plateformes du client. */
+function strictest(platforms: Platform[], key: keyof Omit<PlatformLimits, "name" | "supportsList">) {
+  return platforms
+    .map((p) => ({ value: PLATFORM_LIMITS[p][key], name: PLATFORM_LIMITS[p].name }))
+    .reduce((a, b) => (b.value < a.value ? b : a));
 }
 
 function texts(node: FlowNode): (string | undefined)[] {
@@ -51,6 +62,27 @@ export function lintFlow(graph: FlowGraph, ctx: LintContext): Issue[] {
   const error = (message: string, nodeId?: string) => issues.push({ level: "error", message, nodeId });
   const warning = (message: string, nodeId?: string) => issues.push({ level: "warning", message, nodeId });
   const len = (s: string | undefined) => [...(s ?? "")].length;
+  const platforms: Platform[] = ctx.platforms?.length ? ctx.platforms : ["whatsapp"];
+  const limit = (key: Parameters<typeof strictest>[1]) => strictest(platforms, key);
+
+  /** Boutons de réponse (bloc Message avec boutons, ou ancien bloc Boutons). */
+  const checkReplyButtons = (id: string, text: string, buttons: ChoiceOption[], connected: Set<string>) => {
+    const body = limit("interactiveBody");
+    if (!text.trim()) error("Le texte au-dessus des boutons est obligatoire.", id);
+    if (len(text) > body.value) error(`Texte trop long pour des boutons (${len(text)} / ${body.value}).`, id);
+    const max = limit("replyButtonsMax");
+    if (buttons.length > max.value) error(`${max.name} limite à ${max.value} boutons.`, id);
+    const titleMax = limit("replyButtonTitle");
+    const titles = new Set<string>();
+    for (const b of buttons) {
+      const title = b.title.trim();
+      if (!title) error("Un bouton n'a pas de titre.", id);
+      else if (len(title) > titleMax.value) error(`Bouton « ${title} » trop long (${len(title)} / ${titleMax.value}).`, id);
+      if (title && titles.has(title.toLowerCase())) error(`Deux boutons s'appellent « ${title} ».`, id);
+      titles.add(title.toLowerCase());
+      if (!connected.has(b.id)) error(`Bouton « ${title || "sans titre"} » non relié.`, id);
+    }
+  };
 
   // Déclencheur
   const triggers = graph.nodes.filter((n) => n.type === "trigger");
@@ -82,49 +114,70 @@ export function lintFlow(graph: FlowGraph, ctx: LintContext): Issue[] {
 
     switch (node.type) {
       case "trigger":
-        if (!node.data.keywords.some((k) => k.trim())) {
+        if (node.data.isDefault) {
+          if (ctx.triggerMode === "mots_cles_uniquement") {
+            error(
+              "Flux par défaut interdit : ce client est en mode « mots-clés uniquement » (numéro en coexistence). Le bot répondrait à des conversations privées.",
+              id,
+            );
+          }
+          const other = ctx.flows.find((f) => f.isDefault && f.id !== ctx.flowId);
+          if (other) error(`Le flux « ${other.name} » est déjà le flux par défaut : un seul par client.`, id);
+        } else if (!node.data.keywords.some((k) => k.trim())) {
           warning("Aucun mot-clé : ce flux ne sera lancé que par l'IA ou « Aller à un flux ».", id);
         }
         if (!connected.has("next")) error("Le déclencheur n'est relié à rien.", id);
         break;
 
-      case "message":
-        if (!node.data.text.trim()) error("Le message est vide.", id);
-        if (len(node.data.text) > WA_LIMITS.textBody) error(`Message trop long (${len(node.data.text)} / ${WA_LIMITS.textBody}).`, id);
-        break;
-
-      case "buttons": {
-        if (!node.data.text.trim()) error("Le texte au-dessus des boutons est obligatoire.", id);
-        if (len(node.data.text) > WA_LIMITS.interactiveBody) error(`Texte trop long (${len(node.data.text)} / ${WA_LIMITS.interactiveBody}).`, id);
-        if (node.data.buttons.length === 0) error("Ajoutez au moins un bouton.", id);
-        if (node.data.buttons.length > WA_LIMITS.buttonsMax) error(`WhatsApp limite à ${WA_LIMITS.buttonsMax} boutons.`, id);
-        const titles = new Set<string>();
-        for (const b of node.data.buttons) {
-          const title = b.title.trim();
-          if (!title) error("Un bouton n'a pas de titre.", id);
-          else if (len(title) > WA_LIMITS.buttonTitle) error(`Bouton « ${title} » trop long (${len(title)} / ${WA_LIMITS.buttonTitle}).`, id);
-          if (title && titles.has(title.toLowerCase())) error(`Deux boutons s'appellent « ${title} ».`, id);
-          titles.add(title.toLowerCase());
+      case "message": {
+        if (node.data.buttons?.length) {
+          checkReplyButtons(id, node.data.text, node.data.buttons, connected);
+          break;
         }
-        for (const o of outputs) if (!connected.has(o.id)) error(`Bouton « ${o.label || "sans titre"} » non relié.`, id);
+        const max = limit("textBody");
+        if (!node.data.text.trim()) error("Le message est vide.", id);
+        if (len(node.data.text) > max.value) error(`Message trop long (${len(node.data.text)} / ${max.value}).`, id);
         break;
       }
 
+      case "delay":
+        if (node.data.mode === "fixe") {
+          const sec = node.data.seconds ?? 2;
+          if (sec < 0.5 || sec > DELAY_MAX_SECONDS) error(`Délai entre 0,5 et ${DELAY_MAX_SECONDS} secondes.`, id);
+        }
+        if (!connected.has("next")) warning("Rien après le délai : il ne sert à rien.", id);
+        break;
+
+      case "buttons":
+        if (node.data.buttons.length === 0) error("Ajoutez au moins un bouton.", id);
+        checkReplyButtons(id, node.data.text, node.data.buttons, connected);
+        break;
+
       case "list": {
+        const unsupported = platforms.filter((p) => !PLATFORM_LIMITS[p].supportsList);
+        if (unsupported.length) {
+          error(`Les listes n'existent pas sur ${unsupported.map((p) => PLATFORM_LIMITS[p].name).join(", ")} : utilisez des boutons.`, id);
+          break;
+        }
+        const body = limit("interactiveBody");
         if (!node.data.text.trim()) error("Le texte de la liste est obligatoire.", id);
-        if (len(node.data.text) > WA_LIMITS.interactiveBody) error(`Texte trop long (${len(node.data.text)} / ${WA_LIMITS.interactiveBody}).`, id);
+        if (len(node.data.text) > body.value) error(`Texte trop long (${len(node.data.text)} / ${body.value}).`, id);
+        const labelMax = limit("listButtonLabel");
         const label = node.data.buttonLabel.trim();
         if (!label) error("Le libellé du bouton de la liste est obligatoire.", id);
-        else if (len(label) > WA_LIMITS.listButtonLabel) error(`Libellé « ${label} » trop long (${len(label)} / ${WA_LIMITS.listButtonLabel}).`, id);
+        else if (len(label) > labelMax.value) error(`Libellé « ${label} » trop long (${len(label)} / ${labelMax.value}).`, id);
+        const rows = limit("listRowsMax");
         if (node.data.items.length === 0) error("Ajoutez au moins un choix.", id);
-        if (node.data.items.length > WA_LIMITS.listRowsMax) error(`WhatsApp limite à ${WA_LIMITS.listRowsMax} choix.`, id);
+        if (node.data.items.length > rows.value) error(`${rows.name} limite à ${rows.value} choix.`, id);
+        const titleMax = limit("listRowTitle");
+        const descMax = limit("listRowDescription");
         const titles = new Set<string>();
         for (const item of node.data.items) {
           const title = item.title.trim();
           if (!title) error("Un choix n'a pas de titre.", id);
-          else if (len(title) > WA_LIMITS.listRowTitle) error(`Choix « ${title} » trop long (${len(title)} / ${WA_LIMITS.listRowTitle}).`, id);
-          if (len(item.description) > WA_LIMITS.listRowDescription) {
-            error(`Description de « ${title} » trop longue (${len(item.description)} / ${WA_LIMITS.listRowDescription}).`, id);
+          else if (len(title) > titleMax.value) error(`Choix « ${title} » trop long (${len(title)} / ${titleMax.value}).`, id);
+          if (len(item.description) > descMax.value) {
+            error(`Description de « ${title} » trop longue (${len(item.description)} / ${descMax.value}).`, id);
           }
           if (title && titles.has(title.toLowerCase())) error(`Deux choix s'appellent « ${title} ».`, id);
           titles.add(title.toLowerCase());
@@ -157,12 +210,14 @@ export function lintFlow(graph: FlowGraph, ctx: LintContext): Issue[] {
         break;
       }
 
-      case "order_link":
+      case "order_link": {
         if (!ctx.orderSlug) error("Ce client n'a pas de slug : le lien de commande est impossible.", id);
-        if (len(node.data.buttonLabel) > WA_LIMITS.ctaButtonLabel) {
-          error(`Libellé du bouton trop long (${len(node.data.buttonLabel)} / ${WA_LIMITS.ctaButtonLabel}).`, id);
-        }
+        const cta = limit("ctaButtonLabel");
+        if (len(node.data.buttonLabel) > cta.value) error(`Libellé du bouton trop long (${len(node.data.buttonLabel)} / ${cta.value}).`, id);
+        const body = limit("interactiveBody");
+        if (len(node.data.text) > body.value) error(`Texte trop long (${len(node.data.text)} / ${body.value}).`, id);
         break;
+      }
 
       case "goto_flow":
         if (!node.data.flowId) error("Choisissez le flux de destination.", id);

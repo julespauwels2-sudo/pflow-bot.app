@@ -82,6 +82,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
             nomResto,
             orderSlug,
             timezone: checkTimezone(input.timezone || DEFAULT_TIMEZONE),
+            triggerMode: input.triggerMode ?? "mots_cles_uniquement",
             createdAt: now(),
             updatedAt: now(),
           };
@@ -103,6 +104,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
             client.orderSlug = slug;
           }
           if (patch.timezone !== undefined) client.timezone = checkTimezone(patch.timezone);
+          if (patch.triggerMode !== undefined) client.triggerMode = patch.triggerMode;
           client.updatedAt = now();
           return client;
         });

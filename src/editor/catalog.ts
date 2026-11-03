@@ -13,8 +13,8 @@ export interface BlockInfo {
 
 export const BLOCKS: Record<NodeType, BlockInfo> = {
   trigger: { label: "Déclencheur", description: "Mots-clés qui lancent le flux", accent: "bg-pink", hex: "#FF4FB5", icon: "⚡" },
-  message: { label: "Message", description: "Envoie un texte", accent: "bg-blue", hex: "#2A8BFF", icon: "💬" },
-  buttons: { label: "Boutons", description: "Jusqu'à 3 boutons de réponse", accent: "bg-blue", hex: "#2A8BFF", icon: "🔘" },
+  message: { label: "Message", description: "Envoie un texte, avec ou sans boutons", accent: "bg-blue", hex: "#2A8BFF", icon: "💬" },
+  buttons: { label: "Boutons (ancien)", description: "Remplacé par Message + boutons", accent: "bg-blue", hex: "#2A8BFF", icon: "🔘" },
   list: { label: "Liste", description: "Jusqu'à 10 choix", accent: "bg-blue", hex: "#2A8BFF", icon: "📋" },
   question: { label: "Question", description: "Pose une question, garde la réponse", accent: "bg-cyan", hex: "#74DDFB", icon: "❓" },
   condition: { label: "Condition", description: "Selon une variable, l'heure ou le jour", accent: "bg-navy-2", hex: "#1B2A6B", icon: "🔀" },
@@ -23,13 +23,14 @@ export const BLOCKS: Record<NodeType, BlockInfo> = {
   handoff: { label: "Transfert humain", description: "Met le bot en pause, prévient le gérant", accent: "bg-coral", hex: "#FF6B6B", icon: "🙋" },
   goto_flow: { label: "Aller à un flux", description: "Saute vers un autre flux", accent: "bg-navy", hex: "#101B4D", icon: "↪️" },
   end: { label: "Fin", description: "Termine la conversation", accent: "bg-muted", hex: "#5E6690", icon: "🏁" },
+  delay: { label: "Délai", description: "Pause avec « en train d'écrire »", accent: "bg-cyan", hex: "#74DDFB", icon: "⏳" },
 };
 
 /** Ordre d'affichage dans la palette. */
 export const PALETTE: NodeType[] = [
   "trigger",
   "message",
-  "buttons",
+  "delay",
   "list",
   "question",
   "condition",
@@ -63,6 +64,7 @@ export function defaultData<T extends NodeType>(type: T): NodeDataMap[T] {
     handoff: {},
     goto_flow: { flowId: "" },
     end: {},
+    delay: { mode: "intelligent" },
   };
   return structuredClone(defaults[type]);
 }
@@ -79,9 +81,11 @@ export interface Output {
 /** Sorties d'un bloc (une poignée par sortie dans l'éditeur). */
 export function nodeOutputs(node: FlowNode): Output[] {
   switch (node.type) {
-    case "trigger":
     case "message":
+      return node.data.buttons?.length ? node.data.buttons.map((b) => ({ id: b.id, label: b.title })) : [{ id: "next", label: "Suite" }];
+    case "trigger":
     case "order_link":
+    case "delay":
       return [{ id: "next", label: "Suite" }];
     case "buttons":
       return node.data.buttons.map((b) => ({ id: b.id, label: b.title }));

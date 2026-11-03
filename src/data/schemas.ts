@@ -28,9 +28,17 @@ export const flowNodeSchema = z.discriminatedUnion("type", [
   z.object({
     ...nodeBase,
     type: z.literal("trigger"),
-    data: z.object({ keywords: z.array(z.string()), matchMode: z.enum(["contient", "exact"]).optional() }),
+    data: z.object({
+      keywords: z.array(z.string()),
+      matchMode: z.enum(["contient", "exact"]).optional(),
+      isDefault: z.boolean().optional(),
+    }),
   }),
-  z.object({ ...nodeBase, type: z.literal("message"), data: z.object({ text: z.string() }) }),
+  z.object({
+    ...nodeBase,
+    type: z.literal("message"),
+    data: z.object({ text: z.string(), buttons: z.array(option).optional() }),
+  }),
   z.object({
     ...nodeBase,
     type: z.literal("buttons"),
@@ -70,6 +78,11 @@ export const flowNodeSchema = z.discriminatedUnion("type", [
   z.object({ ...nodeBase, type: z.literal("handoff"), data: z.object({ text: z.string().optional() }) }),
   z.object({ ...nodeBase, type: z.literal("goto_flow"), data: z.object({ flowId: z.string() }) }),
   z.object({ ...nodeBase, type: z.literal("end"), data: z.object({ text: z.string().optional() }) }),
+  z.object({
+    ...nodeBase,
+    type: z.literal("delay"),
+    data: z.object({ mode: z.enum(["fixe", "intelligent"]), seconds: z.number().min(0).max(60).optional() }),
+  }),
 ]);
 
 export const flowEdgeSchema = z.object({
@@ -109,6 +122,8 @@ export const clientSchema = z.object({
   nomResto: z.string().min(1),
   orderSlug: slugSchema,
   timezone: z.string().min(1),
+  /** Anciennes sauvegardes sans ce champ : mode le plus prudent. */
+  triggerMode: z.enum(["mots_cles_uniquement", "toujours"]).default("mots_cles_uniquement"),
   createdAt: timestamp,
   updatedAt: timestamp,
 });

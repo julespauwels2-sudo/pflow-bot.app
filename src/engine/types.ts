@@ -105,8 +105,19 @@ export type ConditionRule =
   | { kind: "ouvert_maintenant" };
 
 export interface NodeDataMap {
-  trigger: { keywords: string[]; matchMode?: "contient" | "exact" };
-  message: { text: string };
+  trigger: {
+    keywords: string[];
+    matchMode?: "contient" | "exact";
+    /**
+     * Flux par défaut : lancé par n'importe quel message quand aucun mot-clé ne correspond
+     * et qu'aucune session n'est en cours. Un seul par client. Jamais sur un canal
+     * en mode « mots-clés uniquement ».
+     */
+    isDefault?: boolean;
+  };
+  /** Texte, éventuellement suivi de boutons de réponse (une sortie par bouton). */
+  message: { text: string; buttons?: ChoiceOption[] };
+  /** Ancien bloc « Boutons » : toujours exécuté, converti en Message + boutons dans l'éditeur. */
   buttons: { text: string; buttons: ChoiceOption[] };
   list: { text: string; buttonLabel: string; items: ChoiceOption[] };
   question: {
@@ -122,6 +133,8 @@ export interface NodeDataMap {
   handoff: { text?: string };
   goto_flow: { flowId: string };
   end: { text?: string };
+  /** Pause avec l'indicateur « en train d'écrire ». */
+  delay: { mode: "fixe" | "intelligent"; seconds?: number };
 }
 
 export type NodeType = keyof NodeDataMap;
@@ -193,6 +206,8 @@ export type IncomingMessage =
   | { kind: "unsupported"; mediaType: string };
 
 export type OutgoingMessage =
+  /** Pause avant le message suivant, avec l'indicateur « en train d'écrire ». */
+  | { kind: "typing"; ms: number }
   | { kind: "text"; text: string }
   | { kind: "buttons"; text: string; buttons: ChoiceOption[] }
   | { kind: "list"; text: string; buttonLabel: string; items: ChoiceOption[] }
@@ -249,7 +264,7 @@ export type EngineEvent =
   | { type: "ignored"; reason: "pause" | "aucun_declencheur" | "media_non_gere" | "echo" }
   | { type: "pause_expired" }
   | { type: "session_expired"; flowId: string }
-  | { type: "flow_started"; flowId: string; via: "mot_cle" | "ia" | "aller_au_flux" | "bouton" }
+  | { type: "flow_started"; flowId: string; via: "mot_cle" | "defaut" | "ia" | "aller_au_flux" | "bouton" }
   | { type: "flow_ended"; flowId: string }
   | { type: "paused"; reason: PauseReason; until: string | null }
   | { type: "handoff"; source: "bloc" | "ia" | "limite_ia" | "erreur_ia"; message?: string }

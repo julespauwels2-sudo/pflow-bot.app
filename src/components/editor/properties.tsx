@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { TEXTS, WEEKDAY_LABELS, type ChoiceOption, type ConditionRule, type FlowNode, type IsoWeekday } from "@/engine";
+import { DELAY_MAX_SECONDS, TEXTS, WEEKDAY_LABELS, smartDelayMs, type ChoiceOption, type ConditionRule, type FlowNode, type IsoWeekday } from "@/engine";
 import { BLOCKS, shortId } from "@/editor/catalog";
 import { OPERATOR_LABELS } from "@/editor/describe";
 import { WA_LIMITS } from "@/editor/limits";
@@ -37,6 +37,7 @@ function OptionsEditor({
   prefix,
 }: {
   options: ChoiceOption[];
+  /** Nombre maximum (limite WhatsApp). */
   max: number;
   titleMax: number;
   withDescription?: boolean;
@@ -239,6 +240,21 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
     case "trigger":
       return (
         <>
+          <label className="flex items-start gap-2 rounded-xl border border-line p-2.5">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-pink"
+              checked={node.data.isDefault ?? false}
+              onChange={(e) => set({ isDefault: e.target.checked || undefined }, "isDefault")}
+            />
+            <span>
+              <span className="block text-sm font-semibold">Flux par défaut</span>
+              <span className="block text-[11px] text-muted">
+                Se lance sur n&apos;importe quel message quand aucun mot-clé ne correspond et qu&apos;aucune conversation n&apos;est
+                en cours. Un seul par client. Interdit en mode « mots-clés uniquement » (numéro perso du gérant).
+              </span>
+            </span>
+          </label>
           <Row label="Mots-clés" hint="Casse et accents ignorés. « commander » reconnaît « Je veux COMMANDER ! ».">
             <KeywordsEditor keywords={node.data.keywords} onChange={(keywords) => set({ keywords }, "keywords")} />
           </Row>
@@ -251,8 +267,72 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
         </>
       );
 
-    case "message":
-      return <Row label="Texte">{vf("text", node.data.text, { multiline: true, max: WA_LIMITS.textBody, placeholder: "Bonjour {{prenom}} 👋" })}</Row>;
+    case "message": {
+      const buttons = node.data.buttons ?? [];
+      return (
+        <>
+          <Row label="Texte">
+            {vf("text", node.data.text, {
+              multiline: true,
+              max: buttons.length ? WA_LIMITS.interactiveBody : WA_LIMITS.textBody,
+              placeholder: "Bonjour {{prenom}} 👋",
+            })}
+          </Row>
+          <Row
+            label="Boutons de réponse (facultatif)"
+            hint="Chaque bouton a sa propre sortie. Pour un bouton qui ouvre un lien, utilisez le bloc « Lien de commande » : WhatsApp ne mélange pas les deux."
+          >
+            <OptionsEditor
+              options={buttons}
+              max={WA_LIMITS.buttonsMax}
+              titleMax={WA_LIMITS.buttonTitle}
+              addLabel="Ajouter un bouton"
+              prefix="b"
+              onChange={(next, field) => set({ buttons: next.length ? next : undefined }, `buttons:${field}`)}
+            />
+          </Row>
+        </>
+      );
+    }
+
+    case "delay": {
+      const mode = node.data.mode;
+      return (
+        <>
+          <Row label="Durée">
+            <div className="space-y-2">
+              {(["intelligent", "fixe"] as const).map((m) => (
+                <label key={m} className="flex items-start gap-2 rounded-xl border border-line p-2.5">
+                  <input type="radio" name={`delay-${node.id}`} className="mt-0.5 accent-pink" checked={mode === m} onChange={() => set({ mode: m }, "mode")} />
+                  <span>
+                    <span className="block text-sm font-semibold">{m === "intelligent" ? "Délai intelligent" : "Durée fixe"}</span>
+                    <span className="block text-[11px] text-muted">
+                      {m === "intelligent"
+                        ? `Le temps de taper le message suivant : ${smartDelayMs("") / 1000} s pour un message court, jusqu'à 5 s pour un long.`
+                        : `Entre 0,5 et ${DELAY_MAX_SECONDS} secondes.`}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </Row>
+          {mode === "fixe" && (
+            <Row label="Secondes">
+              <input
+                type="number"
+                min={0.5}
+                max={DELAY_MAX_SECONDS}
+                step={0.5}
+                className={inputCls}
+                value={node.data.seconds ?? 2}
+                onChange={(e) => set({ seconds: Number(e.target.value) }, "seconds")}
+              />
+            </Row>
+          )}
+          <p className="text-[11px] text-muted">Pendant la pause, le client voit « en train d&apos;écrire… » dans WhatsApp.</p>
+        </>
+      );
+    }
 
     case "buttons":
       return (

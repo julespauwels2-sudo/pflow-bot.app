@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { FlowEditor } from "@/components/editor/flow-editor";
 import { Loading, Notice } from "@/components/ui";
 import { useLoad } from "@/data/browser";
+import { findTrigger } from "@/engine";
 
 export default function FlowPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,7 +15,11 @@ export default function FlowPage() {
       if (!flow) return null;
       const client = await repos.clients.get(flow.clientId);
       if (!client) return null;
-      const flows = (await repos.flows.listByClient(client.id)).map((f) => ({ id: f.id, name: f.name }));
+      const flows = (await repos.flows.listByClient(client.id)).map((f) => ({
+        id: f.id,
+        name: f.name,
+        isDefault: findTrigger({ id: f.id, name: f.name, ...f.draft })?.data.isDefault ?? false,
+      }));
       return { flow, client, flows };
     },
     [id],

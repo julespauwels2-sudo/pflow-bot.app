@@ -26,9 +26,10 @@ const accueil: FlowGraph = {
   nodes: [
     { id: "t", type: "trigger", position: { x: 0, y: 80 }, data: { keywords: ["commander", "bonjour", "menu", "salut"] } },
     { id: "m", type: "message", position: { x: 340, y: 80 }, data: { text: "Bonjour {{prenom}} 👋 Bienvenue chez {{nom_resto}} !" } },
+    { id: "d", type: "delay", position: { x: 340, y: 260 }, data: { mode: "intelligent" } },
     {
       id: "b",
-      type: "buttons",
+      type: "message",
       position: { x: 680, y: 40 },
       data: {
         text: "Que souhaitez-vous faire ?",
@@ -51,7 +52,8 @@ const accueil: FlowGraph = {
   ],
   edges: [
     { id: "e1", source: "t", target: "m" },
-    { id: "e2", source: "m", target: "b" },
+    { id: "e2", source: "m", target: "d" },
+    { id: "e2b", source: "d", target: "b" },
     { id: "e3", source: "b", sourceHandle: "cmd", target: "lien" },
     { id: "e4", source: "lien", target: "fin" },
     { id: "e5", source: "b", sourceHandle: "hor", target: "hor" },
@@ -78,7 +80,12 @@ export async function loadDemo(repos: Repositories): Promise<BotClient> {
   const existing = (await repos.clients.list()).find((c) => c.orderSlug === "resto-demo");
   if (existing) return existing;
 
-  const client = await repos.clients.create({ nomResto: "Resto Démo", orderSlug: "resto-demo", timezone: "America/Guadeloupe" });
+  const client = await repos.clients.create({
+    nomResto: "Resto Démo",
+    orderSlug: "resto-demo",
+    timezone: "America/Guadeloupe",
+    triggerMode: "toujours",
+  });
   await repos.infoSheets.save(client.id, DEMO_INFO_SHEET);
   const f1 = await repos.flows.create({
     clientId: client.id,

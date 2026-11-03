@@ -73,7 +73,7 @@ src/app/      Interface Next.js : /clients, /clients/[id], /flows/[id].
 3. Session en cours qui attend une réponse → on continue le flux
    (bouton > mot-clé d'un autre flux > IA, puis on repose la question).
 4. Mot-clé d'un déclencheur → on lance le flux.
-5. Canal en mode `toujours` → IA de secours.
+5. Canal en mode `toujours` → flux par défaut s'il existe, sinon IA de secours.
 6. Sinon → ignoré.
 
 Toutes les conditions jour/heure utilisent le fuseau du client (`America/Guadeloupe` par défaut).
@@ -87,6 +87,14 @@ Toutes les conditions jour/heure utilisent le fuseau du client (`America/Guadelo
   WhatsApp (3 boutons de 20 caractères, 10 choix de 24 caractères…), variable inconnue, flux de
   destination manquant… « Publier » est bloqué tant qu'il reste une **erreur** ; les
   **avertissements** n'empêchent pas de publier.
+- **Message + boutons** : jusqu'à 3 boutons de réponse sous le texte (« + Ajouter un bouton »),
+  une sortie par bouton. L'ancien bloc « Boutons » est converti automatiquement. Limites vérifiées
+  par plateforme (`src/editor/limits.ts`, Instagram prévu pour la phase 2).
+- **Flux par défaut** (case dans le déclencheur) : lancé par n'importe quel message quand aucun
+  mot-clé ne correspond et qu'aucune conversation n'est en cours. Un seul par client ; interdit si
+  le client est en mode « mots-clés uniquement ».
+- **Délai** : pause avec « en train d'écrire », fixe (0,5 à 10 s) ou intelligent (1 à 5 s selon la
+  longueur du message suivant).
 - Raccourcis : Ctrl+Z / Ctrl+Y, Ctrl+C / Ctrl+V (aussi d'un flux à l'autre), Ctrl+D, Ctrl+A,
   Suppr, Maj + glisser pour sélectionner une zone, `{{` ou le bouton `{x}` pour insérer une variable.
 

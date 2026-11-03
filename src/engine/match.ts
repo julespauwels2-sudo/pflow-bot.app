@@ -30,6 +30,11 @@ export function findTrigger(flow: Flow): FlowNodeOf<"trigger"> | undefined {
   return flow.nodes.find((n): n is FlowNodeOf<"trigger"> => n.type === "trigger");
 }
 
+/** Flux par défaut du client (le premier si, par erreur, il y en a plusieurs). */
+export function findDefaultFlow(flows: Flow[]): Flow | undefined {
+  return flows.find((f) => findTrigger(f)?.data.isDefault);
+}
+
 /**
  * Cherche le flux dont un mot-clé correspond au message.
  * En cas de plusieurs correspondances, le mot-clé le plus long gagne

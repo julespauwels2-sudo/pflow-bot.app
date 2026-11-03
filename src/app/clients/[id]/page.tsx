@@ -56,9 +56,18 @@ export default function ClientPage() {
 }
 
 function ClientSettings({ client, onSaved }: { client: BotClient; onSaved: () => void }) {
-  const [form, setForm] = useState({ nomResto: client.nomResto, orderSlug: client.orderSlug, timezone: client.timezone });
+  const [form, setForm] = useState({
+    nomResto: client.nomResto,
+    orderSlug: client.orderSlug,
+    timezone: client.timezone,
+    triggerMode: client.triggerMode,
+  });
   const [status, setStatus] = useState<{ tone: "success" | "error"; text: string } | null>(null);
-  const dirty = form.nomResto !== client.nomResto || form.orderSlug !== client.orderSlug || form.timezone !== client.timezone;
+  const dirty =
+    form.nomResto !== client.nomResto ||
+    form.orderSlug !== client.orderSlug ||
+    form.timezone !== client.timezone ||
+    form.triggerMode !== client.triggerMode;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -96,6 +105,20 @@ function ClientSettings({ client, onSaved }: { client: BotClient; onSaved: () =>
             ))}
           </Select>
         </Field>
+        <Field
+          label="Le bot répond…"
+          hint={
+            form.triggerMode === "mots_cles_uniquement"
+              ? "Pour un numéro en coexistence (ex. numéro perso du gérant) : le bot ne réagit qu'aux mots-clés et ignore les conversations privées. Pas de flux par défaut ni d'IA hors conversation."
+              : "Pour un numéro dédié aux commandes : tout message reçoit une réponse (flux par défaut, sinon IA)."
+          }
+        >
+          <Select value={form.triggerMode} onChange={(e) => setForm({ ...form, triggerMode: e.target.value as BotClient["triggerMode"] })}>
+            <option value="mots_cles_uniquement">Uniquement aux mots-clés</option>
+            <option value="toujours">À tous les messages</option>
+          </Select>
+        </Field>
+        <p className="-mt-2 text-[11px] text-muted">Provisoire : à l&apos;étape C, ce réglage sera fait numéro par numéro.</p>
         {status && <Notice tone={status.tone}>{status.text}</Notice>}
         <Button type="submit" disabled={!dirty} className="w-full">
           Enregistrer
@@ -168,7 +191,8 @@ function FlowsCard({ clientId, flows, onChange }: { clientId: string; flows: Sto
       ) : (
         <ul className="divide-y divide-rule">
           {flows.map((flow) => {
-            const keywords = findTrigger({ id: flow.id, name: flow.name, ...flow.draft })?.data.keywords ?? [];
+            const trigger = findTrigger({ id: flow.id, name: flow.name, ...flow.draft })?.data;
+            const keywords = trigger?.keywords ?? [];
             return (
               <li key={flow.id} className="flex flex-wrap items-center gap-3 py-3">
                 <div className="min-w-0 flex-1">
@@ -177,6 +201,7 @@ function FlowsCard({ clientId, flows, onChange }: { clientId: string; flows: Sto
                       {flow.name}
                     </Link>
                     {flowStatus(flow)}
+                    {trigger?.isDefault && <Badge tone="info">Par défaut</Badge>}
                   </div>
                   <p className="mt-0.5 truncate text-xs text-muted">
                     {keywords.length ? `Mots-clés : ${keywords.join(", ")}` : "Aucun mot-clé"}

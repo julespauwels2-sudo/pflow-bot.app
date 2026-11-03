@@ -3,8 +3,9 @@
 import { Handle, Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react";
 import { memo, useEffect, type ReactNode } from "react";
 import type { FlowNode } from "@/engine";
-import { TEXTS } from "@/engine";
-import { BLOCKS, hasInput, nodeOutputs } from "@/editor/catalog";
+import { TEXTS, smartDelayMs } from "@/engine";
+import { BLOCKS, hasInput, nodeOutputs, shortId } from "@/editor/catalog";
+import { WA_LIMITS } from "@/editor/limits";
 import { describeRule } from "@/editor/describe";
 import type { RFNode } from "./state";
 import { useEditor } from "./context";
@@ -55,10 +56,39 @@ function OutputRow({ id, children, tone = "default" }: { id: string; children: R
   );
 }
 
-function Body({ node }: { node: FlowNode }) {
+/** « + Ajouter un bouton » directement sur le bloc Message. */
+function AddButton({ node, visible }: { node: Extract<FlowNode, { type: "message" }>; visible: boolean }) {
+  const { updateData } = useEditor();
+  const buttons = node.data.buttons ?? [];
+  if (buttons.length >= WA_LIMITS.buttonsMax) return null;
+  return (
+    <button
+      type="button"
+      className={`nodrag nopan w-full rounded-lg border border-dashed border-blue/40 py-1 text-[12px] font-semibold text-blue hover:bg-blue/5 ${visible ? "" : "hidden group-hover:block"}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        const next = [...buttons, { id: `b${shortId()}`, title: `Option ${buttons.length + 1}` }];
+        updateData(node.id, { ...node.data, buttons: next }, `${node.id}:buttons:add`);
+      }}
+    >
+      + Ajouter un bouton
+    </button>
+  );
+}
+
+function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
   const { flows, orderUrl } = useEditor();
   switch (node.type) {
     case "trigger":
+      if (node.data.isDefault) {
+        return (
+          <div className="space-y-1">
+            <span className="inline-block rounded-full bg-navy px-2 py-0.5 text-[11px] font-semibold text-white">Flux par défaut</span>
+            <p className="text-[11px] text-muted">N&apos;importe quel message, si aucun mot-clé ne correspond et qu&apos;aucune conversation n&apos;est en cours.</p>
+            {node.data.keywords.length > 0 && <p className="text-[11px] text-muted">+ mots-clés : {node.data.keywords.join(", ")}</p>}
+          </div>
+        );
+      }
       return node.data.keywords.length ? (
         <div className="flex flex-wrap gap-1">
           {node.data.keywords.map((k, i) => (
@@ -73,7 +103,35 @@ function Body({ node }: { node: FlowNode }) {
       );
 
     case "message":
-      return <Bubble text={node.data.text} placeholder="Message vide" />;
+      return (
+        <div className="space-y-1.5">
+          <Bubble text={node.data.text} placeholder="Message vide" />
+          {(node.data.buttons ?? []).map((b) => (
+            <OutputRow key={b.id} id={b.id}>
+              {b.title || "Sans titre"}
+            </OutputRow>
+          ))}
+          <AddButton node={node} visible={selected} />
+        </div>
+      );
+
+    case "delay":
+      return (
+        <p className="flex items-center gap-2 text-[12.5px]">
+          <span className="inline-flex gap-0.5 rounded-full bg-white px-2 py-1 shadow-[0_1px_1px_rgb(0_0_0/0.08)]" aria-hidden>
+            <span className="size-1.5 animate-bounce rounded-full bg-muted [animation-delay:-0.3s]" />
+            <span className="size-1.5 animate-bounce rounded-full bg-muted [animation-delay:-0.15s]" />
+            <span className="size-1.5 animate-bounce rounded-full bg-muted" />
+          </span>
+          {node.data.mode === "intelligent" ? (
+            <span>
+              Délai intelligent <span className="text-muted">({smartDelayMs("") / 1000} à 5 s selon le message suivant)</span>
+            </span>
+          ) : (
+            <span>{(node.data.seconds ?? 2).toLocaleString("fr-FR")} s · en train d&apos;écrire…</span>
+          )}
+        </p>
+      );
 
     case "buttons":
       return (
@@ -185,7 +243,12 @@ function BlockNodeComponent({ id, type, data, selected }: NodeProps<RFNode>) {
   const errors = nodeIssues.filter((i) => i.level === "error");
   const warnings = nodeIssues.filter((i) => i.level === "warning");
   const outputs = nodeOutputs(node);
-  const rowOutputs = node.type === "buttons" || node.type === "list" || node.type === "question" || node.type === "condition";
+  const rowOutputs =
+    node.type === "buttons" ||
+    node.type === "list" ||
+    node.type === "question" ||
+    node.type === "condition" ||
+    (node.type === "message" && (node.data.buttons?.length ?? 0) > 0);
   const outputKey = outputs.map((o) => o.id).join("|");
 
   // Les poignées changent quand on ajoute / retire un bouton : React Flow doit les remesurer.
@@ -200,7 +263,7 @@ function BlockNodeComponent({ id, type, data, selected }: NodeProps<RFNode>) {
         : "ring-1 ring-line";
 
   return (
-    <div className={`w-[260px] rounded-2xl bg-white shadow-card ${ring}`} title={nodeIssues.map((i) => i.message).join("\n") || undefined}>
+    <div className={`group w-[260px] rounded-2xl bg-white shadow-card ${ring}`} title={nodeIssues.map((i) => i.message).join("\n") || undefined}>
       {hasInput(node) && <Handle type="target" position={Position.Left} className="!top-6 !size-3 !border-2 !border-white !bg-navy" />}
       <div className="flex items-center gap-2 rounded-t-2xl border-b border-rule px-3 py-2">
         <span className={`grid size-6 place-items-center rounded-lg text-[13px] ${info.accent}`}>{info.icon}</span>
@@ -209,7 +272,7 @@ function BlockNodeComponent({ id, type, data, selected }: NodeProps<RFNode>) {
         {errors.length === 0 && warnings.length > 0 && <span className="rounded-full bg-amber-400 px-1.5 text-[11px] font-bold text-white">!</span>}
       </div>
       <div className="rounded-b-2xl bg-[#efe7dd]/60 px-3 py-2.5">
-        <Body node={node} />
+        <Body node={node} selected={!!selected} />
         {errors.length > 0 && (
           <ul className="mt-2 space-y-0.5 text-[11px] font-semibold text-coral">
             {errors.slice(0, 3).map((e, i) => (
@@ -227,7 +290,8 @@ function BlockNodeComponent({ id, type, data, selected }: NodeProps<RFNode>) {
         )}
       </div>
       {!rowOutputs && outputs.length === 1 && (
-        <Handle type="source" position={Position.Right} id={outputs[0].id} className="!size-3 !border-2 !border-white !bg-blue" />
+        // En haut, à hauteur du titre : la poignée ne bouge pas quand le bloc change de taille.
+        <Handle type="source" position={Position.Right} id={outputs[0].id} className="!top-6 !size-3 !border-2 !border-white !bg-blue" />
       )}
     </div>
   );

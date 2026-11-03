@@ -35,7 +35,8 @@ import { copySelection, editorReducer, initEditor, type EditorState, type RFNode
 /** Le flux tel que l'éditeur le voit au chargement (flèches invalides retirées). */
 const initFlowGraph = (draft: FlowGraph) => initEditor(draft).history.present;
 
-const nodeTypes: NodeTypes = Object.fromEntries(PALETTE.map((t) => [t, BlockNode]));
+// Tous les types (y compris l'ancien bloc « Boutons », hors palette).
+const nodeTypes: NodeTypes = Object.fromEntries(Object.keys(BLOCKS).map((t) => [t, BlockNode]));
 const edgeTypes: EdgeTypes = { deletable: DeletableEdge };
 const DRAG_TYPE = "application/x-pflow-block";
 const AUTOSAVE_MS = 600;
@@ -43,8 +44,8 @@ const AUTOSAVE_MS = 600;
 interface Props {
   flow: StoredFlow;
   client: BotClient;
-  /** Tous les flux du client (id + nom). */
-  flows: { id: string; name: string }[];
+  /** Tous les flux du client (id, nom, flux par défaut ou non). */
+  flows: { id: string; name: string; isDefault?: boolean }[];
 }
 
 export function FlowEditor(props: Props) {
@@ -87,7 +88,9 @@ function EditorInner({ flow: initialFlow, client, flows }: Props) {
 
   const graph = state.history.present;
   const graphJson = useMemo(() => stableStringify(graph), [graph]);
-  const issues = useMemo(() => lintFlow(graph, { flowId: flow.id, flows, orderSlug: client.orderSlug }), [graph, flow.id, flows, client.orderSlug]);
+  const issues = useMemo(() => lintFlow(graph, { flowId: flow.id, flows, orderSlug: client.orderSlug, triggerMode: client.triggerMode }),
+    [graph, flow.id, flows, client.orderSlug, client.triggerMode],
+  );
   const byNode = useMemo(() => issuesByNode(issues), [issues]);
   const errorCount = issues.filter((i) => i.level === "error").length;
   const selected = state.nodes.filter((n) => n.selected);

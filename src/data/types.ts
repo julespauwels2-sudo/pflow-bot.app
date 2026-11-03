@@ -1,4 +1,4 @@
-import type { Flow, FlowEdge, FlowNode, InfoSheet } from "@/engine";
+import type { Flow, FlowEdge, FlowNode, InfoSheet, TriggerMode } from "@/engine";
 
 /** Client (resto) tel que vu par l'app bots. À l'étape B : lu depuis le CRM + réglages bot_. */
 export interface BotClient {
@@ -8,12 +8,18 @@ export interface BotClient {
   orderSlug: string;
   /** Fuseau IANA, America/Guadeloupe par défaut. */
   timezone: string;
+  /**
+   * Mode de déclenchement du canal WhatsApp. Provisoire (étape A) : à l'étape C, il sera porté
+   * par chaque canal (bot_channels). « mots_cles_uniquement » pour les numéros en coexistence
+   * (numéro perso du gérant) : le bot ne répond qu'aux mots-clés.
+   */
+  triggerMode: TriggerMode;
   createdAt: string;
   updatedAt: string;
 }
 
-export type NewClient = Pick<BotClient, "nomResto" | "orderSlug"> & Partial<Pick<BotClient, "timezone">>;
-export type ClientPatch = Partial<Pick<BotClient, "nomResto" | "orderSlug" | "timezone">>;
+export type NewClient = Pick<BotClient, "nomResto" | "orderSlug"> & Partial<Pick<BotClient, "timezone" | "triggerMode">>;
+export type ClientPatch = Partial<Pick<BotClient, "nomResto" | "orderSlug" | "timezone" | "triggerMode">>;
 
 /** Contenu d'un flux (format React Flow). */
 export interface FlowGraph {

@@ -1,5 +1,6 @@
 import { evaluateConditions } from "./conditions";
-import { findTrigger, matchFlowByKeyword, normalize } from "./match";
+import { fixedDelayMs, smartDelayMs, textOf } from "./delay";
+import { findDefaultFlow, findTrigger, matchFlowByKeyword, normalize } from "./match";
 import { decodeReplyId, encodeReplyId } from "./reply-id";
 import { firstName, renderTemplate } from "./template";
 import { localTime } from "./time";
@@ -40,7 +41,23 @@ export const TEXTS = {
   } satisfies Record<QuestionValidation, string>,
 };
 
-type WaitingNode = FlowNodeOf<"buttons"> | FlowNodeOf<"list"> | FlowNodeOf<"question"> | FlowNodeOf<"ai">;
+type WaitingNode =
+  | FlowNodeOf<"message">
+  | FlowNodeOf<"buttons">
+  | FlowNodeOf<"list">
+  | FlowNodeOf<"question">
+  | FlowNodeOf<"ai">;
+
+/** Un bloc Message avec des boutons attend la réponse du contact. */
+const hasButtons = (node: FlowNode): boolean => node.type === "message" && (node.data.buttons?.length ?? 0) > 0;
+
+/** Options cliquables d'un bloc en attente (boutons ou liste). */
+function optionsOf(node: WaitingNode): ChoiceOption[] | null {
+  if (node.type === "message") return node.data.buttons ?? [];
+  if (node.type === "buttons") return node.data.buttons;
+  if (node.type === "list") return node.data.items;
+  return null;
+}
 
 /**
  * Traite un message entrant. Ne fait aucune entrée/sortie : le seul appel
@@ -68,7 +85,7 @@ class EngineRun {
   }
 
   result(): EngineResult {
-    return { contact: this.contact, session: this.session, outgoing: this.outgoing, events: this.events };
+    return { contact: this.contact, session: this.session, outgoing: resolveDelays(this.outgoing), events: this.events };
   }
 
   // -------------------------------------------------------------------------
@@ -137,8 +154,14 @@ class EngineRun {
       return;
     }
 
-    // 4. Canal en mode « toujours » : IA de secours.
+    // 4. Canal en mode « toujours » : flux par défaut s'il existe, sinon IA de secours.
+    //    (Jamais sur un canal « mots-clés uniquement » : numéros perso des gérants.)
     if (this.input.channel.triggerMode === "toujours") {
+      const defaultFlow = findDefaultFlow(this.input.flows);
+      if (defaultFlow) {
+        this.startFlow(defaultFlow, "defaut");
+        return;
+      }
       await this.callAi(text, {});
       return;
     }
@@ -170,9 +193,10 @@ class EngineRun {
 
   private async handleWaiting(node: WaitingNode, text: string): Promise<void> {
     switch (node.type) {
+      case "message":
       case "buttons":
       case "list": {
-        const options = node.type === "buttons" ? node.data.buttons : node.data.items;
+        const options = optionsOf(node) ?? [];
         const option = matchOption(options, text);
         if (option) {
           this.followHandle(node, option.id);
@@ -321,7 +345,7 @@ class EngineRun {
 
   private startFlow(
     flow: Flow,
-    via: "mot_cle" | "ia" | "aller_au_flux" | "bouton",
+    via: "mot_cle" | "defaut" | "ia" | "aller_au_flux" | "bouton",
     vars: Record<string, string> = {},
   ): void {
     const trigger = findTrigger(flow);
@@ -371,7 +395,18 @@ class EngineRun {
           break;
 
         case "message":
+          if (hasButtons(node)) {
+            this.sendPrompt(node);
+            this.refreshExpiry();
+            return;
+          }
           this.send({ kind: "text", text: this.render(node.data.text) });
+          currentId = this.nextNodeId(flow, node.id, "next");
+          break;
+
+        case "delay":
+          // -1 = délai intelligent, calculé d'après le message suivant (voir resolveDelays).
+          this.send({ kind: "typing", ms: node.data.mode === "intelligent" ? -1 : fixedDelayMs(node.data.seconds) });
           currentId = this.nextNodeId(flow, node.id, "next");
           break;
 
@@ -448,8 +483,9 @@ class EngineRun {
       options.map((o) => ({ ...o, id: encodeReplyId({ flowId, nodeId: node.id, handle: o.id }) }));
 
     switch (node.type) {
+      case "message":
       case "buttons":
-        this.send({ kind: "buttons", text: this.render(node.data.text), buttons: withReplyIds(node.data.buttons) });
+        this.send({ kind: "buttons", text: this.render(node.data.text), buttons: withReplyIds(optionsOf(node) ?? []) });
         return;
       case "list":
         this.send({
@@ -499,8 +535,8 @@ class EngineRun {
     if (!this.session) return undefined;
     const node = this.flow(this.session.flowId)?.nodes.find((n) => n.id === this.session!.nodeId);
     if (!node) return undefined;
-    return node.type === "buttons" || node.type === "list" || node.type === "question" || node.type === "ai"
-      ? node
+    return node.type === "buttons" || node.type === "list" || node.type === "question" || node.type === "ai" || hasButtons(node)
+      ? (node as WaitingNode)
       : undefined;
   }
 
@@ -554,6 +590,24 @@ class EngineRun {
   private send(message: OutgoingMessage): void {
     this.outgoing.push(message);
   }
+}
+
+/**
+ * Calcule les délais intelligents d'après la longueur du message qui suit,
+ * et retire les délais qui ne précèdent aucun message.
+ */
+export function resolveDelays(outgoing: OutgoingMessage[]): OutgoingMessage[] {
+  const result: OutgoingMessage[] = [];
+  outgoing.forEach((message, i) => {
+    if (message.kind !== "typing") {
+      result.push(message);
+      return;
+    }
+    const next = outgoing.slice(i + 1).find((m) => m.kind !== "typing");
+    if (!next) return;
+    result.push({ kind: "typing", ms: message.ms < 0 ? smartDelayMs(textOf(next)) : message.ms });
+  });
+  return result;
 }
 
 /** Retrouve l'option choisie à partir d'un texte tapé : titre exact (normalisé) ou numéro (« 1 », « 2 »…). */

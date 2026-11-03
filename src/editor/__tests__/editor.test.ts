@@ -34,7 +34,12 @@ function validGraph(): FlowGraph {
   };
 }
 
-const ctx = { flowId: "f1", flows: [{ id: "f1", name: "Accueil" }, { id: "f2", name: "Agneau" }], orderSlug: "mexico" };
+const ctx = {
+  flowId: "f1",
+  flows: [{ id: "f1", name: "Accueil" }, { id: "f2", name: "Agneau" }],
+  orderSlug: "mexico",
+  triggerMode: "toujours" as const,
+};
 const errors = (issues: Issue[]) => issues.filter((i) => i.level === "error");
 
 describe("vérification du flux (lint)", () => {
@@ -246,5 +251,97 @@ describe("variables", () => {
 
   it("repère les variables utilisées", () => {
     expect(usedVariables("{{ prenom }} et {{nom_resto}}")).toEqual(["prenom", "nom_resto"]);
+  });
+});
+
+describe("flux par défaut (lint)", () => {
+  const defaultGraph = (): FlowGraph => ({
+    nodes: [
+      n({ id: "t", type: "trigger", data: { keywords: [], isDefault: true } }),
+      n({ id: "m", type: "message", data: { text: "Bienvenue" } }),
+    ],
+    edges: [{ id: "1", source: "t", sourceHandle: "next", target: "m" }],
+  });
+
+  it("autorisé en mode « à tous les messages »", () => {
+    expect(lintFlow(defaultGraph(), ctx)).toEqual([]);
+  });
+
+  it("erreur bloquante en mode « mots-clés uniquement »", () => {
+    const issues = errors(lintFlow(defaultGraph(), { ...ctx, triggerMode: "mots_cles_uniquement" }));
+    expect(issues[0]).toMatchObject({ nodeId: "t" });
+    expect(issues[0].message).toContain("mots-clés uniquement");
+  });
+
+  it("un seul flux par défaut par client", () => {
+    const issues = errors(lintFlow(defaultGraph(), { ...ctx, flows: [...ctx.flows, { id: "f9", name: "Accueil bis", isDefault: true }] }));
+    expect(issues[0].message).toBe("Le flux « Accueil bis » est déjà le flux par défaut : un seul par client.");
+  });
+});
+
+describe("bloc Message avec boutons et bloc Délai (lint)", () => {
+  const msgGraph = (buttons: { id: string; title: string }[], text = "Choisissez"): FlowGraph => ({
+    nodes: [n({ id: "t", type: "trigger", data: { keywords: ["x"] } }), n({ id: "m", type: "message", data: { text, buttons } }), n({ id: "f", type: "end", data: {} })],
+    edges: [{ id: "1", source: "t", sourceHandle: "next", target: "m" }, ...buttons.map((b) => ({ id: b.id, source: "m", sourceHandle: b.id, target: "f" }))],
+  });
+
+  it("3 boutons de 20 caractères maximum, chacun relié", () => {
+    expect(errors(lintFlow(msgGraph([{ id: "a", title: "Oui" }, { id: "b", title: "Non" }]), ctx))).toEqual([]);
+    const four = errors(lintFlow(msgGraph(["a", "b", "c", "d"].map((id) => ({ id, title: id }))), ctx)).map((i) => i.message);
+    expect(four).toContain("WhatsApp limite à 3 boutons.");
+    const g = msgGraph([{ id: "a", title: "Oui" }]);
+    g.edges = g.edges.filter((e) => e.id !== "a");
+    expect(errors(lintFlow(g, ctx)).map((i) => i.message)).toContain("Bouton « Oui » non relié.");
+  });
+
+  it("texte limité à 1 024 caractères quand il y a des boutons (4 096 sinon)", () => {
+    const long = "x".repeat(2000);
+    expect(errors(lintFlow(msgGraph([{ id: "a", title: "Ok" }], long), ctx))[0].message).toContain("2000 / 1024");
+    const plain: FlowGraph = { nodes: [n({ id: "t", type: "trigger", data: { keywords: ["x"] } }), n({ id: "m", type: "message", data: { text: long } })], edges: [{ id: "1", source: "t", target: "m" }] };
+    expect(errors(lintFlow(plain, ctx))).toEqual([]);
+  });
+
+  it("limites appliquées selon les plateformes (Instagram : pas de liste)", () => {
+    const list: FlowGraph = {
+      nodes: [
+        n({ id: "t", type: "trigger", data: { keywords: ["x"] } }),
+        n({ id: "l", type: "list", data: { text: "Carte", buttonLabel: "Voir", items: [{ id: "i", title: "Tacos" }] } }),
+        n({ id: "f", type: "end", data: {} }),
+      ],
+      edges: [{ id: "1", source: "t", target: "l" }, { id: "2", source: "l", sourceHandle: "i", target: "f" }],
+    };
+    expect(errors(lintFlow(list, ctx))).toEqual([]);
+    expect(errors(lintFlow(list, { ...ctx, platforms: ["whatsapp", "instagram"] }))[0].message).toContain("Les listes n'existent pas sur Instagram");
+  });
+
+  it("délai fixe entre 0,5 et 10 s", () => {
+    const g = (seconds: number): FlowGraph => ({
+      nodes: [n({ id: "t", type: "trigger", data: { keywords: ["x"] } }), n({ id: "d", type: "delay", data: { mode: "fixe", seconds } }), n({ id: "m", type: "message", data: { text: "ok" } })],
+      edges: [{ id: "1", source: "t", target: "d" }, { id: "2", source: "d", target: "m" }],
+    });
+    expect(lintFlow(g(3), ctx)).toEqual([]);
+    expect(errors(lintFlow(g(30), ctx))[0].message).toBe("Délai entre 0,5 et 10 secondes.");
+  });
+});
+
+describe("migration et report des flèches", () => {
+  it("l'ancien bloc Boutons devient un Message avec boutons, flèches conservées", async () => {
+    const { migrateGraph } = await import("@/data/migrate");
+    const g = validGraph();
+    const migrated = migrateGraph(g);
+    const b = migrated.nodes.find((x) => x.id === "b")!;
+    expect(b.type).toBe("message");
+    expect(b.data).toEqual({ text: "Choisissez", buttons: [{ id: "x", title: "Commander" }, { id: "y", title: "Horaires" }] });
+    expect(migrated.edges).toEqual(g.edges);
+    expect(errors(lintFlow(migrated, ctx))).toEqual([]);
+  });
+
+  it("premier bouton ajouté : la flèche « Suite » passe sur ce bouton ; dernier retiré : elle revient", async () => {
+    const { remapOutputs } = await import("../graph");
+    const g = validGraph(); // m --next--> b
+    const added = remapOutputs(g, "m", ["next"], ["k"]);
+    expect(added.edges.find((e) => e.source === "m")?.sourceHandle).toBe("k");
+    const removed = remapOutputs(added, "m", ["k"], ["next"]);
+    expect(removed.edges.find((e) => e.source === "m")?.sourceHandle).toBe("next");
   });
 });

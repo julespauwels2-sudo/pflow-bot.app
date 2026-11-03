@@ -20,7 +20,7 @@ function next(prev: EngineResult, overrides: Partial<EngineInput>): EngineInput 
   return input({ contact: prev.contact, session: prev.session, ...overrides });
 }
 
-const texts = (r: EngineResult) => r.outgoing.map((m) => m.text);
+const texts = (r: EngineResult) => r.outgoing.flatMap((m) => (m.kind === "typing" ? [] : [m.text]));
 
 describe("ordre de traitement d'un message entrant", () => {
   it("5. mode mots-clés : un message sans mot-clé ni session ne déclenche rien", async () => {
@@ -464,5 +464,115 @@ describe("sessions, aller à un flux, garde-fous", () => {
       input({ client: { ...client, orderSlug: "chez-paul" }, message: { kind: "button_reply", id, title: "Commander" } }),
     );
     expect(r.outgoing[0]).toMatchObject({ kind: "link", url: "https://order.pflow.fr/c/chez-paul" });
+  });
+});
+
+describe("flux par défaut", () => {
+  const defaut: Flow = {
+    id: "f_defaut",
+    name: "Par défaut",
+    nodes: [
+      node("t", "trigger", { keywords: [], isDefault: true }),
+      node("m", "message", { text: "Bienvenue ! Tapez « menu » pour commander." }),
+    ],
+    edges: [edge("t", "m")],
+  };
+  const toujours = { ...channel, triggerMode: "toujours" as const };
+  const withDefault = [defaut, ...input().flows];
+
+  it("se lance sur n'importe quel message quand aucun mot-clé ne correspond", async () => {
+    const r = await runEngine(input({ channel: toujours, flows: withDefault, message: { kind: "text", text: "yo" } }));
+    expect(texts(r)).toEqual(["Bienvenue ! Tapez « menu » pour commander."]);
+    expect(r.events).toContainEqual({ type: "flow_started", flowId: "f_defaut", via: "defaut" });
+  });
+
+  it("passe avant l'IA de secours", async () => {
+    const ai = fakeAi({ action: "repondre", texte: "?" });
+    await runEngine(input({ channel: toujours, flows: withDefault, message: { kind: "text", text: "yo" } }), { ai: ai.port });
+    expect(ai.calls).toHaveLength(0);
+  });
+
+  it("un mot-clé reste prioritaire", async () => {
+    const r = await runEngine(input({ channel: toujours, flows: withDefault, message: { kind: "text", text: "agneau" } }));
+    expect(r.events).toContainEqual({ type: "flow_started", flowId: "f_agneau", via: "mot_cle" });
+  });
+
+  it("une session en cours reste prioritaire", async () => {
+    const r1 = await runEngine(input({ channel: toujours, flows: withDefault, message: { kind: "text", text: "réserver" } }));
+    const r2 = await runEngine(next(r1, { channel: toujours, flows: withDefault, message: { kind: "text", text: "4" } }));
+    expect(texts(r2)).toEqual(["Votre numéro ?"]);
+  });
+
+  it("ne se déclenche jamais sur un canal « mots-clés uniquement »", async () => {
+    const r = await runEngine(input({ flows: withDefault, message: { kind: "text", text: "coucou c'est maman" } }));
+    expect(r.outgoing).toEqual([]);
+    expect(r.events).toEqual([{ type: "ignored", reason: "aucun_declencheur" }]);
+  });
+});
+
+describe("bloc Message avec boutons", () => {
+  const flow: Flow = {
+    id: "f_msg",
+    name: "Message + boutons",
+    nodes: [
+      node("t", "trigger", { keywords: ["salut"] }),
+      node("m", "message", {
+        text: "Bonjour {{prenom}} !",
+        buttons: [
+          { id: "a", title: "Commander" },
+          { id: "b", title: "Horaires" },
+        ],
+      }),
+      node("ok", "message", { text: "Voici nos horaires." }),
+    ],
+    edges: [edge("t", "m"), edge("m", "ok", "b")],
+  };
+
+  it("envoie le texte avec ses boutons et attend la réponse", async () => {
+    const r = await runEngine(input({ flows: [flow], message: { kind: "text", text: "salut" } }));
+    expect(r.outgoing).toHaveLength(1);
+    expect(r.outgoing[0]).toMatchObject({ kind: "buttons", text: "Bonjour Jules !" });
+    expect(r.session?.nodeId).toBe("m");
+    const r2 = await runEngine(next(r, { flows: [flow], message: { kind: "text", text: "horaires" } }));
+    expect(texts(r2)).toEqual(["Voici nos horaires."]);
+  });
+
+  it("sans bouton, le bloc Message continue directement", async () => {
+    const r = await runEngine(input({ message: { kind: "text", text: "agneau" } }));
+    expect(r.session).toBeNull();
+  });
+});
+
+describe("bloc Délai", () => {
+  const flow = (data: { mode: "fixe" | "intelligent"; seconds?: number }, text = "Votre commande est prête !"): Flow => ({
+    id: "f_delai",
+    name: "Délai",
+    nodes: [node("t", "trigger", { keywords: ["test"] }), node("d", "delay", data), node("m", "message", { text })],
+    edges: [edge("t", "d"), edge("d", "m")],
+  });
+
+  it("délai fixe : indicateur « en train d'écrire » avant le message", async () => {
+    const r = await runEngine(input({ flows: [flow({ mode: "fixe", seconds: 3 })], message: { kind: "text", text: "test" } }));
+    expect(r.outgoing).toEqual([{ kind: "typing", ms: 3000 }, { kind: "text", text: "Votre commande est prête !" }]);
+  });
+
+  it("délai fixe borné entre 0,5 s et 10 s", async () => {
+    const long = await runEngine(input({ flows: [flow({ mode: "fixe", seconds: 60 })], message: { kind: "text", text: "test" } }));
+    expect(long.outgoing[0]).toEqual({ kind: "typing", ms: 10_000 });
+  });
+
+  it("délai intelligent : plus le message est long, plus le délai est long (1 à 5 s)", async () => {
+    const court = await runEngine(input({ flows: [flow({ mode: "intelligent" }, "Ok")], message: { kind: "text", text: "test" } }));
+    const moyen = await runEngine(input({ flows: [flow({ mode: "intelligent" }, "x".repeat(60))], message: { kind: "text", text: "test" } }));
+    const long = await runEngine(input({ flows: [flow({ mode: "intelligent" }, "x".repeat(500))], message: { kind: "text", text: "test" } }));
+    expect(court.outgoing[0]).toEqual({ kind: "typing", ms: 1000 });
+    expect(moyen.outgoing[0]).toEqual({ kind: "typing", ms: 2900 });
+    expect(long.outgoing[0]).toEqual({ kind: "typing", ms: 5000 });
+  });
+
+  it("un délai qui ne précède aucun message est retiré", async () => {
+    const f: Flow = { id: "x", name: "x", nodes: [node("t", "trigger", { keywords: ["test"] }), node("d", "delay", { mode: "fixe", seconds: 2 })], edges: [edge("t", "d")] };
+    const r = await runEngine(input({ flows: [f], message: { kind: "text", text: "test" } }));
+    expect(r.outgoing).toEqual([]);
   });
 });
