@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* Direction artistique PFlow (relevée sur pflow.fr) */
+@theme {
+  --color-navy: #101b4d;
+  --color-navy-2: #1b2a6b;
+  --color-navy-3: #0a1447;
+  --color-pink: #ff4fb5;
+  --color-pink-2: #ff7ccb;
+  --color-blue: #2a8bff;
+  --color-cyan: #74ddfb;
+  --color-coral: #ff6b6b;
+  --color-wa: #22c55e;
+  --color-page: #f8f7fb;
+  --color-muted: #5e6690;
+  --color-line: rgb(16 27 77 / 0.12);
+  --color-rule: rgb(16 27 77 / 0.08);
+
+  --font-title: var(--font-fredoka), ui-rounded, system-ui, sans-serif;
+  --font-sans: var(--font-manrope), system-ui, sans-serif;
+
+  --radius-card: 24px;
+  --shadow-card: 0 12px 30px rgb(16 27 77 / 0.08);
+  --shadow-pop: 0 24px 60px rgb(16 27 77 / 0.14);
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-page);
+  color: var(--color-navy);
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-title);
+}
