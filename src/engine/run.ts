@@ -16,6 +16,7 @@ import {
   type Flow,
   type FlowNode,
   type FlowNodeOf,
+  type MessageBubble,
   type OutgoingMessage,
   type PauseReason,
   type QuestionValidation,
@@ -41,20 +42,18 @@ export const TEXTS = {
   } satisfies Record<QuestionValidation, string>,
 };
 
-type WaitingNode =
-  | FlowNodeOf<"message">
-  | FlowNodeOf<"buttons">
-  | FlowNodeOf<"list">
-  | FlowNodeOf<"question">
-  | FlowNodeOf<"ai">;
+type WaitingNode = FlowNodeOf<"message"> | FlowNodeOf<"list"> | FlowNodeOf<"question"> | FlowNodeOf<"ai">;
 
-/** Un bloc Message avec des boutons attend la réponse du contact. */
-const hasButtons = (node: FlowNode): boolean => node.type === "message" && (node.data.buttons?.length ?? 0) > 0;
+/** Boutons de réponse d'un bloc Message, toutes bulles confondues. */
+export function replyButtonsOf(node: FlowNodeOf<"message">): ChoiceOption[] {
+  return node.data.bubbles.flatMap((b) => b.buttons.flatMap((x) => (x.kind === "reply" ? [{ id: x.id, title: x.title }] : [])));
+}
+
+const hasReplyButtons = (node: FlowNode): boolean => node.type === "message" && replyButtonsOf(node).length > 0;
 
 /** Options cliquables d'un bloc en attente (boutons ou liste). */
 function optionsOf(node: WaitingNode): ChoiceOption[] | null {
-  if (node.type === "message") return node.data.buttons ?? [];
-  if (node.type === "buttons") return node.data.buttons;
+  if (node.type === "message") return replyButtonsOf(node);
   if (node.type === "list") return node.data.items;
   return null;
 }
@@ -181,8 +180,11 @@ class EngineRun {
     const node = flow?.nodes.find((n) => n.id === ref.nodeId);
     if (!flow || !node) return false;
 
-    const sameNode = this.session?.flowId === ref.flowId && this.session.nodeId === ref.nodeId;
-    if (!sameNode) {
+    if (this.session?.flowId === ref.flowId) {
+      // Même flux (ex. bouton d'une bulle précédente, l'étape suivante étant déjà partie) :
+      // on garde la session et ses variables.
+      this.session.nodeId = node.id;
+    } else {
       // Ancien bouton (session expirée ou autre flux) : on reprend à cet endroit.
       this.session = this.newSession(flow.id, node.id);
       this.events.push({ type: "flow_started", flowId: flow.id, via: "bouton" });
@@ -194,7 +196,6 @@ class EngineRun {
   private async handleWaiting(node: WaitingNode, text: string): Promise<void> {
     switch (node.type) {
       case "message":
-      case "buttons":
       case "list": {
         const options = optionsOf(node) ?? [];
         const option = matchOption(options, text);
@@ -394,15 +395,18 @@ class EngineRun {
           currentId = this.nextNodeId(flow, node.id, "next");
           break;
 
-        case "message":
-          if (hasButtons(node)) {
-            this.sendPrompt(node);
+        case "message": {
+          for (const bubble of node.data.bubbles) this.sendBubble(node.id, bubble);
+          currentId = this.nextNodeId(flow, node.id, "next");
+          // Étape suivante reliée : la suite part tout de suite (les boutons restent cliquables).
+          if (currentId) break;
+          // Sinon : s'il y a des boutons de réponse, on attend le clic ; sinon, fin du flux.
+          if (hasReplyButtons(node)) {
             this.refreshExpiry();
             return;
           }
-          this.send({ kind: "text", text: this.render(node.data.text) });
-          currentId = this.nextNodeId(flow, node.id, "next");
           break;
+        }
 
         case "delay":
           // -1 = délai intelligent, calculé d'après le message suivant (voir resolveDelays).
@@ -410,7 +414,6 @@ class EngineRun {
           currentId = this.nextNodeId(flow, node.id, "next");
           break;
 
-        case "buttons":
         case "list":
         case "question":
           this.sendPrompt(node);
@@ -430,22 +433,6 @@ class EngineRun {
             infoSheet: this.input.infoSheet,
           });
           currentId = this.nextNodeId(flow, node.id, ok ? "vrai" : "faux");
-          break;
-        }
-
-        case "order_link": {
-          const url = this.orderUrl();
-          if (!url) {
-            this.events.push({ type: "error", message: "Lien de commande : slug du resto manquant" });
-          } else {
-            this.send({
-              kind: "link",
-              text: this.render(node.data.text || TEXTS.orderLink),
-              url,
-              buttonLabel: node.data.buttonLabel || TEXTS.orderButton,
-            });
-          }
-          currentId = this.nextNodeId(flow, node.id, "next");
           break;
         }
 
@@ -477,6 +464,35 @@ class EngineRun {
     }
   }
 
+  /** Envoie une bulle : texte seul, texte + boutons de réponse, ou texte + bouton lien. */
+  private sendBubble(nodeId: string, bubble: MessageBubble): void {
+    const flowId = this.session!.flowId;
+    const text = this.render(bubble.text);
+    const replies = bubble.buttons.filter((b) => b.kind === "reply");
+    const link = bubble.buttons.find((b) => b.kind === "link");
+
+    if (replies.length) {
+      this.send({
+        kind: "buttons",
+        text,
+        buttons: replies.map((b) => ({ id: encodeReplyId({ flowId, nodeId, handle: b.id }), title: this.render(b.title) })),
+      });
+      return;
+    }
+    if (link) {
+      const url = link.orderLink ? this.orderUrl() : this.render(link.url ?? "");
+      if (url && /^https?:\/\//.test(url)) {
+        this.send({ kind: "link", text: text || TEXTS.orderLink, url, buttonLabel: this.render(link.title) || TEXTS.orderButton });
+        return;
+      }
+      this.events.push({
+        type: "error",
+        message: link.orderLink ? "Lien de commande : slug du resto manquant" : `Bouton lien : URL invalide « ${url ?? ""} »`,
+      });
+    }
+    if (text) this.send({ kind: "text", text });
+  }
+
   private sendPrompt(node: WaitingNode): void {
     const flowId = this.session!.flowId;
     const withReplyIds = (options: ChoiceOption[]) =>
@@ -484,8 +500,10 @@ class EngineRun {
 
     switch (node.type) {
       case "message":
-      case "buttons":
-        this.send({ kind: "buttons", text: this.render(node.data.text), buttons: withReplyIds(optionsOf(node) ?? []) });
+        // On renvoie seulement les bulles qui portent des boutons de réponse.
+        for (const bubble of node.data.bubbles) {
+          if (bubble.buttons.some((b) => b.kind === "reply")) this.sendBubble(node.id, bubble);
+        }
         return;
       case "list":
         this.send({
@@ -535,7 +553,7 @@ class EngineRun {
     if (!this.session) return undefined;
     const node = this.flow(this.session.flowId)?.nodes.find((n) => n.id === this.session!.nodeId);
     if (!node) return undefined;
-    return node.type === "buttons" || node.type === "list" || node.type === "question" || node.type === "ai" || hasButtons(node)
+    return node.type === "list" || node.type === "question" || node.type === "ai" || hasReplyButtons(node)
       ? (node as WaitingNode)
       : undefined;
   }

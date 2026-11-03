@@ -3,6 +3,7 @@
  * passe par ici. Ils reflètent les types de `src/engine/types.ts`.
  */
 import { z } from "zod";
+import { migrateRawGraph, migrateRawNode } from "./migrate";
 
 const id = z.string().min(1).max(200);
 const hhmm = z.string().regex(/^([01]?\d|2[0-4]):[0-5]\d$/, "Heure au format HH:MM");
@@ -37,12 +38,20 @@ export const flowNodeSchema = z.discriminatedUnion("type", [
   z.object({
     ...nodeBase,
     type: z.literal("message"),
-    data: z.object({ text: z.string(), buttons: z.array(option).optional() }),
-  }),
-  z.object({
-    ...nodeBase,
-    type: z.literal("buttons"),
-    data: z.object({ text: z.string(), buttons: z.array(option) }),
+    data: z.object({
+      bubbles: z.array(
+        z.object({
+          id,
+          text: z.string(),
+          buttons: z.array(
+            z.discriminatedUnion("kind", [
+              z.object({ id, kind: z.literal("reply"), title: z.string() }),
+              z.object({ id, kind: z.literal("link"), title: z.string(), url: z.string().optional(), orderLink: z.boolean().optional() }),
+            ]),
+          ),
+        }),
+      ),
+    }),
   }),
   z.object({
     ...nodeBase,
@@ -67,11 +76,6 @@ export const flowNodeSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     ...nodeBase,
-    type: z.literal("order_link"),
-    data: z.object({ text: z.string().optional(), buttonLabel: z.string().optional() }),
-  }),
-  z.object({
-    ...nodeBase,
     type: z.literal("ai"),
     data: z.object({ intro: z.string().optional(), instructions: z.string().optional() }),
   }),
@@ -92,10 +96,17 @@ export const flowEdgeSchema = z.object({
   target: id,
 });
 
-export const flowGraphSchema = z.object({
-  nodes: z.array(flowNodeSchema),
-  edges: z.array(flowEdgeSchema),
-});
+/** Graphe au format actuel. Les anciens formats sont convertis avant validation. */
+export const flowGraphSchema = z.preprocess(
+  migrateRawGraph,
+  z.object({
+    nodes: z.array(flowNodeSchema),
+    edges: z.array(flowEdgeSchema),
+  }),
+);
+
+/** Un bloc seul (presse-papiers) : ancien format converti avant validation. */
+export const flowNodeInputSchema = z.preprocess(migrateRawNode, flowNodeSchema);
 
 export const infoSheetSchema = z.object({
   horaires: z.array(z.object({ jour: weekday, plages: z.array(z.object({ de: hhmm, a: hhmm })) })),

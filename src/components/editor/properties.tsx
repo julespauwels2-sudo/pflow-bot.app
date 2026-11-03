@@ -3,6 +3,19 @@
 import { useState, type ReactNode } from "react";
 import { DELAY_MAX_SECONDS, TEXTS, WEEKDAY_LABELS, smartDelayMs, type ChoiceOption, type ConditionRule, type FlowNode, type IsoWeekday } from "@/engine";
 import { BLOCKS, shortId } from "@/editor/catalog";
+import {
+  addBubble,
+  addLinkButton,
+  addReplyButton,
+  canAddBubble,
+  canAddLink,
+  canAddReply,
+  moveBubble,
+  removeBubble,
+  removeButton,
+  setBubbleText,
+  updateButton,
+} from "@/editor/bubbles";
 import { OPERATOR_LABELS } from "@/editor/describe";
 import { WA_LIMITS } from "@/editor/limits";
 import { useEditor } from "./context";
@@ -230,8 +243,153 @@ function RuleEditor({ rule, onChange, onRemove, variables }: { rule: ConditionRu
   );
 }
 
+/** Bulles du bloc Message : texte, boutons de réponse ou bouton lien (jamais les deux). */
+function MessageFields({ node }: { node: Extract<FlowNode, { type: "message" }> }) {
+  const { updateData, variables, orderUrl } = useEditor();
+  const data = node.data;
+  const update = (next: typeof data, field: string) => updateData(node.id, next, `${node.id}:${field}`);
+
+  return (
+    <div className="space-y-3">
+      {data.bubbles.map((bubble, i) => {
+        const reply = canAddReply(bubble);
+        const link = canAddLink(bubble);
+        const interactive = bubble.buttons.length > 0;
+        return (
+          <div key={bubble.id} className="space-y-2 rounded-2xl border border-line p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold">Bulle {i + 1}</p>
+              <div className="flex gap-2 text-[11px] font-semibold">
+                <button type="button" disabled={i === 0} className="text-muted hover:text-navy disabled:opacity-30" onClick={() => update(moveBubble(data, bubble.id, -1), "bubble:move")}>
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  disabled={i === data.bubbles.length - 1}
+                  className="text-muted hover:text-navy disabled:opacity-30"
+                  onClick={() => update(moveBubble(data, bubble.id, 1), "bubble:move")}
+                >
+                  ↓
+                </button>
+                <button type="button" disabled={data.bubbles.length <= 1} className="text-coral hover:underline disabled:opacity-30" onClick={() => update(removeBubble(data, bubble.id), "bubble:remove")}>
+                  Supprimer
+                </button>
+              </div>
+            </div>
+            <VariableField
+              ariaLabel={`Texte de la bulle ${i + 1}`}
+              value={bubble.text}
+              variables={variables}
+              multiline
+              max={interactive ? WA_LIMITS.interactiveBody : WA_LIMITS.textBody}
+              placeholder="👋 Hello {{prenom}} !"
+              onChange={(text) => update(setBubbleText(data, bubble.id, text), `${bubble.id}:text`)}
+            />
+
+            {bubble.buttons.map((b) =>
+              b.kind === "reply" ? (
+                <div key={b.id} className="flex items-center gap-1.5">
+                  <span className="text-xs text-blue" title="Bouton de réponse">↩︎</span>
+                  <input
+                    className={inputCls}
+                    aria-label="Titre du bouton de réponse"
+                    value={b.title}
+                    onChange={(e) => update(updateButton(data, bubble.id, { ...b, title: e.target.value }), `${b.id}:title`)}
+                  />
+                  <Counter value={b.title} max={WA_LIMITS.buttonTitle} />
+                  <button type="button" aria-label="Supprimer le bouton" className="px-1 text-coral" onClick={() => update(removeButton(data, bubble.id, b.id), "button:remove")}>
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <div key={b.id} className="space-y-1.5 rounded-xl bg-page p-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs" title="Bouton lien">🔗</span>
+                    <input
+                      className={inputCls}
+                      aria-label="Titre du bouton lien"
+                      value={b.title}
+                      onChange={(e) => update(updateButton(data, bubble.id, { ...b, title: e.target.value }), `${b.id}:title`)}
+                    />
+                    <Counter value={b.title} max={WA_LIMITS.ctaButtonLabel} />
+                    <button type="button" aria-label="Supprimer le bouton" className="px-1 text-coral" onClick={() => update(removeButton(data, bubble.id, b.id), "button:remove")}>
+                      ✕
+                    </button>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-pink"
+                      checked={b.orderLink ?? false}
+                      onChange={(e) =>
+                        update(
+                          updateButton(data, bubble.id, e.target.checked ? { id: b.id, kind: "link", title: b.title, orderLink: true } : { id: b.id, kind: "link", title: b.title, url: "https://" }),
+                          `${b.id}:orderLink`,
+                        )
+                      }
+                    />
+                    Lien de commande du client
+                  </label>
+                  {b.orderLink ? (
+                    <p className="truncate text-[11px] text-muted">{orderUrl}</p>
+                  ) : (
+                    <VariableField
+                      ariaLabel="URL du bouton lien"
+                      value={b.url ?? ""}
+                      variables={variables}
+                      placeholder="https://…"
+                      onChange={(url) => update(updateButton(data, bubble.id, { ...b, url }), `${b.id}:url`)}
+                    />
+                  )}
+                </div>
+              ),
+            )}
+
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                disabled={!reply.allowed}
+                title={reply.reason}
+                className="rounded-xl border border-dashed border-blue/40 py-1.5 text-xs font-semibold text-blue hover:bg-blue/5 disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={() => update(addReplyButton(data, bubble.id), "reply:add")}
+              >
+                + Bouton de réponse
+              </button>
+              <button
+                type="button"
+                disabled={!link.allowed}
+                title={link.reason}
+                className="rounded-xl border border-dashed border-blue/40 py-1.5 text-xs font-semibold text-blue hover:bg-blue/5 disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={() => update(addLinkButton(data, bubble.id), "link:add")}
+              >
+                + Bouton lien
+              </button>
+            </div>
+            {[...new Set([reply.reason, link.reason].filter(Boolean))].map((reason) => (
+              <p key={reason} className="text-[11px] text-muted">
+                {reason}
+              </p>
+            ))}
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        disabled={!canAddBubble(data)}
+        className="w-full rounded-xl border border-dashed border-line py-2 text-sm font-semibold text-muted hover:border-navy/30 hover:text-navy disabled:opacity-40"
+        onClick={() => update(addBubble(data), "bubble:add")}
+      >
+        + Ajouter une bulle
+      </button>
+      <p className="text-[11px] text-muted">
+        <strong>Étape suivante</strong> reliée : la suite part tout de suite et les boutons restent cliquables. Non reliée : le bot attend un clic.
+      </p>
+    </div>
+  );
+}
+
 function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unknown>, field: string) => void }) {
-  const { variables, flows, flowId, orderUrl } = useEditor();
+  const { variables, flows, flowId } = useEditor();
   const vf = (field: string, value: string | undefined, opts: { multiline?: boolean; placeholder?: string; max?: number } = {}) => (
     <VariableField value={value ?? ""} variables={variables} onChange={(v) => set({ [field]: v }, field)} ariaLabel={field} {...opts} />
   );
@@ -267,33 +425,8 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
         </>
       );
 
-    case "message": {
-      const buttons = node.data.buttons ?? [];
-      return (
-        <>
-          <Row label="Texte">
-            {vf("text", node.data.text, {
-              multiline: true,
-              max: buttons.length ? WA_LIMITS.interactiveBody : WA_LIMITS.textBody,
-              placeholder: "Bonjour {{prenom}} 👋",
-            })}
-          </Row>
-          <Row
-            label="Boutons de réponse (facultatif)"
-            hint="Chaque bouton a sa propre sortie. Pour un bouton qui ouvre un lien, utilisez le bloc « Lien de commande » : WhatsApp ne mélange pas les deux."
-          >
-            <OptionsEditor
-              options={buttons}
-              max={WA_LIMITS.buttonsMax}
-              titleMax={WA_LIMITS.buttonTitle}
-              addLabel="Ajouter un bouton"
-              prefix="b"
-              onChange={(next, field) => set({ buttons: next.length ? next : undefined }, `buttons:${field}`)}
-            />
-          </Row>
-        </>
-      );
-    }
+    case "message":
+      return <MessageFields node={node} />;
 
     case "delay": {
       const mode = node.data.mode;
@@ -333,23 +466,6 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
         </>
       );
     }
-
-    case "buttons":
-      return (
-        <>
-          <Row label="Texte au-dessus des boutons">{vf("text", node.data.text, { multiline: true, max: WA_LIMITS.interactiveBody })}</Row>
-          <Row label="Boutons" hint="Chaque bouton a sa propre sortie à relier.">
-            <OptionsEditor
-              options={node.data.buttons}
-              max={WA_LIMITS.buttonsMax}
-              titleMax={WA_LIMITS.buttonTitle}
-              addLabel="Ajouter un bouton"
-              prefix="b"
-              onChange={(buttons, field) => set({ buttons }, `buttons:${field}`)}
-            />
-          </Row>
-        </>
-      );
 
     case "list":
       return (
@@ -443,21 +559,6 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
         </>
       );
     }
-
-    case "order_link":
-      return (
-        <>
-          <Row label="Texte" hint={`Lien envoyé : ${orderUrl}`}>
-            {vf("text", node.data.text, { multiline: true, placeholder: TEXTS.orderLink })}
-          </Row>
-          <Row label="Libellé du bouton">
-            <div className="flex items-center gap-1.5">
-              <input className={inputCls} placeholder={TEXTS.orderButton} value={node.data.buttonLabel ?? ""} onChange={(e) => set({ buttonLabel: e.target.value || undefined }, "buttonLabel")} />
-              <Counter value={node.data.buttonLabel} max={WA_LIMITS.ctaButtonLabel} />
-            </div>
-          </Row>
-        </>
-      );
 
     case "ai":
       return (

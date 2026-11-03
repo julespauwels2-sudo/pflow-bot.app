@@ -1,7 +1,7 @@
 /** Copier / coller / dupliquer des blocs (avec les flèches entre les blocs copiés). */
 import type { FlowEdge, FlowNode } from "@/engine";
 import type { FlowGraph } from "@/data/types";
-import { flowEdgeSchema, flowNodeSchema } from "@/data/schemas";
+import { flowEdgeSchema, flowNodeInputSchema } from "@/data/schemas";
 import { z } from "zod";
 import { shortId } from "./catalog";
 import { pruneEdges } from "./graph";
@@ -69,7 +69,7 @@ export function pasteBlocks(graph: FlowGraph, payload: ClipboardPayload, offset 
 
 const payloadSchema = z.object({
   format: z.literal(CLIPBOARD_FORMAT),
-  nodes: z.array(flowNodeSchema),
+  nodes: z.array(flowNodeInputSchema),
   edges: z.array(flowEdgeSchema),
 });
 

@@ -95,7 +95,7 @@ describe("flux : brouillon et publication", () => {
     expect(hasUnpublishedChanges(p)).toBe(false);
 
     const draft = structuredClone(p.draft);
-    draft.nodes.push({ id: "m", type: "message", position: { x: 0, y: 100 }, data: { text: "Salut" } });
+    draft.nodes.push({ id: "m", type: "message", position: { x: 0, y: 100 }, data: { bubbles: [{ id: "m-1", text: "Salut", buttons: [] }] } });
     const edited = await repos.flows.update(f.id, { draft, name: "Accueil v2" });
     expect(edited.published?.nodes).toHaveLength(1);
     expect(edited.publishedMeta?.name).toBe("Accueil");
@@ -212,6 +212,35 @@ describe("stockage navigateur", () => {
     await a.clients.create({ nomResto: "Mexico", orderSlug: "mexico" });
     const b = createLocalRepositories(createLocalStorageStore(storage));
     expect((await b.clients.list()).map((c) => c.nomResto)).toEqual(["Mexico"]);
+  });
+
+  it("convertit les anciens flux à la lecture et garde une copie des données d'avant", async () => {
+    const storage = new FakeStorage();
+    const old = {
+      clients: [{ id: "c", nomResto: "Mexico", orderSlug: "mexico", timezone: "America/Guadeloupe", createdAt: "x", updatedAt: "x" }],
+      flows: [
+        {
+          id: "f",
+          clientId: "c",
+          name: "Accueil",
+          draft: { nodes: [{ id: "l", type: "order_link", position: { x: 0, y: 0 }, data: {} }], edges: [] },
+          published: null,
+          publishedMeta: null,
+          publishedAt: null,
+          version: 0,
+          createdAt: "x",
+          updatedAt: "x",
+        },
+      ],
+      infoSheets: {},
+    };
+    storage.setItem(STORAGE_KEY, JSON.stringify(old));
+    const repos = createLocalRepositories(createLocalStorageStore(storage));
+    const flow = await repos.flows.get("f");
+    expect(flow?.draft.nodes[0].type).toBe("message");
+    expect((await repos.clients.get("c"))?.triggerMode).toBe("mots_cles_uniquement");
+    expect(JSON.parse(storage.getItem(STORAGE_KEY)!).flows[0].draft.nodes[0].type).toBe("message");
+    expect(JSON.parse(storage.getItem(`${STORAGE_KEY}:avant-conversion-bulles`)!)).toEqual(old);
   });
 
   it("ne perd jamais des données illisibles : copie de secours", async () => {

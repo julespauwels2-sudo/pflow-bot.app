@@ -5,7 +5,7 @@ import { copySelection, editorReducer, graphOf, initEditor, type EditorAction, t
 const graph: FlowGraph = {
   nodes: [
     { id: "t", type: "trigger", position: { x: 0, y: 0 }, data: { keywords: ["menu"] } },
-    { id: "m", type: "message", position: { x: 300, y: 0 }, data: { text: "Bonjour" } },
+    { id: "m", type: "message", position: { x: 300, y: 0 }, data: { bubbles: [{ id: "m-1", text: "Bonjour", buttons: [] }] } },
     { id: "f", type: "end", position: { x: 600, y: 0 }, data: {} },
   ],
   edges: [
@@ -19,12 +19,13 @@ const run = (state: EditorState, ...actions: EditorAction[]) => actions.reduce(e
 describe("état de l'éditeur", () => {
   it("modifier un texte puis annuler", () => {
     let s = initEditor(graph);
-    s = run(s, { type: "updateData", id: "m", data: { text: "Salut" }, key: "m:text", now: 0 });
-    expect(graphOf(s).nodes[1].data).toEqual({ text: "Salut" });
+    const salut = { bubbles: [{ id: "m-1", text: "Salut", buttons: [] }] };
+    s = run(s, { type: "updateData", id: "m", data: salut, key: "m:text", now: 0 });
+    expect(graphOf(s).nodes[1].data).toEqual(salut);
     s = run(s, { type: "undo" });
-    expect(graphOf(s).nodes[1].data).toEqual({ text: "Bonjour" });
+    expect(graphOf(s).nodes[1].data).toEqual(graph.nodes[1].data);
     s = run(s, { type: "redo" });
-    expect(graphOf(s).nodes[1].data).toEqual({ text: "Salut" });
+    expect(graphOf(s).nodes[1].data).toEqual(salut);
   });
 
   it("supprimer un bloc et ses flèches = une seule étape d'annulation", () => {

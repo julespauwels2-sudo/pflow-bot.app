@@ -19,6 +19,16 @@ export function node<T extends NodeType>(id: string, type: T, data: NodeDataMap[
   return { id, type, position: { x: 0, y: 0 }, data } as FlowNode;
 }
 
+/** Bloc Message d'une seule bulle de texte. */
+export function say(id: string, text: string): FlowNode {
+  return node(id, "message", { bubbles: [{ id: `${id}-1`, text, buttons: [] }] });
+}
+
+/** Bloc Message d'une bulle avec des boutons de réponse. */
+export function ask(id: string, text: string, buttons: { id: string; title: string }[]): FlowNode {
+  return node(id, "message", { bubbles: [{ id: `${id}-1`, text, buttons: buttons.map((b) => ({ ...b, kind: "reply" as const })) }] });
+}
+
 export function edge(source: string, target: string, sourceHandle: string | null = null): FlowEdge {
   return { id: `${source}-${sourceHandle ?? "next"}-${target}`, source, target, sourceHandle };
 }
@@ -56,18 +66,17 @@ export const accueil: Flow = {
   description: "Accueil et lien de commande",
   nodes: [
     node("t", "trigger", { keywords: ["commander", "bonjour", "menu"] }),
-    node("m", "message", { text: "Bonjour {{prenom}} 👋 Bienvenue chez {{nom_resto}} !" }),
-    node("b", "buttons", {
-      text: "Que souhaitez-vous faire ?",
-      buttons: [
-        { id: "cmd", title: "Commander" },
-        { id: "hor", title: "Nos horaires" },
-        { id: "q", title: "Une question" },
-      ],
+    say("m", "Bonjour {{prenom}} 👋 Bienvenue chez {{nom_resto}} !"),
+    ask("b", "Que souhaitez-vous faire ?", [
+      { id: "cmd", title: "Commander" },
+      { id: "hor", title: "Nos horaires" },
+      { id: "q", title: "Une question" },
+    ]),
+    node("lien", "message", {
+      bubbles: [{ id: "lien-1", text: "Pour commander, c'est par ici 👇", buttons: [{ id: "go", kind: "link", title: "Commander", orderLink: true }] }],
     }),
-    node("lien", "order_link", {}),
     node("fin", "end", { text: "Bon appétit !" }),
-    node("hor", "message", { text: "Nous sommes ouverts du mardi au dimanche." }),
+    say("hor", "Nous sommes ouverts du mardi au dimanche."),
     node("ia", "ai", { intro: "Posez-moi votre question 🙂", instructions: "Sois bref." }),
   ],
   edges: [
@@ -87,8 +96,8 @@ export const agneau: Flow = {
   nodes: [
     node("t", "trigger", { keywords: ["agneau"] }),
     node("c", "condition", { rules: [{ kind: "jour", jours: [6, 7] }] }),
-    node("oui", "message", { text: "Oui, l'agneau est dispo aujourd'hui !" }),
-    node("non", "message", { text: "L'agneau n'est disponible que le week-end." }),
+    say("oui", "Oui, l'agneau est dispo aujourd'hui !"),
+    say("non", "L'agneau n'est disponible que le week-end."),
   ],
   edges: [edge("t", "c"), edge("c", "oui", "vrai"), edge("c", "non", "faux")],
 };
@@ -101,7 +110,7 @@ export const reservation: Flow = {
     node("t", "trigger", { keywords: ["réservation", "reserver"] }),
     node("q1", "question", { text: "Pour combien de personnes ?", variable: "couverts", validation: "nombre" }),
     node("q2", "question", { text: "Votre numéro ?", variable: "tel", validation: "telephone" }),
-    node("ok", "message", { text: "C'est noté : {{couverts}} personnes, on vous rappelle au {{tel}}." }),
+    say("ok", "C'est noté : {{couverts}} personnes, on vous rappelle au {{tel}}."),
     node("h", "handoff", { text: "Je passe la main à l'équipe." }),
   ],
   edges: [edge("t", "q1"), edge("q1", "q2", "next"), edge("q1", "h", "echec"), edge("q2", "ok")],

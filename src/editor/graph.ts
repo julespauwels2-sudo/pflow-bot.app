@@ -34,28 +34,6 @@ export function connect(graph: FlowGraph, source: string, sourceHandle: string |
   return pruneEdges({ ...graph, edges });
 }
 
-/**
- * Quand les sorties d'un bloc changent (ex. on ajoute le premier bouton à un message),
- * la flèche existante est reportée au lieu d'être perdue :
- * « Suite » → premier bouton, et dernier bouton retiré → « Suite ».
- */
-export function remapOutputs(graph: FlowGraph, nodeId: string, before: string[], after: string[]): FlowGraph {
-  const fromNode = graph.edges.filter((e) => e.source === nodeId);
-  let move: { from: string; to: string } | null = null;
-  if (before.length === 1 && before[0] === "next" && after.length > 0 && !after.includes("next")) {
-    move = { from: "next", to: after[0] };
-  } else if (after.length === 1 && after[0] === "next" && !before.includes("next") && before.length > 0) {
-    const lost = fromNode.filter((e) => !after.includes(handleOf(e)));
-    if (lost.length === 1) move = { from: handleOf(lost[0]), to: "next" };
-  }
-  if (!move) return graph;
-  const { from, to } = move;
-  return {
-    ...graph,
-    edges: graph.edges.map((e) => (e.source === nodeId && handleOf(e) === from ? { ...e, sourceHandle: to } : e)),
-  };
-}
-
 /** Ids des blocs atteignables depuis le déclencheur. */
 export function reachableFrom(graph: FlowGraph, startId: string): Set<string> {
   const seen = new Set<string>([startId]);

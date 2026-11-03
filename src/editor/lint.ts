@@ -2,10 +2,10 @@
  * Vérification d'un flux avant publication. Les erreurs bloquent « Publier » ;
  * les avertissements sont affichés mais n'empêchent pas de publier.
  */
-import type { ChoiceOption, FlowNode, TriggerMode } from "@/engine";
+import type { FlowNode, TriggerMode } from "@/engine";
 import { DELAY_MAX_SECONDS, parseHhmm } from "@/engine";
 import type { FlowGraph } from "@/data/types";
-import { BLOCKS, nodeOutputs } from "./catalog";
+import { BLOCKS, MAX_BUBBLES, nodeOutputs } from "./catalog";
 import { handleOf, reachableFrom } from "./graph";
 import { PLATFORM_LIMITS, type Platform, type PlatformLimits } from "./limits";
 import { VARIABLE_NAME, flowVariables, usedVariables } from "./variables";
@@ -39,14 +39,11 @@ function strictest(platforms: Platform[], key: keyof Omit<PlatformLimits, "name"
 function texts(node: FlowNode): (string | undefined)[] {
   switch (node.type) {
     case "message":
-      return [node.data.text];
-    case "buttons":
+      return node.data.bubbles.flatMap((b) => [b.text, ...b.buttons.map((x) => x.title), ...b.buttons.map((x) => (x.kind === "link" ? x.url : undefined))]);
     case "list":
       return [node.data.text];
     case "question":
       return [node.data.text, node.data.errorText];
-    case "order_link":
-      return [node.data.text];
     case "ai":
       return [node.data.intro];
     case "handoff":
@@ -65,23 +62,51 @@ export function lintFlow(graph: FlowGraph, ctx: LintContext): Issue[] {
   const platforms: Platform[] = ctx.platforms?.length ? ctx.platforms : ["whatsapp"];
   const limit = (key: Parameters<typeof strictest>[1]) => strictest(platforms, key);
 
-  /** Boutons de réponse (bloc Message avec boutons, ou ancien bloc Boutons). */
-  const checkReplyButtons = (id: string, text: string, buttons: ChoiceOption[], connected: Set<string>) => {
-    const body = limit("interactiveBody");
-    if (!text.trim()) error("Le texte au-dessus des boutons est obligatoire.", id);
-    if (len(text) > body.value) error(`Texte trop long pour des boutons (${len(text)} / ${body.value}).`, id);
-    const max = limit("replyButtonsMax");
-    if (buttons.length > max.value) error(`${max.name} limite à ${max.value} boutons.`, id);
-    const titleMax = limit("replyButtonTitle");
+  /** Bloc Message : chaque bulle est un message WhatsApp, avec ses propres règles. */
+  const checkMessage = (id: string, node: Extract<FlowNode, { type: "message" }>, connected: Set<string>) => {
+    const bubbles = node.data.bubbles;
+    if (bubbles.length === 0) error("Ajoutez au moins une bulle.", id);
+    if (bubbles.length > MAX_BUBBLES) error(`${MAX_BUBBLES} bulles au maximum par bloc.`, id);
     const titles = new Set<string>();
-    for (const b of buttons) {
-      const title = b.title.trim();
-      if (!title) error("Un bouton n'a pas de titre.", id);
-      else if (len(title) > titleMax.value) error(`Bouton « ${title} » trop long (${len(title)} / ${titleMax.value}).`, id);
-      if (title && titles.has(title.toLowerCase())) error(`Deux boutons s'appellent « ${title} ».`, id);
-      titles.add(title.toLowerCase());
-      if (!connected.has(b.id)) error(`Bouton « ${title || "sans titre"} » non relié.`, id);
-    }
+    bubbles.forEach((bubble, i) => {
+      const at = bubbles.length > 1 ? `Bulle ${i + 1} : ` : "";
+      const replies = bubble.buttons.filter((b) => b.kind === "reply");
+      const links = bubble.buttons.filter((b) => b.kind === "link");
+      const interactive = bubble.buttons.length > 0;
+
+      if (replies.length && links.length) error(`${at}une bulle ne peut pas mélanger boutons de réponse et bouton lien (règle WhatsApp).`, id);
+      if (links.length > 1) error(`${at}un seul bouton lien par bulle (règle WhatsApp).`, id);
+
+      const body = limit(interactive ? "interactiveBody" : "textBody");
+      if (!bubble.text.trim()) error(interactive ? `${at}le texte au-dessus des boutons est obligatoire.` : `${at}bulle vide.`, id);
+      if (len(bubble.text) > body.value) error(`${at}texte trop long (${len(bubble.text)} / ${body.value}).`, id);
+
+      const max = limit("replyButtonsMax");
+      if (replies.length > max.value) error(`${at}${max.name} limite à ${max.value} boutons de réponse par bulle.`, id);
+      const titleMax = limit("replyButtonTitle");
+      for (const b of replies) {
+        const title = b.title.trim();
+        if (!title) error(`${at}un bouton n'a pas de titre.`, id);
+        else if (len(title) > titleMax.value) error(`Bouton « ${title} » trop long (${len(title)} / ${titleMax.value}).`, id);
+        if (title && titles.has(title.toLowerCase())) error(`Deux boutons s'appellent « ${title} ».`, id);
+        titles.add(title.toLowerCase());
+        if (!connected.has(b.id)) error(`Bouton « ${title || "sans titre"} » non relié.`, id);
+      }
+
+      const ctaMax = limit("ctaButtonLabel");
+      for (const b of links) {
+        const title = b.title.trim();
+        if (!title) error(`${at}le bouton lien n'a pas de titre.`, id);
+        else if (len(title) > ctaMax.value) error(`Bouton lien « ${title} » trop long (${len(title)} / ${ctaMax.value}).`, id);
+        if (b.orderLink) {
+          if (!ctx.orderSlug) error("Ce client n'a pas de slug : le lien de commande est impossible.", id);
+        } else {
+          const url = (b.url ?? "").trim();
+          if (!url) error(`${at}l'URL du bouton lien est vide.`, id);
+          else if (!/^https:\/\//.test(url) && !url.startsWith("{{")) error(`${at}l'URL doit commencer par https://`, id);
+        }
+      }
+    });
   };
 
   // Déclencheur
@@ -129,16 +154,9 @@ export function lintFlow(graph: FlowGraph, ctx: LintContext): Issue[] {
         if (!connected.has("next")) error("Le déclencheur n'est relié à rien.", id);
         break;
 
-      case "message": {
-        if (node.data.buttons?.length) {
-          checkReplyButtons(id, node.data.text, node.data.buttons, connected);
-          break;
-        }
-        const max = limit("textBody");
-        if (!node.data.text.trim()) error("Le message est vide.", id);
-        if (len(node.data.text) > max.value) error(`Message trop long (${len(node.data.text)} / ${max.value}).`, id);
+      case "message":
+        checkMessage(id, node, connected);
         break;
-      }
 
       case "delay":
         if (node.data.mode === "fixe") {
@@ -146,11 +164,6 @@ export function lintFlow(graph: FlowGraph, ctx: LintContext): Issue[] {
           if (sec < 0.5 || sec > DELAY_MAX_SECONDS) error(`Délai entre 0,5 et ${DELAY_MAX_SECONDS} secondes.`, id);
         }
         if (!connected.has("next")) warning("Rien après le délai : il ne sert à rien.", id);
-        break;
-
-      case "buttons":
-        if (node.data.buttons.length === 0) error("Ajoutez au moins un bouton.", id);
-        checkReplyButtons(id, node.data.text, node.data.buttons, connected);
         break;
 
       case "list": {
@@ -207,15 +220,6 @@ export function lintFlow(graph: FlowGraph, ctx: LintContext): Issue[] {
         }
         if (!connected.has("vrai")) warning("Sortie « Vrai » non reliée : la conversation s'arrête.", id);
         if (!connected.has("faux")) warning("Sortie « Faux » non reliée : la conversation s'arrête.", id);
-        break;
-      }
-
-      case "order_link": {
-        if (!ctx.orderSlug) error("Ce client n'a pas de slug : le lien de commande est impossible.", id);
-        const cta = limit("ctaButtonLabel");
-        if (len(node.data.buttonLabel) > cta.value) error(`Libellé du bouton trop long (${len(node.data.buttonLabel)} / ${cta.value}).`, id);
-        const body = limit("interactiveBody");
-        if (len(node.data.text) > body.value) error(`Texte trop long (${len(node.data.text)} / ${body.value}).`, id);
         break;
       }
 

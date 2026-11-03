@@ -1,4 +1,5 @@
 import type { WorkspaceData } from "../types";
+import { containsLegacyNodes } from "../migrate";
 import { workspaceSchema } from "../schemas";
 
 /** Stockage brut d'un document JSON unique. */
@@ -34,8 +35,17 @@ export function createLocalStorageStore(storage: Storage, key = STORAGE_KEY): Js
       const raw = storage.getItem(key);
       if (!raw) return emptyWorkspace();
       try {
-        const parsed = workspaceSchema.safeParse(JSON.parse(raw));
-        if (parsed.success) return parsed.data;
+        const json: unknown = JSON.parse(raw);
+        const parsed = workspaceSchema.safeParse(json);
+        if (parsed.success) {
+          if (containsLegacyNodes(json)) {
+            // Conversion vers le nouveau format : on garde une copie des données d'avant.
+            const backupKey = `${key}:avant-conversion-bulles`;
+            if (!storage.getItem(backupKey)) storage.setItem(backupKey, raw);
+            storage.setItem(key, JSON.stringify(parsed.data));
+          }
+          return parsed.data;
+        }
       } catch {
         // JSON invalide : traité ci-dessous.
       }

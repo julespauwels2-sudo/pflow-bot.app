@@ -6,9 +6,7 @@ import { applyEdgeChanges, applyNodeChanges, type Edge, type EdgeChange, type No
 import type { FlowNode, NodeDataMap } from "@/engine";
 import type { FlowGraph } from "@/data/types";
 import { copyBlocks, pasteBlocks, type ClipboardPayload } from "@/editor/clipboard";
-import { cleanEdge, cleanNode, connect, pruneEdges, remapOutputs } from "@/editor/graph";
-import { nodeOutputs } from "@/editor/catalog";
-import { migrateGraph } from "@/data/migrate";
+import { cleanEdge, cleanNode, connect, pruneEdges } from "@/editor/graph";
 import { createHistory, record, redo, undo, type History } from "@/editor/history";
 
 export type RFNode = Node<FlowNode["data"]> & { type: FlowNode["type"] };
@@ -50,7 +48,7 @@ export function graphOf(state: Pick<EditorState, "nodes" | "edges">): FlowGraph 
 }
 
 export function initEditor(graph: FlowGraph): EditorState {
-  const clean = pruneEdges(migrateGraph(graph));
+  const clean = pruneEdges(graph);
   return { nodes: clean.nodes.map((n) => toRFNode(n)), edges: clean.edges.map(toRFEdge), history: createHistory(clean) };
 }
 
@@ -103,14 +101,9 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
     }
 
     case "updateData": {
-      const target = state.nodes.find((n) => n.id === action.id);
-      if (!target) return state;
-      const updated = { ...target, data: action.data as NodeDataMap[typeof target.type] } as RFNode;
-      const nodes = state.nodes.map((n) => (n.id === action.id ? updated : n));
-      const ids = (n: RFNode) => nodeOutputs(n as unknown as FlowNode).map((o) => o.id);
-      const graph = remapOutputs(graphOf({ nodes, edges: state.edges }), action.id, ids(target), ids(updated));
-      const edges = graph.edges.map((e) => ({ ...toRFEdge(e), selected: state.edges.find((x) => x.id === e.id)?.selected ?? false }));
-      return commit({ ...state, nodes, edges }, action.now, action.key);
+      const nodes = state.nodes.map((n) => (n.id === action.id ? ({ ...n, data: action.data as NodeDataMap[typeof n.type] } as RFNode) : n));
+      // Les flèches d'un bouton supprimé sont retirées par commit() (pruneEdges).
+      return commit({ ...state, nodes }, action.now, action.key);
     }
 
     case "deleteSelected": {
@@ -127,8 +120,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
     }
 
     case "paste": {
-      const payload = { ...action.payload, nodes: migrateGraph({ nodes: action.payload.nodes, edges: [] }).nodes };
-      const { graph, pastedIds } = pasteBlocks(graphOf(state), payload, action.offset);
+      const { graph, pastedIds } = pasteBlocks(graphOf(state), action.payload, action.offset);
       if (!pastedIds.length) return state;
       return commit(withGraph(state, graph, new Set(pastedIds)), action.now);
     }

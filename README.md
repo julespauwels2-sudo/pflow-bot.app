@@ -87,9 +87,14 @@ Toutes les conditions jour/heure utilisent le fuseau du client (`America/Guadelo
   WhatsApp (3 boutons de 20 caractères, 10 choix de 24 caractères…), variable inconnue, flux de
   destination manquant… « Publier » est bloqué tant qu'il reste une **erreur** ; les
   **avertissements** n'empêchent pas de publier.
-- **Message + boutons** : jusqu'à 3 boutons de réponse sous le texte (« + Ajouter un bouton »),
-  une sortie par bouton. L'ancien bloc « Boutons » est converti automatiquement. Limites vérifiées
-  par plateforme (`src/editor/limits.ts`, Instagram prévu pour la phase 2).
+- **Bloc Message façon UChat** : plusieurs bulles à la suite. Sous chaque bulle, « + Ajouter un
+  bouton » propose un **bouton de réponse** (une sortie par bouton) ou un **bouton lien** (URL libre
+  en `https://`, ou « Lien de commande » calculé avec le slug du client). Règle WhatsApp imposée :
+  dans une bulle, soit 1 à 3 boutons de réponse, soit 1 bouton lien, jamais les deux. Sortie
+  **« Étape suivante »** en bas du bloc : reliée, la suite part tout de suite et les boutons restent
+  cliquables ; non reliée, le bot attend un clic. Les anciens blocs « Boutons » et « Lien de
+  commande » sont convertis automatiquement (stockage, import, collage ; copie des données d'avant
+  sous `pflow-bots:v1:avant-conversion-bulles`).
 - **Flux par défaut** (case dans le déclencheur) : lancé par n'importe quel message quand aucun
   mot-clé ne correspond et qu'aucune conversation n'est en cours. Un seul par client ; interdit si
   le client est en mode « mots-clés uniquement ».

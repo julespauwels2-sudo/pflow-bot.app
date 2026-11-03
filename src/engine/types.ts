@@ -88,6 +88,36 @@ export interface ChoiceOption {
   description?: string;
 }
 
+/** Bouton de réponse : a sa propre sortie dans le flux. */
+export interface ReplyButton {
+  id: string;
+  kind: "reply";
+  title: string;
+}
+
+/** Bouton lien (bouton natif WhatsApp « CTA URL ») : ouvre une page, pas de sortie. */
+export interface LinkButton {
+  id: string;
+  kind: "link";
+  title: string;
+  /** URL libre (variables {{...}} acceptées). Ignorée si `orderLink`. */
+  url?: string;
+  /** Lien de commande du client : order.pflow.fr/c/<slug>, calculé à l'envoi. */
+  orderLink?: boolean;
+}
+
+export type BubbleButton = ReplyButton | LinkButton;
+
+/**
+ * Une bulle = un message WhatsApp. Règles WhatsApp : soit aucun bouton, soit 1 à 3 boutons
+ * de réponse, soit 1 bouton lien — jamais de mélange.
+ */
+export interface MessageBubble {
+  id: string;
+  text: string;
+  buttons: BubbleButton[];
+}
+
 export type QuestionValidation = "texte" | "nombre" | "telephone" | "oui_non";
 
 export type ConditionRule =
@@ -115,10 +145,12 @@ export interface NodeDataMap {
      */
     isDefault?: boolean;
   };
-  /** Texte, éventuellement suivi de boutons de réponse (une sortie par bouton). */
-  message: { text: string; buttons?: ChoiceOption[] };
-  /** Ancien bloc « Boutons » : toujours exécuté, converti en Message + boutons dans l'éditeur. */
-  buttons: { text: string; buttons: ChoiceOption[] };
+  /**
+   * Plusieurs bulles envoyées à la suite (comme dans UChat). Sorties : une par bouton de
+   * réponse, plus « next » (Étape suivante). Si « next » est reliée, la suite part tout de
+   * suite et les boutons restent cliquables ; sinon, le bot attend un clic.
+   */
+  message: { bubbles: MessageBubble[] };
   list: { text: string; buttonLabel: string; items: ChoiceOption[] };
   question: {
     text: string;
@@ -128,7 +160,6 @@ export interface NodeDataMap {
     maxRetries?: number;
   };
   condition: { rules: ConditionRule[]; match?: "toutes" | "une" };
-  order_link: { text?: string; buttonLabel?: string };
   ai: { intro?: string; instructions?: string };
   handoff: { text?: string };
   goto_flow: { flowId: string };

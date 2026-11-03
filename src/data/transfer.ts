@@ -6,7 +6,6 @@ import {
   backupSchema,
   flowExportSchema,
 } from "./schemas";
-import { migrateGraph } from "./migrate";
 import type { StoredFlow, WorkspaceData } from "./types";
 
 export type FlowExport = z.infer<typeof flowExportSchema>;
@@ -50,7 +49,8 @@ export function parseFlowImport(text: string, knownFlowIds: string[] = []): Pars
   const parsed = flowExportSchema.safeParse(json.value);
   if (!parsed.success) return { ok: false, error: `Fichier de flux invalide : ${firstIssue(parsed.error)}` };
 
-  const flow = { ...parsed.data.flow, graph: migrateGraph(parsed.data.flow.graph) };
+  // Les anciens formats ont déjà été convertis par le schéma.
+  const flow = parsed.data.flow;
   const warnings: string[] = [];
   const triggers = flow.graph.nodes.filter((n) => n.type === "trigger").length;
   if (triggers !== 1) warnings.push(`Le flux contient ${triggers} déclencheurs (il en faut exactement 1).`);

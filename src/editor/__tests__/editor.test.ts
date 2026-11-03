@@ -10,19 +10,27 @@ import { flowVariables, insertVariable, usedVariables } from "../variables";
 
 const at = { x: 0, y: 0 };
 const n = (node: Omit<FlowNode, "position">): FlowNode => ({ ...node, position: at }) as FlowNode;
+type MessageNode = Extract<FlowNode, { type: "message" }>;
+/** Message d'une bulle, avec éventuellement des boutons de réponse. */
+const msg = (id: string, text: string, replies: { id: string; title: string }[] = []): FlowNode =>
+  n({ id, type: "message", data: { bubbles: [{ id: `${id}-1`, text, buttons: replies.map((r) => ({ ...r, kind: "reply" as const })) }] } });
+const bubble = (g: FlowGraph, id: string) => (g.nodes.find((x) => x.id === id) as MessageNode).data.bubbles[0];
 
 /** Flux valide : déclencheur → message → boutons (2 sorties reliées). */
 function validGraph(): FlowGraph {
   return {
     nodes: [
       n({ id: "t", type: "trigger", data: { keywords: ["menu"] } }),
-      n({ id: "m", type: "message", data: { text: "Bonjour {{prenom}}" } }),
+      msg("m", "Bonjour {{prenom}}"),
+      msg("b", "Choisissez", [
+        { id: "x", title: "Commander" },
+        { id: "y", title: "Horaires" },
+      ]),
       n({
-        id: "b",
-        type: "buttons",
-        data: { text: "Choisissez", buttons: [{ id: "x", title: "Commander" }, { id: "y", title: "Horaires" }] },
+        id: "l",
+        type: "message",
+        data: { bubbles: [{ id: "l-1", text: "Par ici 👇", buttons: [{ id: "go", kind: "link", title: "Commander", orderLink: true }] }] },
       }),
-      n({ id: "l", type: "order_link", data: {} }),
       n({ id: "f", type: "end", data: { text: "Merci" } }),
     ],
     edges: [
@@ -58,15 +66,14 @@ describe("vérification du flux (lint)", () => {
 
   it("limites WhatsApp : 3 boutons, 20 caractères", () => {
     const g = validGraph();
-    const b = g.nodes.find((x) => x.id === "b") as Extract<FlowNode, { type: "buttons" }>;
-    b.data.buttons = [
-      { id: "x", title: "Un titre beaucoup trop long" },
-      { id: "y", title: "B" },
-      { id: "z", title: "C" },
-      { id: "w", title: "D" },
+    bubble(g, "b").buttons = [
+      { id: "x", kind: "reply", title: "Un titre beaucoup trop long" },
+      { id: "y", kind: "reply", title: "B" },
+      { id: "z", kind: "reply", title: "C" },
+      { id: "w", kind: "reply", title: "D" },
     ];
     const messages = errors(lintFlow(g, ctx)).map((i) => i.message);
-    expect(messages).toContain("WhatsApp limite à 3 boutons.");
+    expect(messages).toContain("WhatsApp limite à 3 boutons de réponse par bulle.");
     expect(messages).toContain("Bouton « Un titre beaucoup trop long » trop long (27 / 20).");
   });
 
@@ -111,7 +118,7 @@ describe("vérification du flux (lint)", () => {
 
   it("variable inconnue : avertissement ; variable d'une question : connue", () => {
     const g = validGraph();
-    (g.nodes[1] as Extract<FlowNode, { type: "message" }>).data.text = "Bonjour {{prenom}}, {{couverts}} {{inconnue}}";
+    bubble(g, "m").text = "Bonjour {{prenom}}, {{couverts}} {{inconnue}}";
     g.nodes.push(n({ id: "q", type: "question", data: { text: "Combien ?", variable: "couverts", validation: "nombre" } }));
     g.edges.push({ id: "5", source: "l", sourceHandle: "next", target: "q" });
     const warnings = lintFlow(g, ctx).filter((i) => i.level === "warning").map((i) => i.message);
@@ -154,8 +161,7 @@ describe("flèches", () => {
 
   it("supprimer un bouton supprime sa flèche", () => {
     const g = validGraph();
-    const b = g.nodes.find((x) => x.id === "b") as Extract<FlowNode, { type: "buttons" }>;
-    b.data.buttons = b.data.buttons.filter((x) => x.id !== "y");
+    bubble(g, "b").buttons = bubble(g, "b").buttons.filter((x) => x.id !== "y");
     expect(pruneEdges(g).edges.map((e) => e.id)).toEqual(["1", "2", "3"]);
   });
 
@@ -163,7 +169,8 @@ describe("flèches", () => {
     expect(nodeOutputs(createNode("condition", at)).map((o) => o.id)).toEqual(["vrai", "faux"]);
     expect(nodeOutputs(createNode("question", at)).map((o) => o.id)).toEqual(["next", "echec"]);
     expect(nodeOutputs(createNode("end", at))).toEqual([]);
-    expect(nodeOutputs(createNode("buttons", at))).toHaveLength(2);
+    expect(nodeOutputs(createNode("message", at)).map((o) => o.id)).toEqual(["next"]);
+    expect(nodeOutputs(validGraph().nodes.find((x) => x.id === "b")!).map((o) => o.id)).toEqual(["x", "y", "next"]);
   });
 });
 
@@ -214,12 +221,12 @@ describe("copier / coller / dupliquer", () => {
     expect(payload.edges.map((e) => e.id)).toEqual(["3", "4"]);
     let i = 0;
     const { graph, pastedIds, skippedTriggers } = pasteBlocks(g, payload, 40, () => `n${++i}`);
-    expect(pastedIds).toEqual(["buttons-n1", "order_link-n2", "end-n3"]);
+    expect(pastedIds).toEqual(["message-n1", "message-n2", "end-n3"]);
     expect(skippedTriggers).toBe(0);
     expect(graph.nodes).toHaveLength(8);
-    const pastedButtons = graph.nodes.find((x) => x.id === "buttons-n1")!;
+    const pastedButtons = graph.nodes.find((x) => x.id === "message-n1")!;
     expect(pastedButtons.position).toEqual({ x: 40, y: 40 });
-    expect(graph.edges.filter((e) => e.source === "buttons-n1").map((e) => e.target)).toEqual(["order_link-n2", "end-n3"]);
+    expect(graph.edges.filter((e) => e.source === "message-n1").map((e) => e.target)).toEqual(["message-n2", "end-n3"]);
   });
 
   it("ne duplique jamais le déclencheur", () => {
@@ -258,7 +265,7 @@ describe("flux par défaut (lint)", () => {
   const defaultGraph = (): FlowGraph => ({
     nodes: [
       n({ id: "t", type: "trigger", data: { keywords: [], isDefault: true } }),
-      n({ id: "m", type: "message", data: { text: "Bienvenue" } }),
+      msg("m", "Bienvenue"),
     ],
     edges: [{ id: "1", source: "t", sourceHandle: "next", target: "m" }],
   });
@@ -281,14 +288,14 @@ describe("flux par défaut (lint)", () => {
 
 describe("bloc Message avec boutons et bloc Délai (lint)", () => {
   const msgGraph = (buttons: { id: string; title: string }[], text = "Choisissez"): FlowGraph => ({
-    nodes: [n({ id: "t", type: "trigger", data: { keywords: ["x"] } }), n({ id: "m", type: "message", data: { text, buttons } }), n({ id: "f", type: "end", data: {} })],
+    nodes: [n({ id: "t", type: "trigger", data: { keywords: ["x"] } }), msg("m", text, buttons), n({ id: "f", type: "end", data: {} })],
     edges: [{ id: "1", source: "t", sourceHandle: "next", target: "m" }, ...buttons.map((b) => ({ id: b.id, source: "m", sourceHandle: b.id, target: "f" }))],
   });
 
   it("3 boutons de 20 caractères maximum, chacun relié", () => {
     expect(errors(lintFlow(msgGraph([{ id: "a", title: "Oui" }, { id: "b", title: "Non" }]), ctx))).toEqual([]);
     const four = errors(lintFlow(msgGraph(["a", "b", "c", "d"].map((id) => ({ id, title: id }))), ctx)).map((i) => i.message);
-    expect(four).toContain("WhatsApp limite à 3 boutons.");
+    expect(four).toContain("WhatsApp limite à 3 boutons de réponse par bulle.");
     const g = msgGraph([{ id: "a", title: "Oui" }]);
     g.edges = g.edges.filter((e) => e.id !== "a");
     expect(errors(lintFlow(g, ctx)).map((i) => i.message)).toContain("Bouton « Oui » non relié.");
@@ -297,7 +304,7 @@ describe("bloc Message avec boutons et bloc Délai (lint)", () => {
   it("texte limité à 1 024 caractères quand il y a des boutons (4 096 sinon)", () => {
     const long = "x".repeat(2000);
     expect(errors(lintFlow(msgGraph([{ id: "a", title: "Ok" }], long), ctx))[0].message).toContain("2000 / 1024");
-    const plain: FlowGraph = { nodes: [n({ id: "t", type: "trigger", data: { keywords: ["x"] } }), n({ id: "m", type: "message", data: { text: long } })], edges: [{ id: "1", source: "t", target: "m" }] };
+    const plain: FlowGraph = { nodes: [n({ id: "t", type: "trigger", data: { keywords: ["x"] } }), msg("m", long)], edges: [{ id: "1", source: "t", target: "m" }] };
     expect(errors(lintFlow(plain, ctx))).toEqual([]);
   });
 
@@ -316,7 +323,7 @@ describe("bloc Message avec boutons et bloc Délai (lint)", () => {
 
   it("délai fixe entre 0,5 et 10 s", () => {
     const g = (seconds: number): FlowGraph => ({
-      nodes: [n({ id: "t", type: "trigger", data: { keywords: ["x"] } }), n({ id: "d", type: "delay", data: { mode: "fixe", seconds } }), n({ id: "m", type: "message", data: { text: "ok" } })],
+      nodes: [n({ id: "t", type: "trigger", data: { keywords: ["x"] } }), n({ id: "d", type: "delay", data: { mode: "fixe", seconds } }), msg("m", "ok")],
       edges: [{ id: "1", source: "t", target: "d" }, { id: "2", source: "d", target: "m" }],
     });
     expect(lintFlow(g(3), ctx)).toEqual([]);
@@ -324,24 +331,85 @@ describe("bloc Message avec boutons et bloc Délai (lint)", () => {
   });
 });
 
-describe("migration et report des flèches", () => {
-  it("l'ancien bloc Boutons devient un Message avec boutons, flèches conservées", async () => {
-    const { migrateGraph } = await import("@/data/migrate");
-    const g = validGraph();
-    const migrated = migrateGraph(g);
-    const b = migrated.nodes.find((x) => x.id === "b")!;
-    expect(b.type).toBe("message");
-    expect(b.data).toEqual({ text: "Choisissez", buttons: [{ id: "x", title: "Commander" }, { id: "y", title: "Horaires" }] });
-    expect(migrated.edges).toEqual(g.edges);
-    expect(errors(lintFlow(migrated, ctx))).toEqual([]);
+describe("bulles : règles WhatsApp imposées à la saisie", () => {
+  it("bouton lien interdit si la bulle a des boutons de réponse, et inversement", async () => {
+    const b = await import("../bubbles");
+    const base = (msg("m", "Hello") as MessageNode).data;
+    const withReply = b.addReplyButton(base, "m-1");
+    expect(b.canAddLink(withReply.bubbles[0]).allowed).toBe(false);
+    expect(b.addLinkButton(withReply, "m-1")).toBe(withReply);
+    const withLink = b.addLinkButton(base, "m-1");
+    expect(withLink.bubbles[0].buttons[0]).toMatchObject({ kind: "link", title: "Commander", orderLink: true });
+    expect(b.canAddReply(withLink.bubbles[0]).allowed).toBe(false);
+    expect(b.canAddLink(withLink.bubbles[0]).allowed).toBe(false);
   });
 
-  it("premier bouton ajouté : la flèche « Suite » passe sur ce bouton ; dernier retiré : elle revient", async () => {
-    const { remapOutputs } = await import("../graph");
-    const g = validGraph(); // m --next--> b
-    const added = remapOutputs(g, "m", ["next"], ["k"]);
-    expect(added.edges.find((e) => e.source === "m")?.sourceHandle).toBe("k");
-    const removed = remapOutputs(added, "m", ["k"], ["next"]);
-    expect(removed.edges.find((e) => e.source === "m")?.sourceHandle).toBe("next");
+  it("3 boutons de réponse au plus par bulle ; il reste toujours une bulle", async () => {
+    const b = await import("../bubbles");
+    let data = (msg("m", "Hello") as MessageNode).data;
+    for (let i = 0; i < 5; i++) data = b.addReplyButton(data, "m-1");
+    expect(data.bubbles[0].buttons).toHaveLength(3);
+    expect(b.removeBubble(data, "m-1")).toBe(data);
+    const two = b.addBubble(data);
+    expect(two.bubbles).toHaveLength(2);
+    expect(b.moveBubble(two, two.bubbles[1].id, -1).bubbles[0].id).toBe(two.bubbles[1].id);
+  });
+
+  it("lint : mélange, URL invalide, lien de commande sans slug", () => {
+    const g = validGraph();
+    bubble(g, "b").buttons.push({ id: "z", kind: "link", title: "Site", url: "http://exemple.fr" });
+    const messages = errors(lintFlow(g, ctx)).map((i) => i.message);
+    expect(messages).toContain("une bulle ne peut pas mélanger boutons de réponse et bouton lien (règle WhatsApp).");
+    expect(messages).toContain("l'URL doit commencer par https://");
+    expect(errors(lintFlow(validGraph(), { ...ctx, orderSlug: "" })).map((i) => i.message)).toContain(
+      "Ce client n'a pas de slug : le lien de commande est impossible.",
+    );
+  });
+
+  it("lint : le numéro de bulle est indiqué quand il y en a plusieurs", () => {
+    const g = validGraph();
+    const m = g.nodes.find((x) => x.id === "m") as MessageNode;
+    m.data.bubbles.push({ id: "m-2", text: "", buttons: [] });
+    expect(errors(lintFlow(g, ctx)).map((i) => i.message)).toContain("Bulle 2 : bulle vide.");
+  });
+});
+
+describe("conversion des anciens flux", () => {
+  const legacy = {
+    nodes: [
+      { id: "t", type: "trigger", position: at, data: { keywords: ["menu"] } },
+      { id: "m", type: "message", position: at, data: { text: "Bonjour" } },
+      { id: "b", type: "buttons", position: at, data: { text: "Choisissez", buttons: [{ id: "x", title: "Commander" }] } },
+      { id: "mb", type: "message", position: at, data: { text: "Et ?", buttons: [{ id: "k", title: "Ok" }] } },
+      { id: "l", type: "order_link", position: at, data: { buttonLabel: "Je commande" } },
+      { id: "f", type: "end", position: at, data: {} },
+    ],
+    edges: [
+      { id: "1", source: "t", target: "m" },
+      { id: "2", source: "m", target: "b" },
+      { id: "3", source: "b", sourceHandle: "x", target: "l" },
+      { id: "4", source: "l", target: "mb" },
+      { id: "5", source: "mb", sourceHandle: "k", target: "f" },
+    ],
+  };
+
+  it("Message, Boutons et Lien de commande deviennent des bulles ; les flèches restent valides", async () => {
+    const { flowGraphSchema } = await import("@/data/schemas");
+    const g = flowGraphSchema.parse(legacy);
+    expect(g.nodes.every((x) => x.type !== ("buttons" as string) && x.type !== ("order_link" as string))).toBe(true);
+    expect(bubble(g, "m")).toEqual({ id: "m-1", text: "Bonjour", buttons: [] });
+    expect(bubble(g, "b").buttons).toEqual([{ id: "x", kind: "reply", title: "Commander" }]);
+    expect(bubble(g, "l")).toEqual({
+      id: "l-1",
+      text: "Pour commander, c'est par ici 👇",
+      buttons: [{ id: "l-lien", kind: "link", title: "Je commande", orderLink: true }],
+    });
+    expect(g.edges).toHaveLength(5);
+    expect(errors(lintFlow(g, ctx))).toEqual([]);
+  });
+
+  it("le presse-papiers accepte aussi les anciens blocs", () => {
+    const pasted = parseClipboard(JSON.stringify({ format: CLIPBOARD_FORMAT, nodes: [legacy.nodes[4]], edges: [] }));
+    expect(pasted?.nodes[0].type).toBe("message");
   });
 });

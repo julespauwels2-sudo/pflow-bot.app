@@ -5,6 +5,8 @@ import type { EngineInput, EngineResult, Flow } from "../types";
 import {
   NOW,
   addMinutes,
+  ask,
+  say,
   agneau,
   channel,
   client,
@@ -165,7 +167,7 @@ describe("boutons et listes", () => {
             { id: "burritos", title: "Burritos" },
           ],
         }),
-        node("m", "message", { text: "Nos burritos sont à la page 2." }),
+        say("m", "Nos burritos sont à la page 2."),
       ],
       edges: [edge("t", "l"), edge("l", "m", "burritos")],
     };
@@ -235,8 +237,8 @@ describe("conditions et fuseau horaire du client", () => {
       nodes: [
         node("t", "trigger", { keywords: ["test"] }),
         node("c", "condition", { rules: [{ kind: "ouvert_maintenant" }] }),
-        node("o", "message", { text: "ouvert" }),
-        node("f", "message", { text: "fermé" }),
+        say("o", "ouvert"),
+        say("f", "fermé"),
       ],
       edges: [edge("t", "c"), edge("c", "o", "vrai"), edge("c", "f", "faux")],
     };
@@ -473,7 +475,7 @@ describe("flux par défaut", () => {
     name: "Par défaut",
     nodes: [
       node("t", "trigger", { keywords: [], isDefault: true }),
-      node("m", "message", { text: "Bienvenue ! Tapez « menu » pour commander." }),
+      say("m", "Bienvenue ! Tapez « menu » pour commander."),
     ],
     edges: [edge("t", "m")],
   };
@@ -510,34 +512,118 @@ describe("flux par défaut", () => {
   });
 });
 
-describe("bloc Message avec boutons", () => {
-  const flow: Flow = {
-    id: "f_msg",
-    name: "Message + boutons",
+describe("bloc Message à plusieurs bulles (façon UChat)", () => {
+  /** La trame d'accueil de Jules : bulle 1 + bouton lien, bulle 2 + 2 boutons de réponse. */
+  const accueilUChat = (withNext = false): Flow => ({
+    id: "f_uchat",
+    name: "Accueil",
     nodes: [
       node("t", "trigger", { keywords: ["salut"] }),
       node("m", "message", {
-        text: "Bonjour {{prenom}} !",
-        buttons: [
-          { id: "a", title: "Commander" },
-          { id: "b", title: "Horaires" },
+        bubbles: [
+          {
+            id: "b1",
+            text: "👋 Hello {{prenom}} ! Bienvenue chez {{nom_resto}} 🍔",
+            buttons: [{ id: "cmd", kind: "link", title: "Commander", orderLink: true }],
+          },
+          {
+            id: "b2",
+            text: "✨ Besoin d'un petit coup de main ?",
+            buttons: [
+              { id: "conseil", kind: "reply", title: "⭐ Me conseiller" },
+              { id: "infos", kind: "reply", title: "ℹ️ Infos pratiques" },
+            ],
+          },
         ],
       }),
-      node("ok", "message", { text: "Voici nos horaires." }),
+      say("c", "Je vous conseille le burger maison !"),
+      say("i", "Nous sommes au 12 rue Frébault."),
+      say("suite", "Et sinon, voici la suite."),
     ],
-    edges: [edge("t", "m"), edge("m", "ok", "b")],
-  };
-
-  it("envoie le texte avec ses boutons et attend la réponse", async () => {
-    const r = await runEngine(input({ flows: [flow], message: { kind: "text", text: "salut" } }));
-    expect(r.outgoing).toHaveLength(1);
-    expect(r.outgoing[0]).toMatchObject({ kind: "buttons", text: "Bonjour Jules !" });
-    expect(r.session?.nodeId).toBe("m");
-    const r2 = await runEngine(next(r, { flows: [flow], message: { kind: "text", text: "horaires" } }));
-    expect(texts(r2)).toEqual(["Voici nos horaires."]);
+    edges: [edge("t", "m"), edge("m", "c", "conseil"), edge("m", "i", "infos"), ...(withNext ? [edge("m", "suite", "next")] : [])],
   });
 
-  it("sans bouton, le bloc Message continue directement", async () => {
+  it("envoie les bulles dans l'ordre : bouton lien natif puis boutons de réponse", async () => {
+    const r = await runEngine(input({ flows: [accueilUChat()], message: { kind: "text", text: "salut" } }));
+    expect(r.outgoing[0]).toEqual({
+      kind: "link",
+      text: "👋 Hello Jules ! Bienvenue chez Mexico 🍔",
+      url: "https://order.pflow.fr/c/mexico",
+      buttonLabel: "Commander",
+    });
+    expect(r.outgoing[1]).toMatchObject({ kind: "buttons", text: "✨ Besoin d'un petit coup de main ?" });
+    expect(r.outgoing).toHaveLength(2);
+  });
+
+  it("étape suivante non reliée : le bot attend le clic", async () => {
+    const r = await runEngine(input({ flows: [accueilUChat()], message: { kind: "text", text: "salut" } }));
+    expect(r.session?.nodeId).toBe("m");
+    const r2 = await runEngine(next(r, { flows: [accueilUChat()], message: { kind: "text", text: "infos pratiques" } }));
+    expect(texts(r2)).toEqual(["Nous sommes au 12 rue Frébault."]);
+  });
+
+  it("sans réponse reconnue, seules les bulles à boutons de réponse sont renvoyées", async () => {
+    const r = await runEngine(input({ flows: [accueilUChat()], message: { kind: "text", text: "salut" } }));
+    const r2 = await runEngine(next(r, { flows: [accueilUChat()], message: { kind: "text", text: "euh" } }));
+    expect(r2.outgoing.map((m) => m.kind)).toEqual(["text", "buttons"]);
+  });
+
+  it("étape suivante reliée : la suite part tout de suite, et les boutons restent cliquables", async () => {
+    const flow = accueilUChat(true);
+    const r = await runEngine(input({ flows: [flow], message: { kind: "text", text: "salut" } }));
+    expect(texts(r).at(-1)).toBe("Et sinon, voici la suite.");
+    expect(r.session).toBeNull();
+    const buttons = r.outgoing[1];
+    if (buttons.kind !== "buttons") throw new Error("boutons attendus");
+    const r2 = await runEngine(next(r, { flows: [flow], message: { kind: "button_reply", id: buttons.buttons[0].id, title: "⭐ Me conseiller" } }));
+    expect(texts(r2)).toEqual(["Je vous conseille le burger maison !"]);
+  });
+
+  it("un bouton d'une bulle précédente garde les variables de la session", async () => {
+    const flow: Flow = {
+      id: "f_vars",
+      name: "Vars",
+      nodes: [
+        node("t", "trigger", { keywords: ["go"] }),
+        ask("m", "Choisissez", [{ id: "a", title: "A" }]),
+        node("q", "question", { text: "Votre prénom ?", variable: "nom", validation: "texte" }),
+        node("q2", "question", { text: "Votre ville ?", variable: "ville", validation: "texte" }),
+        say("ok", "Merci {{nom}}"),
+      ],
+      edges: [edge("t", "m"), edge("m", "q", "next"), edge("q", "q2"), edge("m", "ok", "a")],
+    };
+    const r1 = await runEngine(input({ flows: [flow], message: { kind: "text", text: "go" } }));
+    expect(r1.session?.nodeId).toBe("q");
+    const r2 = await runEngine(next(r1, { flows: [flow], message: { kind: "text", text: "Léa" } }));
+    expect(r2.session?.nodeId).toBe("q2");
+    const id = encodeReplyId({ flowId: "f_vars", nodeId: "m", handle: "a" });
+    const r3 = await runEngine(next(r2, { flows: [flow], message: { kind: "button_reply", id, title: "A" } }));
+    expect(texts(r3)).toEqual(["Merci Léa"]);
+  });
+
+  it("bouton lien avec URL libre et variables", async () => {
+    const flow: Flow = {
+      id: "f_url",
+      name: "URL",
+      nodes: [
+        node("t", "trigger", { keywords: ["avis"] }),
+        node("m", "message", {
+          bubbles: [{ id: "b", text: "Laissez-nous un avis 🙏", buttons: [{ id: "l", kind: "link", title: "Donner mon avis", url: "https://g.page/{{nom_resto}}" }] }],
+        }),
+      ],
+      edges: [edge("t", "m")],
+    };
+    const r = await runEngine(input({ flows: [flow], message: { kind: "text", text: "avis" } }));
+    expect(r.outgoing[0]).toEqual({ kind: "link", text: "Laissez-nous un avis 🙏", url: "https://g.page/Mexico", buttonLabel: "Donner mon avis" });
+  });
+
+  it("lien de commande sans slug : la bulle part en texte simple et l'erreur est journalisée", async () => {
+    const r = await runEngine(input({ client: { ...client, orderSlug: "" }, flows: [accueilUChat()], message: { kind: "text", text: "salut" } }));
+    expect(r.outgoing[0]).toEqual({ kind: "text", text: "👋 Hello Jules ! Bienvenue chez Mexico 🍔" });
+    expect(r.events).toContainEqual({ type: "error", message: "Lien de commande : slug du resto manquant" });
+  });
+
+  it("une bulle de texte seule continue directement", async () => {
     const r = await runEngine(input({ message: { kind: "text", text: "agneau" } }));
     expect(r.session).toBeNull();
   });
@@ -547,7 +633,7 @@ describe("bloc Délai", () => {
   const flow = (data: { mode: "fixe" | "intelligent"; seconds?: number }, text = "Votre commande est prête !"): Flow => ({
     id: "f_delai",
     name: "Délai",
-    nodes: [node("t", "trigger", { keywords: ["test"] }), node("d", "delay", data), node("m", "message", { text })],
+    nodes: [node("t", "trigger", { keywords: ["test"] }), node("d", "delay", data), say("m", text)],
     edges: [edge("t", "d"), edge("d", "m")],
   });
 

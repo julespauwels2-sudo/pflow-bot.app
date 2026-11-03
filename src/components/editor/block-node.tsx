@@ -1,11 +1,11 @@
 "use client";
 
 import { Handle, Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react";
-import { memo, useEffect, type ReactNode } from "react";
-import type { FlowNode } from "@/engine";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
+import type { FlowNode, MessageBubble } from "@/engine";
 import { TEXTS, smartDelayMs } from "@/engine";
-import { BLOCKS, hasInput, nodeOutputs, shortId } from "@/editor/catalog";
-import { WA_LIMITS } from "@/editor/limits";
+import { addBubble, addLinkButton, addReplyButton, canAddBubble, canAddLink, canAddReply } from "@/editor/bubbles";
+import { BLOCKS, hasInput, nodeOutputs } from "@/editor/catalog";
 import { describeRule } from "@/editor/describe";
 import type { RFNode } from "./state";
 import { useEditor } from "./context";
@@ -41,14 +41,15 @@ function Bubble({ text, placeholder, children }: { text?: string; placeholder?: 
 }
 
 /** Ligne avec sa propre sortie (bouton, choix de liste, vrai / faux…). */
-function OutputRow({ id, children, tone = "default" }: { id: string; children: ReactNode; tone?: "default" | "danger" }) {
+function OutputRow({ id, children, tone = "default" }: { id: string; children: ReactNode; tone?: "default" | "danger" | "muted" }) {
+  const tones = {
+    default: "border-blue/20 bg-white text-blue",
+    danger: "border-coral/30 bg-coral/5 text-coral",
+    muted: "border-line bg-white/60 text-muted",
+  };
   return (
     <div className="relative -mx-3 px-3">
-      <div
-        className={`rounded-lg border px-2 py-1 text-center text-[12px] font-semibold ${
-          tone === "danger" ? "border-coral/30 bg-coral/5 text-coral" : "border-blue/20 bg-white text-blue"
-        }`}
-      >
+      <div className={`rounded-lg border px-2 py-1 text-center text-[12px] font-semibold ${tones[tone]}`}>
         {children}
       </div>
       <Handle type="source" position={Position.Right} id={id} className="!size-3 !border-2 !border-white !bg-blue" />
@@ -56,28 +57,105 @@ function OutputRow({ id, children, tone = "default" }: { id: string; children: R
   );
 }
 
-/** « + Ajouter un bouton » directement sur le bloc Message. */
-function AddButton({ node, visible }: { node: Extract<FlowNode, { type: "message" }>; visible: boolean }) {
+/** Menu « + Ajouter un bouton » sous une bulle : bouton de réponse ou bouton lien. */
+function AddButtonMenu({ node, bubble, visible }: { node: Extract<FlowNode, { type: "message" }>; bubble: MessageBubble; visible: boolean }) {
   const { updateData } = useEditor();
-  const buttons = node.data.buttons ?? [];
-  if (buttons.length >= WA_LIMITS.buttonsMax) return null;
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const reply = canAddReply(bubble);
+  const link = canAddLink(bubble);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  if (!reply.allowed && !link.allowed) return null;
+  const choose = (data: typeof node.data, key: string) => {
+    updateData(node.id, data, `${node.id}:${key}`);
+    setOpen(false);
+  };
+  const item = "block w-full px-3 py-1.5 text-left text-[12px] hover:bg-page disabled:cursor-not-allowed disabled:opacity-40";
+
   return (
-    <button
-      type="button"
-      className={`nodrag nopan w-full rounded-lg border border-dashed border-blue/40 py-1 text-[12px] font-semibold text-blue hover:bg-blue/5 ${visible ? "" : "hidden group-hover:block"}`}
-      onClick={(e) => {
-        e.stopPropagation();
-        const next = [...buttons, { id: `b${shortId()}`, title: `Option ${buttons.length + 1}` }];
-        updateData(node.id, { ...node.data, buttons: next }, `${node.id}:buttons:add`);
-      }}
-    >
-      + Ajouter un bouton
-    </button>
+    <div ref={ref} className={`nodrag nopan relative ${visible || open ? "" : "hidden group-hover:block"}`}>
+      <button
+        type="button"
+        className="w-full rounded-lg border border-dashed border-blue/40 py-1 text-[12px] font-semibold text-blue hover:bg-blue/5"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+      >
+        + Ajouter un bouton
+      </button>
+      {open && (
+        <div role="menu" className="absolute top-8 left-0 z-20 w-full overflow-hidden rounded-xl border border-line bg-white shadow-pop">
+          <button role="menuitem" type="button" className={item} disabled={!reply.allowed} title={reply.reason} onClick={() => choose(addReplyButton(node.data, bubble.id), "reply:add")}>
+            <span className="font-semibold">↩︎ Bouton de réponse</span>
+            <span className="block text-[11px] text-muted">{reply.reason ?? "Mène à une suite du flux"}</span>
+          </button>
+          <button role="menuitem" type="button" className={item} disabled={!link.allowed} title={link.reason} onClick={() => choose(addLinkButton(node.data, bubble.id), "link:add")}>
+            <span className="font-semibold">🔗 Bouton lien</span>
+            <span className="block text-[11px] text-muted">{link.reason ?? "Ouvre une page (lien de commande par défaut)"}</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Bulles du bloc Message, chacune avec ses boutons. */
+function MessageBody({ node, selected }: { node: Extract<FlowNode, { type: "message" }>; selected: boolean }) {
+  const { updateData, orderUrl } = useEditor();
+  return (
+    <div className="space-y-2.5">
+      {node.data.bubbles.map((bubble, i) => (
+        <div key={bubble.id} className="space-y-1">
+          {node.data.bubbles.length > 1 && <p className="text-[10px] font-semibold tracking-wide text-muted uppercase">Bulle {i + 1}</p>}
+          <Bubble text={bubble.text} placeholder="Bulle vide">
+            {bubble.buttons
+              .filter((b) => b.kind === "link")
+              .map((b) => (
+                <div key={b.id} className="mt-1.5 border-t border-rule pt-1 text-center">
+                  <div className="text-[12px] font-semibold text-blue">🔗 {b.title || "Sans titre"}</div>
+                  <div className="truncate text-[10px] text-muted">{b.kind === "link" && b.orderLink ? orderUrl : b.kind === "link" ? b.url : ""}</div>
+                </div>
+              ))}
+          </Bubble>
+          {bubble.buttons
+            .filter((b) => b.kind === "reply")
+            .map((b) => (
+              <OutputRow key={b.id} id={b.id}>
+                {b.title || "Sans titre"}
+              </OutputRow>
+            ))}
+          <AddButtonMenu node={node} bubble={bubble} visible={selected} />
+        </div>
+      ))}
+      {canAddBubble(node.data) && (
+        <button
+          type="button"
+          className={`nodrag nopan w-full rounded-lg py-1 text-[12px] font-semibold text-muted hover:bg-white/70 hover:text-navy ${selected ? "" : "hidden group-hover:block"}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            updateData(node.id, addBubble(node.data), `${node.id}:bubble:add`);
+          }}
+        >
+          + Ajouter une bulle
+        </button>
+      )}
+      <OutputRow id="next" tone="muted">
+        Étape suivante
+      </OutputRow>
+    </div>
   );
 }
 
 function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
-  const { flows, orderUrl } = useEditor();
+  const { flows } = useEditor();
   switch (node.type) {
     case "trigger":
       if (node.data.isDefault) {
@@ -103,17 +181,7 @@ function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
       );
 
     case "message":
-      return (
-        <div className="space-y-1.5">
-          <Bubble text={node.data.text} placeholder="Message vide" />
-          {(node.data.buttons ?? []).map((b) => (
-            <OutputRow key={b.id} id={b.id}>
-              {b.title || "Sans titre"}
-            </OutputRow>
-          ))}
-          <AddButton node={node} visible={selected} />
-        </div>
-      );
+      return <MessageBody node={node} selected={selected} />;
 
     case "delay":
       return (
@@ -131,18 +199,6 @@ function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
             <span>{(node.data.seconds ?? 2).toLocaleString("fr-FR")} s · en train d&apos;écrire…</span>
           )}
         </p>
-      );
-
-    case "buttons":
-      return (
-        <div className="space-y-1.5">
-          <Bubble text={node.data.text} />
-          {node.data.buttons.map((b) => (
-            <OutputRow key={b.id} id={b.id}>
-              {b.title || "Sans titre"}
-            </OutputRow>
-          ))}
-        </div>
       );
 
     case "list":
@@ -192,14 +248,6 @@ function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
         </div>
       );
 
-    case "order_link":
-      return (
-        <Bubble text={node.data.text || TEXTS.orderLink}>
-          <div className="mt-1.5 border-t border-rule pt-1 text-center text-[12px] font-semibold text-blue">🔗 {node.data.buttonLabel || TEXTS.orderButton}</div>
-          <div className="truncate text-center text-[10px] text-muted">{orderUrl}</div>
-        </Bubble>
-      );
-
     case "ai":
       return (
         <div className="space-y-1.5">
@@ -243,12 +291,7 @@ function BlockNodeComponent({ id, type, data, selected }: NodeProps<RFNode>) {
   const errors = nodeIssues.filter((i) => i.level === "error");
   const warnings = nodeIssues.filter((i) => i.level === "warning");
   const outputs = nodeOutputs(node);
-  const rowOutputs =
-    node.type === "buttons" ||
-    node.type === "list" ||
-    node.type === "question" ||
-    node.type === "condition" ||
-    (node.type === "message" && (node.data.buttons?.length ?? 0) > 0);
+  const rowOutputs = node.type === "list" || node.type === "question" || node.type === "condition" || node.type === "message";
   const outputKey = outputs.map((o) => o.id).join("|");
 
   // Les poignées changent quand on ajoute / retire un bouton : React Flow doit les remesurer.
