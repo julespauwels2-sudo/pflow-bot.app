@@ -85,6 +85,7 @@ function ownerSettings(owner: EditorOwner) {
   if (owner.kind === "client") {
     const c = owner.client;
     return {
+      simulatorParams: `client=${c.id}`,
       backHref: `/clients/${c.id}`,
       backLabel: c.nomResto,
       orderUrl: `${DEFAULT_ORDER_BASE_URL}${c.orderSlug}`,
@@ -94,6 +95,7 @@ function ownerSettings(owner: EditorOwner) {
     };
   }
   return {
+    simulatorParams: "modele=1",
     backHref: "/modele",
     backLabel: owner.template.name,
     orderUrl: `${DEFAULT_ORDER_BASE_URL}<slug du client>`,
@@ -344,6 +346,13 @@ function EditorInner({ flow: initialFlow, owner, flows }: Props) {
             <ToolButton title={`Rétablir (${mod}+Y)`} disabled={!state.history.future.length} onClick={() => dispatch({ type: "redo" })}>
               ↷
             </ToolButton>
+            <Link
+              href={`/simulateur?${settings.simulatorParams}&flux=${encodeURIComponent(botFlowId)}&brouillons=1`}
+              className="rounded-full border border-line bg-white px-3 py-1.5 text-sm font-semibold hover:border-navy/30"
+              title="Tester ce flux dans le simulateur (brouillons compris)"
+            >
+              ▶ Tester
+            </Link>
             <ToolButton title="Recentrer le flux" onClick={recenter}>
               ⤢ <span className="hidden sm:inline">Recentrer</span>
             </ToolButton>

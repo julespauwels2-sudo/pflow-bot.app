@@ -14,6 +14,8 @@ export interface EditorContextValue {
   orderUrl: string;
   updateData: (id: string, data: FlowNode["data"], key: string) => void;
   deleteEdge: (id: string) => void;
+  /** Vue en lecture seule (simulateur) : pas de boutons d'ajout sur les blocs. */
+  readOnly?: boolean;
 }
 
 export const EditorContext = createContext<EditorContextValue | null>(null);

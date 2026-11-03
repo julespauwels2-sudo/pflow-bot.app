@@ -59,7 +59,7 @@ function OutputRow({ id, children, tone = "default" }: { id: string; children: R
 
 /** Menu « + Ajouter un bouton » sous une bulle : bouton de réponse ou bouton lien. */
 function AddButtonMenu({ node, bubble, visible }: { node: Extract<FlowNode, { type: "message" }>; bubble: MessageBubble; visible: boolean }) {
-  const { updateData } = useEditor();
+  const { updateData, readOnly } = useEditor();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const reply = canAddReply(bubble);
@@ -72,7 +72,7 @@ function AddButtonMenu({ node, bubble, visible }: { node: Extract<FlowNode, { ty
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
 
-  if (!reply.allowed && !link.allowed) return null;
+  if (readOnly || (!reply.allowed && !link.allowed)) return null;
   const choose = (data: typeof node.data, key: string) => {
     updateData(node.id, data, `${node.id}:${key}`);
     setOpen(false);
@@ -109,7 +109,7 @@ function AddButtonMenu({ node, bubble, visible }: { node: Extract<FlowNode, { ty
 
 /** Bulles du bloc Message, chacune avec ses boutons. */
 function MessageBody({ node, selected }: { node: Extract<FlowNode, { type: "message" }>; selected: boolean }) {
-  const { updateData, orderUrl } = useEditor();
+  const { updateData, orderUrl, readOnly } = useEditor();
   return (
     <div className="space-y-2.5">
       {node.data.bubbles.map((bubble, i) => (
@@ -135,7 +135,7 @@ function MessageBody({ node, selected }: { node: Extract<FlowNode, { type: "mess
           <AddButtonMenu node={node} bubble={bubble} visible={selected} />
         </div>
       ))}
-      {canAddBubble(node.data) && (
+      {!readOnly && canAddBubble(node.data) && (
         <button
           type="button"
           className={`nodrag nopan w-full rounded-lg py-1 text-[12px] font-semibold text-muted hover:bg-white/70 hover:text-navy ${selected ? "" : "hidden group-hover:block"}`}
@@ -306,7 +306,9 @@ function BlockNodeComponent({ id, type, data, selected }: NodeProps<RFNode>) {
   const outputKey = outputs.map((o) => o.id).join("|");
 
   // Les poignées changent quand on ajoute / retire un bouton : React Flow doit les remesurer.
-  useEffect(() => updateNodeInternals(id), [id, outputKey, updateNodeInternals]);
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [id, outputKey, updateNodeInternals]);
 
   const ring = selected
     ? "ring-2 ring-pink"

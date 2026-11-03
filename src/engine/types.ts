@@ -262,7 +262,9 @@ export type IncomingMessage =
   /** Image, audio, localisation… non gérés en phase 1. */
   | { kind: "unsupported"; mediaType: string }
   /** Événement envoyé par PFlow Order (pas un message du contact). */
-  | { kind: "event"; event: OrderEvent; data: Record<string, string> };
+  | { kind: "event"; event: OrderEvent; data: Record<string, string> }
+  /** Simulateur : lance directement un flux (ex. un sous-flux sans mot-clé), comme si le contact écrivait. */
+  | { kind: "start_flow"; flowId: string };
 
 export type OutgoingMessage =
   /** Pause avant le message suivant, avec l'indicateur « en train d'écrire ». */
@@ -326,7 +328,11 @@ export type EngineEvent =
     }
   | { type: "pause_expired" }
   | { type: "session_expired"; flowId: string }
-  | { type: "flow_started"; flowId: string; via: "mot_cle" | "defaut" | "ia" | "aller_au_flux" | "bouton" | "evenement" }
+  | { type: "flow_started"; flowId: string; via: "mot_cle" | "defaut" | "ia" | "aller_au_flux" | "bouton" | "evenement" | "manuel" }
+  /** Mot-clé reconnu (avant le lancement du flux). */
+  | { type: "keyword_matched"; flowId: string; keyword: string }
+  /** Bloc exécuté (trace pour le simulateur et le journal). */
+  | { type: "step"; flowId: string; nodeId: string; nodeType: string }
   | { type: "flow_ended"; flowId: string }
   | { type: "paused"; reason: PauseReason; until: string | null }
   | { type: "handoff"; source: "bloc" | "ia" | "limite_ia" | "erreur_ia"; message?: string }

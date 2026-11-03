@@ -8,7 +8,7 @@ import { BotCard } from "@/components/bot-card";
 import { FlowsCard } from "@/components/flows-card";
 import { InfoSheetForm } from "@/components/info-sheet-form";
 import { LocalClock } from "@/components/local-clock";
-import { Button, Card, Field, Input, Loading, Notice, Select } from "@/components/ui";
+import { Button, ButtonLink, Card, Field, Input, Loading, Notice, Select } from "@/components/ui";
 import { errorText, getRepositories, useLoad } from "@/data/browser";
 import { BOT_OPTIONS, BOT_OPTION_KEYS, type BotOption } from "@/data/options";
 import type { BotClient } from "@/data/types";
@@ -52,7 +52,10 @@ export default function ClientPage() {
       {state.status === "ready" && !state.data && <Notice tone="error">Ce client n&apos;existe pas (ou plus) dans ce navigateur.</Notice>}
       {state.status === "ready" && state.data && (
         <div className="space-y-6">
-          <h1 className="text-3xl font-semibold">{state.data.client.nomResto}</h1>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h1 className="text-3xl font-semibold">{state.data.client.nomResto}</h1>
+            <ButtonLink href={`/simulateur?client=${id}`}>💬 Tester le bot</ButtonLink>
+          </div>
           <BotCard
             input={{
               client: state.data.client,

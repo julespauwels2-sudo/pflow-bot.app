@@ -49,7 +49,12 @@ export function findEventFlow(flows: Flow[], event: string): Flow | undefined {
  * (« carte du midi » l'emporte sur « carte »), puis l'ordre des flux.
  */
 export function matchFlowByKeyword(flows: Flow[], message: string): Flow | undefined {
-  let best: { flow: Flow; length: number } | undefined;
+  return matchKeyword(flows, message)?.flow;
+}
+
+/** Comme matchFlowByKeyword, en renvoyant aussi le mot-clé reconnu. */
+export function matchKeyword(flows: Flow[], message: string): { flow: Flow; keyword: string } | undefined {
+  let best: { flow: Flow; length: number; keyword: string } | undefined;
   for (const flow of flows) {
     const trigger = findTrigger(flow);
     // Un flux d'événement ne se lance jamais sur un message.
@@ -57,8 +62,8 @@ export function matchFlowByKeyword(flows: Flow[], message: string): Flow | undef
     for (const keyword of trigger.data.keywords) {
       if (!keywordMatches(message, keyword, trigger.data.matchMode)) continue;
       const length = normalize(keyword).length;
-      if (!best || length > best.length) best = { flow, length };
+      if (!best || length > best.length) best = { flow, length, keyword };
     }
   }
-  return best?.flow;
+  return best && { flow: best.flow, keyword: best.keyword };
 }

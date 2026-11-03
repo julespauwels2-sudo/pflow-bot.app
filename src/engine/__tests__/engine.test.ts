@@ -662,3 +662,21 @@ describe("bloc Délai", () => {
     expect(r.outgoing).toEqual([]);
   });
 });
+
+describe("trace pour le simulateur", () => {
+  it("mot-clé reconnu et blocs exécutés sont journalisés", async () => {
+    const r = await runEngine(input({ message: { kind: "text", text: "Je veux COMMANDER" } }));
+    expect(r.events[0]).toEqual({ type: "keyword_matched", flowId: "f_accueil", keyword: "commander" });
+    expect(r.events.filter((e) => e.type === "step").map((e) => (e.type === "step" ? e.nodeId : ""))).toEqual(["t", "m", "b"]);
+  });
+
+  it("démarrage manuel d'un flux (sous-flux sans mot-clé)", async () => {
+    const r = await runEngine(input({ message: { kind: "start_flow", flowId: "f_agneau" } }));
+    expect(r.events).toContainEqual({ type: "flow_started", flowId: "f_agneau", via: "manuel" });
+    expect(r.contact.lastInboundAt).toBe(NOW.toISOString());
+    const paused = await runEngine(
+      input({ contact: freshContact({ pause: { reason: "manuel", until: null } }), message: { kind: "start_flow", flowId: "f_agneau" } }),
+    );
+    expect(paused.outgoing).toEqual([]);
+  });
+});

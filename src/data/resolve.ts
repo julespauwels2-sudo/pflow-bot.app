@@ -37,6 +37,14 @@ export interface BotInput {
   templateFolders?: BotFolder[];
   clientFlows: StoredFlow[];
   clientFolders?: BotFolder[];
+  /** Simulateur : utiliser les brouillons au lieu des versions publiées. */
+  useDrafts?: boolean;
+}
+
+/** Version donnée au moteur : publiée, ou brouillon (simulateur). */
+function engineVersion(flow: StoredFlow, useDrafts: boolean | undefined): Flow | null {
+  if (useDrafts) return { id: flow.id, name: flow.name, description: flow.description, nodes: flow.draft.nodes, edges: flow.draft.edges };
+  return toEngineFlow(flow);
 }
 
 function folderName(folders: BotFolder[] | undefined, id: string | undefined) {
@@ -55,7 +63,15 @@ export function resolveBot(input: BotInput): { entries: ResolvedFlow[]; flows: F
   // Flux du client d'abord : en cas de mot-clé identique, ils l'emportent sur le modèle.
   for (const f of clientFlows) {
     if (f.overridesTemplateFlowId && overrides.get(f.overridesTemplateFlowId) === f) continue;
-    entries.push({ botId: f.id, origin: "client", name: f.name, source: f, folderName: folderName(input.clientFolders, f.folderId), active: true, engineFlow: toEngineFlow(f) });
+    entries.push({
+      botId: f.id,
+      origin: "client",
+      name: f.name,
+      source: f,
+      folderName: folderName(input.clientFolders, f.folderId),
+      active: true,
+      engineFlow: engineVersion(f, input.useDrafts),
+    });
   }
   for (const t of templateFlows) {
     const override = overrides.get(t.id);
@@ -69,7 +85,7 @@ export function resolveBot(input: BotInput): { entries: ResolvedFlow[]; flows: F
       folderName: folderName(input.templateFolders, t.folderId),
       active: true,
       templateChanged: override ? t.version > (override.basedOnTemplateVersion ?? 0) : undefined,
-      engineFlow: toEngineFlow(source),
+      engineFlow: engineVersion(source, input.useDrafts),
     });
   }
 

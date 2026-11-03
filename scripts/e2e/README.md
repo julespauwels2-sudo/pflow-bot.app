@@ -19,6 +19,7 @@ node scripts/e2e/dossiers.js /tmp
 node scripts/e2e/modele.js /tmp
 node scripts/e2e/evenements.js /tmp
 node scripts/e2e/bot.js /tmp
+node scripts/e2e/simulateur.js /tmp
 ```
 
 Chaque script part d'un navigateur vierge et charge le resto d'exemple.

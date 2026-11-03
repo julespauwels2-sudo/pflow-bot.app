@@ -1,7 +1,7 @@
 import { evaluateConditions } from "./conditions";
 import { infoSheetVariables, withUpcomingRounds } from "./info-vars";
 import { fixedDelayMs, smartDelayMs, textOf } from "./delay";
-import { findDefaultFlow, findEventFlow, findTrigger, matchFlowByKeyword, normalize } from "./match";
+import { findDefaultFlow, findEventFlow, findTrigger, matchKeyword, normalize } from "./match";
 import { canSendFreeform } from "./window";
 import { decodeReplyId, encodeReplyId } from "./reply-id";
 import { firstName, renderTemplate } from "./template";
@@ -127,6 +127,14 @@ class EngineRun {
       this.session = null;
     }
 
+    // Simulateur : démarrage manuel d'un flux.
+    if (message.kind === "start_flow") {
+      const flow = this.flow(message.flowId);
+      if (flow) this.startFlow(flow, "manuel");
+      else this.events.push({ type: "error", message: `Flux introuvable « ${message.flowId} »` });
+      return;
+    }
+
     if (message.kind === "unsupported") {
       const waiting = this.currentWaitingNode();
       if (waiting) {
@@ -155,11 +163,7 @@ class EngineRun {
     this.session = null;
 
     // 3. Mot-clé d'un déclencheur : on lance le flux.
-    const flow = matchFlowByKeyword(this.input.flows, text);
-    if (flow) {
-      this.startFlow(flow, "mot_cle");
-      return;
-    }
+    if (this.tryKeyword(text)) return;
 
     // 4. Canal en mode « toujours » : flux par défaut s'il existe, sinon IA de secours.
     //    (Jamais sur un canal « mots-clés uniquement » : numéros perso des gérants.)
@@ -274,9 +278,10 @@ class EngineRun {
   }
 
   private tryKeyword(text: string): boolean {
-    const flow = matchFlowByKeyword(this.input.flows, text);
-    if (!flow) return false;
-    this.startFlow(flow, "mot_cle");
+    const match = matchKeyword(this.input.flows, text);
+    if (!match) return false;
+    this.events.push({ type: "keyword_matched", flowId: match.flow.id, keyword: match.keyword });
+    this.startFlow(match.flow, "mot_cle");
     return true;
   }
 
@@ -381,7 +386,7 @@ class EngineRun {
 
   private startFlow(
     flow: Flow,
-    via: "mot_cle" | "defaut" | "ia" | "aller_au_flux" | "bouton" | "evenement",
+    via: "mot_cle" | "defaut" | "ia" | "aller_au_flux" | "bouton" | "evenement" | "manuel",
     vars: Record<string, string> = {},
   ): void {
     const trigger = findTrigger(flow);
@@ -392,6 +397,7 @@ class EngineRun {
     }
     this.session = this.newSession(flow.id, trigger.id, vars);
     this.events.push({ type: "flow_started", flowId: flow.id, via });
+    this.events.push({ type: "step", flowId: flow.id, nodeId: trigger.id, nodeType: "trigger" });
     this.runFrom(this.nextNodeId(flow, trigger.id, "next"));
   }
 
@@ -424,6 +430,7 @@ class EngineRun {
       }
 
       session.nodeId = node.id;
+      this.events.push({ type: "step", flowId: flow.id, nodeId: node.id, nodeType: node.type });
 
       switch (node.type) {
         case "trigger":

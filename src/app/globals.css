@@ -39,3 +39,14 @@ h2,
 h3 {
   font-family: var(--font-title);
 }
+
+/* Simulateur : surlignage du bloc en cours et des blocs exécutés */
+.react-flow__node.sim-idle {
+  opacity: 0.55;
+}
+.react-flow__node.sim-trail > div {
+  box-shadow: 0 0 0 3px rgb(255 79 181 / 0.35);
+}
+.react-flow__node.sim-active > div {
+  box-shadow: 0 0 0 4px #ff4fb5, 0 12px 30px rgb(255 79 181 / 0.35);
+}

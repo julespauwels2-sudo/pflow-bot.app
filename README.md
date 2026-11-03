@@ -103,6 +103,24 @@ Toutes les conditions jour/heure utilisent le fuseau du client (`America/Guadelo
 - Raccourcis : Ctrl+Z / Ctrl+Y, Ctrl+C / Ctrl+V (aussi d'un flux à l'autre), Ctrl+D, Ctrl+A,
   Suppr, Maj + glisser pour sélectionner une zone, `{{` ou le bouton `{x}` pour insérer une variable.
 
+## Simulateur (A5)
+
+`/simulateur?client=<id>` (bouton « 💬 Tester le bot » de la page client, ou « ▶ Tester » dans
+l'éditeur) : le **vrai moteur** sur le **bot assemblé** du client (modèle + flux du client + options).
+- Chat façon WhatsApp : boutons de réponse et listes cliquables, bouton lien qui ouvre la page,
+  « en train d'écrire » pendant les délais, texte libre, message vocal (non géré), réponse du gérant
+  (coexistence), événements PFlow Order avec leurs données, « Lancer un flux » (sous-flux sans mot-clé).
+- Tableau blanc en lecture seule : bloc en attente surligné, blocs exécutés pendant le dernier tour.
+- Panneau « État » : contact (pause, fenêtre de 24 h, appels IA), conversation (bloc en attente,
+  expiration), variables de la conversation et de la fiche d'infos.
+- Journal : pourquoi le bot a réagi ou non (mot-clé reconnu, flux par défaut, ignoré car mode
+  mots-clés, en pause, événement ignoré car fenêtre fermée, conversation expirée…).
+- Horloge simulée au fuseau du client : régler l'heure et le jour, avancer de +5 min, +31 min, +1 h,
+  +13 h, +25 h ; « Réinitialiser ». Options : mode de déclenchement, brouillons, délais réels.
+- Depuis l'éditeur : flux mis en avant (« ▶ Lancer … ») et brouillons ; pour un flux du modèle, le
+  simulateur demande avec quel client tester. L'IA de secours n'est pas encore branchée (A6).
+- Logique testée à part : `src/simulator/` (horloge, tour de conversation, journal).
+
 ## Bots liés au modèle (M3d)
 
 - **« Créer le bot depuis le modèle »** (page client) : le client est relié au modèle, rien n'est
