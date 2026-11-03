@@ -54,11 +54,20 @@ export function toEngineFlow(flow: StoredFlow): Flow | null {
   };
 }
 
+/** JSON indépendant de l'ordre des clés (le stockage peut les réordonner). */
+export function stableStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, v) =>
+    v && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : v,
+  );
+}
+
 /** Vrai si le brouillon a changé depuis la dernière publication. */
 export function hasUnpublishedChanges(flow: StoredFlow): boolean {
   if (!flow.published || !flow.publishedMeta) return true;
   return (
-    JSON.stringify(flow.draft) !== JSON.stringify(flow.published) ||
+    stableStringify(flow.draft) !== stableStringify(flow.published) ||
     flow.name !== flow.publishedMeta.name ||
     (flow.description ?? "") !== (flow.publishedMeta.description ?? "")
   );

@@ -107,6 +107,21 @@ describe("flux : brouillon et publication", () => {
     expect(toEngineFlow(republished)?.nodes).toHaveLength(2);
   });
 
+  it("l'ordre des clés n'est pas une modification", async () => {
+    const storage = new FakeStorage();
+    const repos = createLocalRepositories(createLocalStorageStore(storage));
+    const c = await repos.clients.create({ nomResto: "Mexico", orderSlug: "mexico" });
+    const f = await repos.flows.create({
+      clientId: c.id,
+      name: "Accueil",
+      draft: { nodes: [{ id: "t", type: "trigger", position: { x: 0, y: 0 }, data: { keywords: [] } }], edges: [] },
+    });
+    const published = await repos.flows.publish(f.id);
+    // Relu depuis le stockage, l'objet a ses clés dans l'ordre du schéma.
+    const reordered = { ...published, draft: { edges: [], nodes: [{ data: { keywords: [] }, position: { y: 0, x: 0 }, type: "trigger", id: "t" }] } };
+    expect(hasUnpublishedChanges(reordered as typeof published)).toBe(false);
+  });
+
   it("les données renvoyées sont des copies (pas de modification par accident)", async () => {
     const { repos } = setup();
     const c = await repos.clients.create({ nomResto: "Mexico", orderSlug: "mexico" });

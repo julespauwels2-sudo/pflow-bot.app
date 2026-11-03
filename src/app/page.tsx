@@ -4,7 +4,7 @@ const steps = [
   { id: "A1", title: "Socle", detail: "Next.js, Tailwind, DA PFlow, accès protégé", done: true },
   { id: "A2", title: "Moteur", detail: "Exécution des flux, testée unitairement", done: true },
   { id: "A3", title: "Stockage local", detail: "Clients, fiches d'infos, import / export JSON", done: true },
-  { id: "A4", title: "Éditeur", detail: "Tableau blanc React Flow, brouillon et publication", done: false },
+  { id: "A4", title: "Éditeur", detail: "Tableau blanc React Flow, brouillon et publication", done: true },
   { id: "A5", title: "Simulateur", detail: "Tester un flux sans WhatsApp", done: false },
   { id: "A6", title: "IA de secours", detail: "Claude Haiku, fiche d'infos, limites", done: false },
 ];

@@ -24,12 +24,12 @@ export const DEMO_INFO_SHEET: InfoSheet = {
 
 const accueil: FlowGraph = {
   nodes: [
-    { id: "t", type: "trigger", position: { x: 0, y: 0 }, data: { keywords: ["commander", "bonjour", "menu", "salut"] } },
-    { id: "m", type: "message", position: { x: 0, y: 140 }, data: { text: "Bonjour {{prenom}} 👋 Bienvenue chez {{nom_resto}} !" } },
+    { id: "t", type: "trigger", position: { x: 0, y: 80 }, data: { keywords: ["commander", "bonjour", "menu", "salut"] } },
+    { id: "m", type: "message", position: { x: 340, y: 80 }, data: { text: "Bonjour {{prenom}} 👋 Bienvenue chez {{nom_resto}} !" } },
     {
       id: "b",
       type: "buttons",
-      position: { x: 0, y: 280 },
+      position: { x: 680, y: 40 },
       data: {
         text: "Que souhaitez-vous faire ?",
         buttons: [
@@ -39,15 +39,15 @@ const accueil: FlowGraph = {
         ],
       },
     },
-    { id: "lien", type: "order_link", position: { x: -320, y: 460 }, data: {} },
-    { id: "fin", type: "end", position: { x: -320, y: 600 }, data: { text: "Bon appétit ! 🌮" } },
+    { id: "lien", type: "order_link", position: { x: 1040, y: -120 }, data: {} },
+    { id: "fin", type: "end", position: { x: 1380, y: -100 }, data: { text: "Bon appétit ! 🌮" } },
     {
       id: "hor",
       type: "message",
-      position: { x: 0, y: 460 },
+      position: { x: 1040, y: 140 },
       data: { text: "Nous sommes ouverts du mardi au dimanche, midi et soir le vendredi et le samedi." },
     },
-    { id: "ia", type: "ai", position: { x: 320, y: 460 }, data: { intro: "Posez-moi votre question 🙂" } },
+    { id: "ia", type: "ai", position: { x: 1040, y: 330 }, data: { intro: "Posez-moi votre question 🙂" } },
   ],
   edges: [
     { id: "e1", source: "t", target: "m" },
@@ -61,10 +61,10 @@ const accueil: FlowGraph = {
 
 const agneau: FlowGraph = {
   nodes: [
-    { id: "t", type: "trigger", position: { x: 0, y: 0 }, data: { keywords: ["agneau"] } },
-    { id: "c", type: "condition", position: { x: 0, y: 140 }, data: { rules: [{ kind: "jour", jours: [6, 7] }] } },
-    { id: "oui", type: "message", position: { x: -200, y: 300 }, data: { text: "Oui, l'agneau est disponible aujourd'hui ! 🐑" } },
-    { id: "non", type: "message", position: { x: 200, y: 300 }, data: { text: "L'agneau n'est disponible que le week-end (samedi et dimanche)." } },
+    { id: "t", type: "trigger", position: { x: 0, y: 60 }, data: { keywords: ["agneau"] } },
+    { id: "c", type: "condition", position: { x: 340, y: 40 }, data: { rules: [{ kind: "jour", jours: [6, 7] }] } },
+    { id: "oui", type: "message", position: { x: 700, y: -40 }, data: { text: "Oui, l'agneau est disponible aujourd'hui ! 🐑" } },
+    { id: "non", type: "message", position: { x: 700, y: 160 }, data: { text: "L'agneau n'est disponible que le week-end (samedi et dimanche)." } },
   ],
   edges: [
     { id: "e1", source: "t", target: "c" },

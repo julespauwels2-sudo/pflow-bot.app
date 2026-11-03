@@ -40,12 +40,16 @@ src/data/     Accès aux données. repositories.ts = interfaces uniques (clients
               sauvegarde). local/ = implémentation localStorage (étape A). browser.ts = le seul
               endroit à changer pour brancher Supabase (étape B). schemas.ts = validation zod de
               tout JSON importé. transfer.ts = export / import.
+src/editor/   Logique pure de l'éditeur, testée : catalogue des blocs et de leurs sorties, limites
+              WhatsApp, vérification avant publication (lint), annuler/rétablir, copier/coller,
+              variables.
+src/components/editor/  Tableau blanc React Flow (état centralisé dans state.ts).
 src/lib/      Utilitaires (protection par mot de passe, fuseaux, fichiers).
 src/proxy.ts  Protection de toutes les pages sauf /api/webhooks/.
 src/app/      Interface Next.js : /clients, /clients/[id], /flows/[id].
 ```
 
-À venir : `src/components/editor` (A4), simulateur (A5), IA (A6),
+À venir : simulateur (A5), IA (A6),
 `src/channels/whatsapp` (webhook isolé, hébergeable ailleurs si besoin), `supabase/migrations/`.
 
 ## Données (étape A)
@@ -69,6 +73,18 @@ src/app/      Interface Next.js : /clients, /clients/[id], /flows/[id].
 6. Sinon → ignoré.
 
 Toutes les conditions jour/heure utilisent le fuseau du client (`America/Guadeloupe` par défaut).
+
+## Éditeur (étape A4)
+
+- Blocs glissables depuis la palette, reliés par des flèches. Chaque bouton, choix de liste ou
+  issue de condition a sa propre sortie ; une sortie ne mène qu'à un seul bloc.
+- Brouillon enregistré automatiquement (0,6 s après chaque modification, et à la fermeture de l'onglet).
+- Vérification en continu, affichée sur les blocs : bloc non relié, bouton non relié, limites
+  WhatsApp (3 boutons de 20 caractères, 10 choix de 24 caractères…), variable inconnue, flux de
+  destination manquant… « Publier » est bloqué tant qu'il reste une **erreur** ; les
+  **avertissements** n'empêchent pas de publier.
+- Raccourcis : Ctrl+Z / Ctrl+Y, Ctrl+C / Ctrl+V (aussi d'un flux à l'autre), Ctrl+D, Ctrl+A,
+  Suppr, Maj + glisser pour sélectionner une zone, `{{` ou le bouton `{x}` pour insérer une variable.
 
 ## Secrets
 
