@@ -1,5 +1,5 @@
 -- PFlow Bots — étape B : tables propres au bot dans la base du CRM.
--- NON APPLIQUÉE tant que Jules ne l'a pas validée.
+-- Validée par Jules le 5 novembre 2026 (avec « on delete set null » sur remplace_flux_modele_id).
 --
 -- Règles :
 -- * uniquement des CRÉATIONS de tables préfixées bot_ ; aucune table, colonne, fonction ou donnée
@@ -53,7 +53,8 @@ create table public.bot_flux (
   proprietaire_id uuid not null,
   dossier_id uuid references public.bot_dossiers (id) on delete set null,
   -- Personnalisation d'un flux du modèle pour un client : id du flux du modèle remplacé.
-  remplace_flux_modele_id uuid references public.bot_flux (id) on delete cascade,
+  -- Si le flux du modèle est supprimé, la copie reste et devient un flux propre au client.
+  remplace_flux_modele_id uuid references public.bot_flux (id) on delete set null,
   base_version_modele integer,
   nom text not null,
   description text,

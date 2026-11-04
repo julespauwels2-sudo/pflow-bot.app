@@ -1,5 +1,6 @@
 /**
- * Protection provisoire par mot de passe (étape A), remplacée par Supabase Auth à l'étape B.
+ * Protection provisoire par mot de passe (étape A). À l'étape B, la connexion Supabase la remplace :
+ * le mot de passe reste actif s'il est défini (BASIC_AUTH_PASSWORD), facultatif sinon.
  * Logique isolée ici pour être testable sans Next.js.
  */
 
@@ -9,6 +10,8 @@ export interface BasicAuthConfig {
   user?: string;
   password?: string;
   isProduction: boolean;
+  /** Une autre protection est en place (connexion Supabase) : le mot de passe devient facultatif. */
+  otherAuth?: boolean;
 }
 
 /** Comparaison en temps constant (évite de deviner le mot de passe caractère par caractère). */
@@ -42,8 +45,9 @@ export function checkBasicAuth(authorization: string | null, config: BasicAuthCo
   const expectedPassword = config.password?.trim();
   const expectedUser = config.user?.trim();
   if (!expectedPassword) {
-    // En local sans mot de passe : accès libre. En production : on bloque tout.
-    return config.isProduction ? "not_configured" : "allow";
+    // Sans mot de passe : accès libre en local ou si la connexion Supabase protège l'app ;
+    // sinon, en production, on bloque tout.
+    return config.isProduction && !config.otherAuth ? "not_configured" : "allow";
   }
   if (!authorization?.startsWith("Basic ")) return "challenge";
 

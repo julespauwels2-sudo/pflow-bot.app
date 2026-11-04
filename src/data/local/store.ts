@@ -8,6 +8,12 @@ export interface JsonStore {
   write(data: WorkspaceData): void;
 }
 
+/** Même rôle, en asynchrone (Supabase : lecture des tables, puis écriture des seules différences). */
+export interface WorkspaceStore {
+  read(): Promise<WorkspaceData>;
+  write(data: WorkspaceData): Promise<void>;
+}
+
 export const STORAGE_KEY = "pflow-bots:v1";
 
 export function emptyWorkspace(): WorkspaceData {

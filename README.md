@@ -57,6 +57,25 @@ src/ai/       Agent IA : base de connaissances, prompt, appel à Claude, tarifs 
 À venir :
 `src/channels/whatsapp` (webhook isolé, hébergeable ailleurs si besoin), `supabase/migrations/`.
 
+## Étape B : Supabase (base du CRM)
+
+- **Migration** : `supabase/migrations/20261105000000_bot_init.sql` (appliquée le 5 novembre 2026,
+  validée par Jules). Uniquement des tables `bot_` avec RLS réservé à `bot_admins` ; aucune
+  modification du CRM, pas de clé étrangère vers ses tables. `bot_reglages` et `bot_cles`
+  appartiennent au module UChat du CRM : le bot n'y touche jamais.
+- **Variables** : `NEXT_PUBLIC_SUPABASE_URL` et `NEXT_PUBLIC_SUPABASE_ANON_KEY` (clé publique). Sans
+  elles, l'app reste en mode local (stockage du navigateur).
+- **Connexion** (`/connexion`) avec le compte Supabase du CRM ; le compte doit être dans `bot_admins`
+  (ajout à la main, en SQL). La route `/api/ai` vérifie le jeton de session.
+- **Lecture seule du CRM** : `src/data/supabase/crm.ts` ne reçoit qu'un lecteur (aucune méthode
+  d'écriture) ; l'adaptateur refuse toute écriture hors des tables `bot_` ; un test le vérifie.
+  Lus : restos (statuts signé, actif, démo, et ceux qui ont un bot), horaires, adresse,
+  livraison/retrait, zones (`qg_zones_livraison`), carte (`produits` + options), module `relance`.
+- **Stockage** (`src/data/supabase/store.ts`) : même format que le stockage local ; lecture des
+  tables, puis écriture des seules différences. Toute la logique des repositories est partagée.
+- **Import** (`/import`) : reprend les données de l'étape A du navigateur (modèle, agent, flux,
+  fiche du bot, journal IA) et les rattache aux restos du CRM.
+
 ## Données (étape A)
 
 - Tout est dans le `localStorage` du navigateur (clé `pflow-bots:v1`). Des données illisibles ne sont

@@ -19,6 +19,7 @@ import { fetchAiStatus, httpAiPort, type AiStatus } from "@/ai/http-port";
 import { formatUsd, modelLabel } from "@/ai/models";
 import { agentConfigFor, aiDailyLimit } from "@/data/agent";
 import { getRepositories } from "@/data/browser";
+import { accessToken } from "@/lib/supabase";
 import { resolveBot } from "@/data/resolve";
 import type { BotClient, BotTemplate, StoredFlow } from "@/data/types";
 import { ADVANCES, formatLocal, formatShort, zonedToUtc } from "@/simulator/clock";
@@ -90,7 +91,7 @@ export function Simulator({ client, infoSheet, templateFlows, clientFlows, templ
 
   /** Port IA qui note chaque appel dans le journal des appels IA du client. */
   const aiPort: AiPort = useMemo(() => {
-    const http = httpAiPort();
+    const http = httpAiPort("/api/ai", undefined, accessToken);
     return async (request) => {
       const at = new Date().toISOString();
       const repo = getRepositories().aiCalls;

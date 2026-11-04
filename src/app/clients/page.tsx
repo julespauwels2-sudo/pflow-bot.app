@@ -5,7 +5,7 @@ import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { LocalClock } from "@/components/local-clock";
 import { Badge, Button, Card, Field, FileButton, Input, Loading, Notice, Select } from "@/components/ui";
-import { errorText, getRepositories, useLoad } from "@/data/browser";
+import { errorText, getRepositories, isCrmMode, useLoad } from "@/data/browser";
 import { loadDemo } from "@/data/demo";
 import { exportBackup, exportFileName, parseBackup } from "@/data/transfer";
 import { DEFAULT_ORDER_BASE_URL, DEFAULT_TIMEZONE } from "@/engine";
@@ -13,6 +13,8 @@ import { downloadJson } from "@/lib/files";
 import { TIMEZONES, slugify, timezoneLabel } from "@/lib/timezones";
 
 type Message = { tone: "error" | "success"; text: string } | null;
+
+const CRM_STATUTS: Record<string, string> = { signe: "Signé", actif: "Actif", demo: "Démo", perdu: "Perdu" };
 
 export default function ClientsPage() {
   const { state, reload } = useLoad(async (repos) => {
@@ -52,6 +54,7 @@ export default function ClientsPage() {
           >
             Exporter la sauvegarde
           </Button>
+          {!isCrmMode && (
           <FileButton
             accept="application/json,.json"
             onFile={(file) =>
@@ -69,14 +72,21 @@ export default function ClientsPage() {
           >
             Restaurer une sauvegarde
           </FileButton>
+          )}
         </div>
       </div>
 
       <div className="mt-6">
-        <Notice tone="info">
-        <strong>Étape A :</strong> les données sont enregistrées dans ce navigateur uniquement. Exportez une sauvegarde
-        régulièrement ; à l&apos;étape B, tout passera dans Supabase.
-        </Notice>
+        {isCrmMode ? (
+          <Notice tone="info">
+            Les restos viennent du CRM : statuts <strong>signé</strong>, <strong>actif</strong> et <strong>démo</strong>, plus ceux qui ont déjà un
+            bot. Nom, slug, fuseau, horaires, zones et carte se modifient dans le CRM ; le bot les lit sans jamais les modifier.
+          </Notice>
+        ) : (
+          <Notice tone="info">
+            <strong>Mode local :</strong> les données sont enregistrées dans ce navigateur uniquement. Exportez une sauvegarde régulièrement.
+          </Notice>
+        )}
       </div>
 
       {message && (
@@ -87,11 +97,16 @@ export default function ClientsPage() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_360px]">
+      <div className={`mt-6 grid gap-6 ${isCrmMode ? "" : "lg:grid-cols-[1fr_360px]"}`}>
         <div>
           {state.status === "loading" && <Loading />}
           {state.status === "error" && <Notice tone="error">{state.error}</Notice>}
-          {state.status === "ready" && state.data.length === 0 && (
+          {state.status === "ready" && state.data.length === 0 && isCrmMode && (
+            <Card title="Aucun resto à afficher">
+              <p className="text-sm text-muted">Aucun resto signé, actif ou en démo dans le CRM pour l&apos;instant.</p>
+            </Card>
+          )}
+          {state.status === "ready" && state.data.length === 0 && !isCrmMode && (
             <Card title="Aucun client pour l'instant">
               <p className="text-sm text-muted">Créez votre premier resto, ou chargez un resto d&apos;exemple déjà configuré.</p>
               <Button className="mt-4" variant="secondary" onClick={() => run(async () => void (await loadDemo(getRepositories())))}>
@@ -111,9 +126,14 @@ export default function ClientsPage() {
                       <h2 className="text-lg font-semibold">{client.nomResto}</h2>
                       <Badge tone="info">{flowCount} flux</Badge>
                     </div>
+                    {client.crmStatut && (
+                      <p className="mt-1 flex flex-wrap gap-1.5">
+                        <Badge tone={client.crmStatut === "demo" ? "warning" : "success"}>{CRM_STATUTS[client.crmStatut] ?? client.crmStatut}</Badge>
+                        {client.template && <Badge tone="info">Bot lié au modèle</Badge>}
+                      </p>
+                    )}
                     <p className="mt-1 truncate text-sm text-blue">
-                      {DEFAULT_ORDER_BASE_URL.replace("https://", "")}
-                      {client.orderSlug}
+                      {client.orderSlug ? `${DEFAULT_ORDER_BASE_URL.replace("https://", "")}${client.orderSlug}` : <span className="text-coral">Pas de slug dans le CRM</span>}
                     </p>
                     <p className="mt-2 text-xs text-muted">
                       {timezoneLabel(client.timezone)} · <LocalClock timezone={client.timezone} />
@@ -125,7 +145,7 @@ export default function ClientsPage() {
           )}
         </div>
 
-        <NewClientForm onCreated={(name) => run(async () => `Client « ${name} » créé.`)} />
+        {!isCrmMode && <NewClientForm onCreated={(name) => run(async () => `Client « ${name} » créé.`)} />}
       </div>
     </AppShell>
   );

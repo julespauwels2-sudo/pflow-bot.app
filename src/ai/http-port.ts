@@ -1,11 +1,17 @@
 /** Port IA côté navigateur (simulateur) : passe par la route serveur /api/ai. */
 import type { AiPort, AiResult } from "@/engine";
 
-export function httpAiPort(endpoint = "/api/ai", fetchImpl: typeof fetch = (...args) => fetch(...args)): AiPort {
+export function httpAiPort(
+  endpoint = "/api/ai",
+  fetchImpl: typeof fetch = (...args) => fetch(...args),
+  /** Jeton de la session Supabase (étape B), envoyé à la route serveur. */
+  getToken: () => Promise<string | null> = async () => null,
+): AiPort {
   return async (request) => {
+    const token = await getToken();
     const response = await fetchImpl(endpoint, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify(request),
     });
     const body = (await response.json().catch(() => null)) as (AiResult & { error?: string }) | null;

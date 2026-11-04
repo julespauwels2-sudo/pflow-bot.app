@@ -32,10 +32,13 @@ export function InfoSheetForm({
   timezone,
   initial,
   onSaved,
+  locked = [],
 }: {
   clientId: string;
   timezone: string;
   initial: InfoSheet;
+  /** Champs lus dans le CRM : affichés, non modifiables ici. */
+  locked?: (keyof InfoSheet)[];
   /** Appelé après l'enregistrement (ex. pour recalculer la liste de contrôle du bot). */
   onSaved?: () => void;
 }) {
@@ -49,8 +52,11 @@ export function InfoSheetForm({
     setStatus(null);
   }
 
+  const isLocked = (key: keyof InfoSheet) => locked.includes(key);
+
   function text<K extends keyof InfoSheet>(key: K) {
     return {
+      disabled: isLocked(key),
       value: (sheet[key] as string | undefined) ?? "",
       onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => change({ ...sheet, [key]: e.target.value || undefined }),
     };
@@ -82,6 +88,7 @@ export function InfoSheetForm({
         <div>
           <h3 className="text-sm font-semibold">
             Horaires <span className="font-normal text-muted">(heure locale du resto : <LocalClock timezone={timezone} />)</span>
+            {isLocked("horaires") && <CrmTag />}
           </h3>
           <ul className="mt-2 divide-y divide-rule rounded-2xl border border-rule">
             {DAYS.map((jour) => {
@@ -96,6 +103,7 @@ export function InfoSheetForm({
                         type="time"
                         aria-label={`${WEEKDAY_LABELS[jour]} ouverture`}
                         value={plage.de}
+                        disabled={isLocked("horaires")}
                         className="bg-transparent text-sm"
                         onChange={(e) => change(withPlages(sheet, jour, plages.map((p, j) => (j === i ? { ...p, de: e.target.value } : p))))}
                       />
@@ -104,9 +112,11 @@ export function InfoSheetForm({
                         type="time"
                         aria-label={`${WEEKDAY_LABELS[jour]} fermeture`}
                         value={plage.a}
+                        disabled={isLocked("horaires")}
                         className="bg-transparent text-sm"
                         onChange={(e) => change(withPlages(sheet, jour, plages.map((p, j) => (j === i ? { ...p, a: e.target.value } : p))))}
                       />
+                      {!isLocked("horaires") && (
                       <button
                         type="button"
                         className="ml-1 text-muted hover:text-coral"
@@ -115,8 +125,10 @@ export function InfoSheetForm({
                       >
                         ✕
                       </button>
+                      )}
                     </span>
                   ))}
+                  {!isLocked("horaires") && (
                   <button
                     type="button"
                     className="ml-auto text-sm font-semibold text-blue hover:underline"
@@ -124,6 +136,7 @@ export function InfoSheetForm({
                   >
                     + plage
                   </button>
+                  )}
                 </li>
               );
             })}
@@ -135,18 +148,18 @@ export function InfoSheetForm({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Adresse">
+          <Field label={isLocked("adresse") ? "Adresse (CRM)" : "Adresse"}>
             <Input placeholder="12 rue Frébault, Pointe-à-Pitre" {...text("adresse")} />
           </Field>
           <fieldset>
-            <legend className="text-sm font-semibold">Service</legend>
+            <legend className="text-sm font-semibold">Service{(isLocked("livraison") || isLocked("retrait")) && <CrmTag />}</legend>
             <div className="mt-2 flex gap-4 text-sm">
               <label className="flex items-center gap-2">
-                <input type="checkbox" className="size-4 accent-pink" checked={sheet.livraison ?? false} onChange={(e) => change({ ...sheet, livraison: e.target.checked })} />
+                <input type="checkbox" className="size-4 accent-pink" checked={sheet.livraison ?? false} disabled={isLocked("livraison")} onChange={(e) => change({ ...sheet, livraison: e.target.checked })} />
                 Livraison
               </label>
               <label className="flex items-center gap-2">
-                <input type="checkbox" className="size-4 accent-pink" checked={sheet.retrait ?? false} onChange={(e) => change({ ...sheet, retrait: e.target.checked })} />
+                <input type="checkbox" className="size-4 accent-pink" checked={sheet.retrait ?? false} disabled={isLocked("retrait")} onChange={(e) => change({ ...sheet, retrait: e.target.checked })} />
                 Retrait sur place
               </label>
             </div>
@@ -156,15 +169,19 @@ export function InfoSheetForm({
           </Field>
           {sheet.livraison && (
             <div className="sm:col-span-2">
-              <DeliveryEditor sheet={sheet} timezone={timezone} onChange={change} />
+              <DeliveryEditor sheet={sheet} timezone={timezone} onChange={change} zonesLocked={isLocked("zonesLivraison")} />
             </div>
           )}
           <Field label="Points de vente">
             <Textarea placeholder="Restaurant, food truck le samedi au marché…" {...text("pointsDeVente")} />
           </Field>
           <Field
-            label="Carte (pour l'IA)"
-            hint="Colle la carte : produits, prix, descriptions, allergènes. C'est la seule source de l'IA sur les produits. À l'étape B, elle sera lue directement dans PFlow Order."
+            label={isLocked("resumeCarte") ? "Carte (lue dans PFlow Order)" : "Carte (pour l'IA)"}
+            hint={
+              isLocked("resumeCarte")
+                ? "Produits disponibles, prix, options et allergènes, lus dans PFlow Order. À modifier dans le dashboard."
+                : "Colle la carte : produits, prix, descriptions, allergènes. C'est la seule source de l'IA sur les produits. Dès que le resto a des produits dans PFlow Order, la carte est lue là-bas."
+            }
           >
             <Textarea rows={8} placeholder={"== Cookies ==\n• Cookies Nutella : 4 €\nCœur fondant au chocolat\nAllergènes : Gluten, Œufs, Lait"} {...text("resumeCarte")} />
           </Field>
@@ -184,10 +201,24 @@ export function InfoSheetForm({
   );
 }
 
-const newRoundId = () => `t${Math.random().toString(36).slice(2, 8)}`;
+const newRoundId = () => crypto.randomUUID();
+
+function CrmTag() {
+  return <span className="ml-2 rounded-full bg-blue/10 px-2 py-0.5 text-[11px] font-semibold text-blue">CRM</span>;
+}
 
 /** Livraison : zones fixes, ou tournées à des dates précises (planning). */
-function DeliveryEditor({ sheet, timezone, onChange }: { sheet: InfoSheet; timezone: string; onChange: (s: InfoSheet) => void }) {
+function DeliveryEditor({
+  sheet,
+  timezone,
+  onChange,
+  zonesLocked = false,
+}: {
+  sheet: InfoSheet;
+  timezone: string;
+  onChange: (s: InfoSheet) => void;
+  zonesLocked?: boolean;
+}) {
   const minute = useCurrentMinute();
   const mode = sheet.livraisonMode ?? "zones";
   const rounds = sheet.tournees ?? [];
@@ -214,8 +245,13 @@ function DeliveryEditor({ sheet, timezone, onChange }: { sheet: InfoSheet; timez
       </div>
 
       {mode === "zones" ? (
-        <Field label="Zones de livraison" className="mt-3">
+        <Field
+          label={zonesLocked ? "Zones de livraison (CRM)" : "Zones de livraison"}
+          hint={zonesLocked ? "Zones, frais et minimums lus dans le CRM." : undefined}
+          className="mt-3"
+        >
           <Textarea
+            disabled={zonesLocked}
             placeholder="Jarry et Dothémare (livraison offerte)…"
             value={sheet.zonesLivraison ?? ""}
             onChange={(e) => onChange({ ...sheet, zonesLivraison: e.target.value || undefined })}

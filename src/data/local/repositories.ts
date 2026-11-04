@@ -13,11 +13,18 @@ import {
   type WorkspaceData,
 } from "../types";
 import { workspaceSchema } from "../schemas";
-import type { JsonStore } from "./store";
+import type { JsonStore, WorkspaceStore } from "./store";
 
 export const MAX_LOCAL_AI_CALLS = 1000;
 
 export interface LocalRepoOptions {
+  /**
+   * Clients venant du CRM (étape B) : pas de création, et nom, slug, fuseau et options payantes
+   * en lecture seule (modifiables uniquement dans le CRM).
+   */
+  crmClients?: boolean;
+  /** Champs de la fiche d'infos venant du CRM (lecture seule). */
+  lockedFields?: (clientId: string) => Promise<(keyof InfoSheet)[]>;
   now?: () => Date;
   newId?: () => string;
 }
@@ -42,15 +49,23 @@ function checkTimezone(timezone: string): string {
 }
 
 /** Implémentation des repositories sur un document JSON (localStorage ou mémoire). */
-export function createLocalRepositories(store: JsonStore, options: LocalRepoOptions = {}): Repositories {
+export function createLocalRepositories(store: JsonStore | WorkspaceStore, options: LocalRepoOptions = {}): Repositories {
   const now = () => (options.now ? options.now() : new Date()).toISOString();
   const newId = options.newId ?? (() => crypto.randomUUID());
 
-  function mutate<T>(fn: (data: WorkspaceData) => T): T {
-    const data = store.read();
-    const result = fn(data);
-    store.write(data);
-    return structuredClone(result);
+  // Stockage synchrone (navigateur, mémoire) ou asynchrone (Supabase) : même logique.
+  const read = async (): Promise<WorkspaceData> => store.read();
+  // Les modifications passent l'une après l'autre (lecture → modification → écriture).
+  let queue: Promise<unknown> = Promise.resolve();
+  function mutate<T>(fn: (data: WorkspaceData) => T): Promise<T> {
+    const run = queue.then(async () => {
+      const data = await read();
+      const result = fn(data);
+      await store.write(data);
+      return structuredClone(result);
+    });
+    queue = run.catch(() => undefined);
+    return run;
   }
 
   function findClient(data: WorkspaceData, id: string): BotClient {
@@ -145,17 +160,18 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
 
   return {
     clients: {
-      canManageClients: true,
+      canManageClients: !options.crmClients,
 
       async list() {
-        return store.read().clients.sort((a, b) => a.nomResto.localeCompare(b.nomResto, "fr"));
+        return (await read()).clients.sort((a, b) => a.nomResto.localeCompare(b.nomResto, "fr"));
       },
 
       async get(id) {
-        return store.read().clients.find((c) => c.id === id) ?? null;
+        return (await read()).clients.find((c) => c.id === id) ?? null;
       },
 
       async create(input) {
+        if (options.crmClients) throw new DataError("Les clients viennent du CRM : créez le resto dans le CRM.");
         return mutate((data) => {
           const nomResto = input.nomResto.trim();
           if (!nomResto) throw new DataError("Nom du resto obligatoire");
@@ -178,6 +194,15 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
       async update(id, patch) {
         return mutate((data) => {
           const client = findClient(data, id);
+          if (options.crmClients) {
+            const crmPatch =
+              (patch.nomResto !== undefined && patch.nomResto !== client.nomResto) ||
+              (patch.orderSlug !== undefined && patch.orderSlug !== client.orderSlug) ||
+              (patch.timezone !== undefined && patch.timezone !== client.timezone) ||
+              (patch.options !== undefined &&
+                Object.entries(patch.options).some(([k, v]) => Boolean(v) !== Boolean(client.options?.[k as keyof typeof client.options])));
+            if (crmPatch) throw new DataError("Nom, slug, fuseau et options payantes se modifient dans le CRM.");
+          }
           if (patch.nomResto !== undefined) {
             if (!patch.nomResto.trim()) throw new DataError("Nom du resto obligatoire");
             client.nomResto = patch.nomResto.trim();
@@ -196,7 +221,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
       },
 
       async delete(id) {
-        mutate((data) => {
+        await mutate((data) => {
           data.clients = data.clients.filter((c) => c.id !== id);
           data.flows = data.flows.filter((f) => f.ownerId !== id);
           data.folders = data.folders.filter((f) => f.ownerId !== id);
@@ -208,14 +233,12 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
 
     flows: {
       async listByOwner(ownerId) {
-        return store
-          .read()
-          .flows.filter((f) => f.ownerId === ownerId)
+        return (await read()).flows.filter((f) => f.ownerId === ownerId)
           .sort((a, b) => a.name.localeCompare(b.name, "fr"));
       },
 
       async get(id) {
-        return store.read().flows.find((f) => f.id === id) ?? null;
+        return (await read()).flows.find((f) => f.id === id) ?? null;
       },
 
       async create(input) {
@@ -277,7 +300,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
       },
 
       async delete(id) {
-        mutate((data) => {
+        await mutate((data) => {
           data.flows = data.flows.filter((f) => f.id !== id);
         });
       },
@@ -285,9 +308,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
 
     folders: {
       async listByOwner(ownerId) {
-        return store
-          .read()
-          .folders.filter((f) => f.ownerId === ownerId)
+        return (await read()).folders.filter((f) => f.ownerId === ownerId)
           .sort((a, b) => a.order - b.order);
       },
 
@@ -311,7 +332,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
       },
 
       async move(id, delta) {
-        mutate((data) => {
+        await mutate((data) => {
           const folder = findFolder(data, id);
           renumber(data, folder.ownerId);
           const siblings = data.folders.filter((f) => f.ownerId === folder.ownerId).sort((a, b) => a.order - b.order);
@@ -322,7 +343,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
       },
 
       async delete(id) {
-        mutate((data) => {
+        await mutate((data) => {
           const folder = findFolder(data, id);
           for (const flow of data.flows) if (flow.folderId === id) delete flow.folderId;
           data.folders = data.folders.filter((f) => f.id !== id);
@@ -363,7 +384,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
       },
 
       async revert(flowId) {
-        mutate((data) => {
+        await mutate((data) => {
           const flow = findFlow(data, flowId);
           if (!flow.overridesTemplateFlowId) throw new DataError("Ce flux n'est pas une personnalisation du modèle");
           data.flows = data.flows.filter((f) => f.id !== flowId);
@@ -371,7 +392,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
       },
 
       async detach(clientId) {
-        mutate((data) => {
+        await mutate((data) => {
           const client = findClient(data, clientId);
           const templateId = client.template?.templateId;
           if (!templateId) throw new DataError("Ce client n'est pas lié au modèle maître");
@@ -410,11 +431,11 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
 
     templates: {
       async list() {
-        return store.read().templates;
+        return (await read()).templates;
       },
 
       async get(id) {
-        return store.read().templates.find((t) => t.id === id) ?? null;
+        return (await read()).templates.find((t) => t.id === id) ?? null;
       },
 
       async create(input) {
@@ -462,22 +483,24 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
       },
 
       async listByClient(clientId) {
-        return store
-          .read()
-          .aiCalls.filter((c) => c.clientId === clientId)
+        return (await read()).aiCalls.filter((c) => c.clientId === clientId)
           .reverse();
       },
 
       async clearByClient(clientId) {
-        mutate((data) => {
+        await mutate((data) => {
           data.aiCalls = data.aiCalls.filter((c) => c.clientId !== clientId);
         });
       },
     },
 
     infoSheets: {
+      async lockedFields(clientId) {
+        return options.lockedFields ? options.lockedFields(clientId) : [];
+      },
+
       async get(clientId) {
-        return store.read().infoSheets[clientId] ?? structuredClone(EMPTY_INFO_SHEET);
+        return (await read()).infoSheets[clientId] ?? structuredClone(EMPTY_INFO_SHEET);
       },
 
       async save(clientId, sheet: InfoSheet) {
@@ -493,13 +516,13 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
 
     workspace: {
       async exportAll() {
-        return store.read();
+        return (await read());
       },
 
       async importAll(data) {
         const parsed = workspaceSchema.safeParse(data);
         if (!parsed.success) throw new DataError("Sauvegarde invalide");
-        store.write(parsed.data);
+        await store.write(parsed.data);
       },
     },
   };

@@ -1,13 +1,14 @@
 /**
  * Route IA : reçoit une demande du moteur (simulateur aujourd'hui, webhook WhatsApp à l'étape C)
- * et interroge Claude. La clé ANTHROPIC_API_KEY reste côté serveur. Route protégée par le mot de
- * passe de l'app (voir src/proxy.ts).
+ * et interroge Claude. La clé ANTHROPIC_API_KEY reste côté serveur. Route réservée aux
+ * administrateurs du bot (jeton Supabase), et au mot de passe provisoire s'il est défini (proxy).
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { askClaude } from "@/ai/claude";
 import { AI_MODELS, DEFAULT_AI_MODEL } from "@/ai/models";
 import { aiRequestSchema } from "@/ai/schemas";
+import { checkBotAdmin } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const caller = await checkBotAdmin(request.headers.get("authorization"));
+  if (!caller.ok) return fail(caller.error, caller.status);
+
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
     return fail("Clé API absente : ajoutez ANTHROPIC_API_KEY aux variables d'environnement (Vercel ou .env.local), puis redéployez.", 503);

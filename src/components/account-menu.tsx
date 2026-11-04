@@ -1,0 +1,29 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { isCrmMode, readBrowserWorkspace } from "@/data/browser";
+import { useAuth } from "./auth-gate";
+
+/** Compte connecté, déconnexion, et lien d'import tant que des données restent dans le navigateur. */
+export function AccountMenu() {
+  const { email, signOut } = useAuth();
+  // Rendu seulement dans le navigateur une fois connecté (la porte de connexion bloque le rendu serveur).
+  const [hasLocal] = useState(() => isCrmMode && typeof window !== "undefined" && Boolean(readBrowserWorkspace()));
+  if (!email) return null;
+  return (
+    <span className="ml-2 flex items-center gap-1 border-l border-rule pl-3">
+      {hasLocal && (
+        <Link href="/import" className="rounded-full bg-pink/10 px-3 py-1.5 text-pink hover:bg-pink/20">
+          Importer
+        </Link>
+      )}
+      <span className="hidden text-xs font-normal text-muted sm:inline" title={email}>
+        {email}
+      </span>
+      <button type="button" className="rounded-full px-3 py-1.5 hover:bg-navy/5" onClick={() => void signOut()}>
+        Déconnexion
+      </button>
+    </span>
+  );
+}

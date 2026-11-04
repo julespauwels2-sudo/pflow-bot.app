@@ -19,6 +19,8 @@ export interface BotClient {
   template?: { templateId: string; linkedAt: string };
   /** Options payantes activées (ex. relance panier abandonné). */
   options?: Partial<Record<BotOption, boolean>>;
+  /** Statut du resto dans le CRM (étape B : signe, actif, demo…). Absent en local. */
+  crmStatut?: string;
   createdAt: string;
   updatedAt: string;
 }

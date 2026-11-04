@@ -1,20 +1,42 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { createLocalRepositories } from "./local/repositories";
-import { createLocalStorageStore } from "./local/store";
+import { createLocalStorageStore, STORAGE_KEY } from "./local/store";
 import type { Repositories } from "./repositories";
+import { supabaseDb } from "./supabase/db";
+import { createSupabaseStore } from "./supabase/store";
+import type { WorkspaceData } from "./types";
 
 let instance: Repositories | null = null;
 
+/** Vrai quand les données viennent de Supabase (clients lus dans le CRM). */
+export const isCrmMode = isSupabaseConfigured;
+
 /**
- * Repositories utilisés par l'interface. Étape A : localStorage.
- * Étape B : on remplacera uniquement cette fonction par l'implémentation Supabase.
+ * Repositories utilisés par l'interface : Supabase si configuré (étape B), sinon le stockage du
+ * navigateur (étape A). La logique métier est la même dans les deux cas.
  */
 export function getRepositories(): Repositories {
   if (typeof window === "undefined") throw new Error("Les données ne sont disponibles que dans le navigateur");
-  instance ??= createLocalRepositories(createLocalStorageStore(window.localStorage));
+  if (!instance) {
+    const sb = getSupabase();
+    if (sb) {
+      const store = createSupabaseStore(supabaseDb(sb));
+      instance = createLocalRepositories(store, { crmClients: true, lockedFields: (id) => store.lockedFields(id) });
+    } else {
+      instance = createLocalRepositories(createLocalStorageStore(window.localStorage));
+    }
+  }
   return instance;
+}
+
+/** Données de l'étape A restées dans ce navigateur (pour l'import dans Supabase). */
+export function readBrowserWorkspace(): WorkspaceData | null {
+  if (typeof window === "undefined" || !window.localStorage.getItem(STORAGE_KEY)) return null;
+  const data = createLocalStorageStore(window.localStorage).read();
+  return data.clients.length || data.templates.length || data.flows.length ? data : null;
 }
 
 export type LoadState<T> =

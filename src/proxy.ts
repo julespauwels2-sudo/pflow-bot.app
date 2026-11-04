@@ -6,6 +6,7 @@ export function proxy(request: NextRequest) {
     user: process.env.BASIC_AUTH_USER,
     password: process.env.BASIC_AUTH_PASSWORD,
     isProduction: process.env.NODE_ENV === "production",
+    otherAuth: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()),
   });
 
   if (decision === "allow") return NextResponse.next();

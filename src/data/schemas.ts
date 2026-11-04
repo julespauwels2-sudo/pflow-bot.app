@@ -153,12 +153,14 @@ const timestamp = z.string();
 export const clientSchema = z.object({
   id,
   nomResto: z.string().min(1),
-  orderSlug: slugSchema,
+  /** Vide possible pour un resto du CRM sans slug (ex. démo) ; un client créé ici a toujours un slug. */
+  orderSlug: z.union([slugSchema, z.literal("")]),
   timezone: z.string().min(1),
   /** Anciennes sauvegardes sans ce champ : mode le plus prudent. */
   triggerMode: z.enum(["mots_cles_uniquement", "toujours"]).default("mots_cles_uniquement"),
   template: z.object({ templateId: id, linkedAt: z.string() }).optional(),
   options: z.object({ panier_abandonne: z.boolean().optional() }).optional(),
+  crmStatut: z.string().optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
 });

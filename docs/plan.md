@@ -13,7 +13,7 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 | M3 | Dossiers, modèle maître, événements de commande, bots liés, options payantes | Fait |
 | A5 | Simulateur : tester le bot en direct dans un chat | Fait |
 | A6 | Agent IA par client (consigne), base de connaissances, réglages du modèle, journal et coût ; fonctions `lancer_commande`, `proposer_commande`, `parler_equipe` | Fait |
-| B | Supabase (tables `bot_` uniquement, SQL montré avant), auth, lecture seule du CRM | À faire |
+| B | Supabase (tables `bot_` uniquement, SQL montré avant), auth, lecture seule du CRM | Migration appliquée ; connexion, branchement et import faits (à valider) |
 | C | WhatsApp : connexion, webhook, coexistence, boîte de réception, tests sur le numéro de test Meta | À faire |
 
 ## Points notés pour plus tard

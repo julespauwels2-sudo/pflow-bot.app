@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { AccountMenu } from "./account-menu";
 
 export function Logo() {
   return (
@@ -29,6 +30,7 @@ export function AppShell({ children, breadcrumb }: { children: ReactNode; breadc
             <Link href="/clients" className="rounded-full px-3 py-1.5 hover:bg-navy/5">
               Clients
             </Link>
+            <AccountMenu />
           </nav>
         </div>
       </header>

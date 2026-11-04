@@ -89,6 +89,8 @@ export interface FolderRepository {
 
 export interface InfoSheetRepository {
   get(clientId: string): Promise<InfoSheet>;
+  /** Champs qui viennent du CRM (lecture seule dans l'app). Vide en local. */
+  lockedFields(clientId: string): Promise<(keyof InfoSheet)[]>;
   save(clientId: string, sheet: InfoSheet): Promise<InfoSheet>;
 }
 

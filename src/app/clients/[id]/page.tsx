@@ -10,7 +10,7 @@ import { FlowsCard } from "@/components/flows-card";
 import { InfoSheetForm } from "@/components/info-sheet-form";
 import { LocalClock } from "@/components/local-clock";
 import { Button, ButtonLink, Card, Field, Input, Loading, Notice, Select } from "@/components/ui";
-import { errorText, getRepositories, useLoad } from "@/data/browser";
+import { errorText, getRepositories, isCrmMode, useLoad } from "@/data/browser";
 import { BOT_OPTIONS, BOT_OPTION_KEYS, type BotOption } from "@/data/options";
 import type { BotClient } from "@/data/types";
 import { DEFAULT_ORDER_BASE_URL } from "@/engine";
@@ -29,11 +29,12 @@ export default function ClientPage() {
         repos.templates.list(),
         repos.aiCalls.listByClient(id),
       ]);
+      const locked = await repos.infoSheets.lockedFields(id);
       const template = templates.find((t) => t.id === client.template?.templateId) ?? templates[0] ?? null;
       const [templateFlows, templateFolders] = template
         ? await Promise.all([repos.flows.listByOwner(template.id), repos.folders.listByOwner(template.id)])
         : [[], []];
-      return { client, flows, folders, infoSheet, template, templateFlows, templateFolders, aiCalls };
+      return { client, flows, folders, infoSheet, template, templateFlows, templateFolders, aiCalls, locked };
     },
     [id],
   );
@@ -92,7 +93,7 @@ export default function ClientPage() {
             template={state.data.template}
             infoSheet={state.data.infoSheet}
           />
-          <InfoSheetForm key={id} clientId={id} timezone={state.data.client.timezone} initial={state.data.infoSheet} onSaved={reload} />
+          <InfoSheetForm key={id} clientId={id} timezone={state.data.client.timezone} initial={state.data.infoSheet} locked={state.data.locked} onSaved={reload} />
           <AiCallsCard clientId={id} calls={state.data.aiCalls} onChange={reload} />
           <DangerZone client={state.data.client} />
         </div>
@@ -120,7 +121,8 @@ function ClientSettings({ client, onSaved }: { client: BotClient; onSaved: () =>
   async function save(e: React.FormEvent) {
     e.preventDefault();
     try {
-      await getRepositories().clients.update(client.id, form);
+      // Clients du CRM : seul le mode de déclenchement se règle ici.
+      await getRepositories().clients.update(client.id, isCrmMode ? { triggerMode: form.triggerMode } : form);
       onSaved();
     } catch (error) {
       setStatus({ tone: "error", text: errorText(error) });
@@ -130,11 +132,12 @@ function ClientSettings({ client, onSaved }: { client: BotClient; onSaved: () =>
   return (
     <Card title="Infos client" className="h-fit">
       <form onSubmit={save} className="space-y-4">
+        {isCrmMode && <p className="rounded-xl bg-page p-2.5 text-[11px] text-muted">Nom, slug, fuseau et options payantes viennent du CRM : à modifier là-bas.</p>}
         <Field label="Nom du resto" hint="Variable {{nom_resto}} dans les messages.">
-          <Input required value={form.nomResto} onChange={(e) => setForm({ ...form, nomResto: e.target.value })} />
+          <Input required disabled={isCrmMode} value={form.nomResto} onChange={(e) => setForm({ ...form, nomResto: e.target.value })} />
         </Field>
-        <Field label="Slug du mini-site" hint={`${DEFAULT_ORDER_BASE_URL}${form.orderSlug}`}>
-          <Input required value={form.orderSlug} onChange={(e) => setForm({ ...form, orderSlug: e.target.value })} />
+        <Field label="Slug du mini-site" hint={form.orderSlug ? `${DEFAULT_ORDER_BASE_URL}${form.orderSlug}` : "Pas de slug : boutons « Commander » impossibles."}>
+          <Input required={!isCrmMode} disabled={isCrmMode} value={form.orderSlug} onChange={(e) => setForm({ ...form, orderSlug: e.target.value })} />
         </Field>
         <Field
           label="Fuseau horaire"
@@ -144,7 +147,7 @@ function ClientSettings({ client, onSaved }: { client: BotClient; onSaved: () =>
             </>
           }
         >
-          <Select value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}>
+          <Select disabled={isCrmMode} value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}>
             {!TIMEZONES.some((t) => t.value === form.timezone) && <option value={form.timezone}>{form.timezone}</option>}
             {TIMEZONES.map((tz) => (
               <option key={tz.value} value={tz.value}>
@@ -168,12 +171,13 @@ function ClientSettings({ client, onSaved }: { client: BotClient; onSaved: () =>
         </Field>
         <p className="-mt-2 text-[11px] text-muted">Provisoire : à l&apos;étape C, ce réglage sera fait numéro par numéro.</p>
         <fieldset>
-          <legend className="text-sm font-semibold">Options payantes</legend>
+          <legend className="text-sm font-semibold">Options payantes{isCrmMode && <span className="font-normal text-muted"> (modules du CRM)</span>}</legend>
           {BOT_OPTION_KEYS.map((key) => (
             <label key={key} className="mt-2 flex items-start gap-2 text-sm">
               <input
                 type="checkbox"
                 className="mt-0.5 size-4 accent-pink"
+                disabled={isCrmMode}
                 checked={Boolean(form.options[key])}
                 onChange={(e) => setForm({ ...form, options: { ...form.options, [key]: e.target.checked } })}
               />
@@ -195,18 +199,25 @@ function ClientSettings({ client, onSaved }: { client: BotClient; onSaved: () =>
 
 function DangerZone({ client }: { client: BotClient }) {
   const router = useRouter();
+  // Confirmation : le slug, ou le nom du resto s'il n'a pas de slug.
+  const confirmWord = client.orderSlug || client.nomResto;
   async function remove() {
-    const typed = window.prompt(`Pour supprimer ${client.nomResto} avec ses flux et sa fiche d'infos, tapez son slug : ${client.orderSlug}`);
-    if (typed !== client.orderSlug) return;
+    const what = isCrmMode ? `le bot de ${client.nomResto} (flux, fiche du bot, journal IA)` : `${client.nomResto} avec ses flux et sa fiche d'infos`;
+    const typed = window.prompt(`Pour supprimer ${what}, tapez : ${confirmWord}`);
+    if (typed?.trim() !== confirmWord) return;
     await getRepositories().clients.delete(client.id);
     router.push("/clients");
   }
   return (
     <Card title="Zone sensible">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted">Supprime ce client, ses flux et sa fiche d&apos;infos de ce navigateur.</p>
+        <p className="text-sm text-muted">
+          {isCrmMode
+            ? "Supprime le bot de ce resto : ses flux, la partie bot de sa fiche, ses tournées et son journal IA. Le resto reste dans le CRM, sans aucune modification."
+            : "Supprime ce client, ses flux et sa fiche d'infos de ce navigateur."}
+        </p>
         <Button variant="danger" onClick={remove}>
-          Supprimer le client
+          {isCrmMode ? "Supprimer le bot" : "Supprimer le client"}
         </Button>
       </div>
     </Card>

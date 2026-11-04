@@ -39,6 +39,10 @@ describe("protection par mot de passe", () => {
 
   it("bloque tout en production si aucun mot de passe n'est configuré", () => {
     expect(checkBasicAuth(null, { isProduction: true })).toBe("not_configured");
+    // Étape B : la connexion Supabase protège l'app, le mot de passe devient facultatif…
+    expect(checkBasicAuth(null, { isProduction: true, otherAuth: true })).toBe("allow");
+    // … mais reste exigé s'il est défini.
+    expect(checkBasicAuth(null, { password: "x", isProduction: true, otherAuth: true })).toBe("challenge");
     expect(checkBasicAuth(null, { isProduction: false })).toBe("allow");
   });
 
