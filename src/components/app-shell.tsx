@@ -30,6 +30,9 @@ export function AppShell({ children, breadcrumb }: { children: ReactNode; breadc
             <Link href="/clients" className="rounded-full px-3 py-1.5 hover:bg-navy/5">
               Clients
             </Link>
+            <Link href="/inbox" className="rounded-full px-3 py-1.5 hover:bg-navy/5">
+              Boîte de réception
+            </Link>
             <AccountMenu />
           </nav>
         </div>

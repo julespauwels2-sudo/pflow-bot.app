@@ -84,3 +84,33 @@ Règles respectées : aucune écriture dans les tables du CRM, aucune migration 
 **Questions en attente**
 - Aucune bloquante. Rappel : la migration C (`docs/etape-c/migration-c.sql`) doit être validée et
   appliquée avant que le stockage Supabase du canal serve.
+
+### Tâche 3 — Boîte de réception ✅
+
+**Fait**
+- Page **Boîte de réception** (`/inbox`, lien dans le menu) : conversations groupées par resto (numéro),
+  celles qui attendent l'équipe en premier (🔔), état du bot (en pause, pourquoi, jusqu'à quand), fil
+  façon WhatsApp (Client, Bot, Équipe, Gérant depuis l'appli), statuts (lu, échec). Actualisation toutes
+  les 5 s.
+- **Reprendre la main** : le bot se tait pour ce client, sans limite, et la conversation en cours est
+  arrêtée. **Rendre au bot** : pause levée, alerte de transfert marquée traitée.
+- **Répondre à la main** (dans la fenêtre de 24 h seulement) : envoyé par l'API Graph, affiché « Équipe ».
+- Routes serveur `/api/inbox` (protégées par la connexion, comme `/api/ai`), même stockage que le webhook.
+- **Mode démo** (stockage en mémoire) : « Simuler un message client » pour tout tester sans numéro.
+
+**Comment vérifier** (sans Meta)
+1. Lancer le faux Meta et l'app en mode démo (commandes en tête de `scripts/e2e/inbox.js`).
+2. Ouvrir `/inbox`, « Simuler un message client » (« bonjour »), ouvrir la conversation, « Reprendre la
+   main », simuler « vous êtes là ? » (le bot ne répond pas), répondre à la main, « Rendre au bot ».
+3. Tests : `src/channels/whatsapp/__tests__/inbox.test.ts` ; parcours navigateur `scripts/e2e/inbox.js`.
+
+**Choix faits sans Jules**
+- Quand quelqu'un **répond depuis la boîte de réception**, le bot se met en pause 12 h (comme quand le
+  gérant répond depuis son appli) pour ne pas couper la parole. « Rendre au bot » le relance tout de suite.
+- **Reprendre la main** = pause sans fin (jusqu'à « Rendre au bot »), plutôt qu'une durée fixe.
+- Actualisation par interrogation toutes les 5 s (pas de temps réel Supabase, qui demanderait de modifier
+  une publication de la base : à revoir si besoin).
+
+**Questions en attente**
+- Faut-il que le gérant de chaque resto ait accès à SA boîte de réception (compte du dashboard, droit
+  limité à son resto) ? Aujourd'hui, seuls les administrateurs du bot y ont accès.

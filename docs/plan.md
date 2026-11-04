@@ -14,7 +14,7 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 | A5 | Simulateur : tester le bot en direct dans un chat | Fait |
 | A6 | Agent IA par client (consigne), base de connaissances, réglages du modèle, journal et coût ; fonctions `lancer_commande`, `proposer_commande`, `parler_equipe` | Fait |
 | B | Supabase (tables `bot_` uniquement, SQL montré avant), auth, lecture seule du CRM | Fait |
-| C | WhatsApp : connexion, webhook, coexistence, boîte de réception, tests sur le numéro de test Meta | Préparé dans [`docs/etape-c/`](etape-c/README.md), en pause jusqu'à fin novembre |
+| C | WhatsApp : connexion, webhook, coexistence, boîte de réception, tests sur le numéro de test Meta | Code prêt sans Meta (webhook, envoi, échos, boîte de réception), testé contre un faux Meta ; reste C0 (Meta) et la migration C — voir [`docs/etape-c/`](etape-c/README.md) et [`docs/journal.md`](journal.md) |
 
 ## Points notés pour plus tard
 
