@@ -1,13 +1,21 @@
 import Link from "next/link";
 
-const steps = [
-  { id: "A1", title: "Socle", detail: "Next.js, Tailwind, DA PFlow, accès protégé", done: true },
-  { id: "A2", title: "Moteur", detail: "Exécution des flux, testée unitairement", done: true },
-  { id: "A3", title: "Stockage local", detail: "Clients, fiches d'infos, import / export JSON", done: true },
-  { id: "A4", title: "Éditeur", detail: "Tableau blanc React Flow, brouillon et publication", done: true },
-  { id: "A5", title: "Simulateur", detail: "Tester un flux sans WhatsApp", done: false },
-  { id: "A6", title: "IA de secours", detail: "Claude Haiku, fiche d'infos, limites", done: false },
+type StepState = "fait" | "en_cours" | "a_venir";
+
+const steps: { id: string; title: string; detail: string; state: StepState }[] = [
+  { id: "A1–A4", title: "Socle, moteur, éditeur", detail: "Tableau blanc, blocs façon UChat, vérification avant publication", state: "fait" },
+  { id: "M1–M3", title: "Modèle maître", detail: "Bulles et boutons, fiche d'infos, dossiers, événements de commande, bots liés", state: "fait" },
+  { id: "A5", title: "Simulateur", detail: "Tester le bot dans un chat façon WhatsApp, avec journal et horloge simulée", state: "fait" },
+  { id: "A6", title: "Agent IA", detail: "Claude Haiku, consigne, fonctions, base de connaissances, coût suivi", state: "fait" },
+  { id: "B", title: "Supabase", detail: "Connexion, tables bot_, CRM lu en lecture seule, import des données", state: "en_cours" },
+  { id: "C", title: "WhatsApp", detail: "Numéros, webhook, coexistence, boîte de réception", state: "a_venir" },
 ];
+
+const STATE_LABELS: Record<StepState, { label: string; className: string }> = {
+  fait: { label: "Fait", className: "bg-wa/15 text-green-700" },
+  en_cours: { label: "En cours", className: "bg-pink/10 text-pink" },
+  a_venir: { label: "À venir", className: "bg-navy/5 text-muted" },
+};
 
 export default function Home() {
   return (
@@ -30,13 +38,13 @@ export default function Home() {
       </header>
 
       <section className="mt-10 overflow-hidden rounded-[var(--radius-card)] bg-navy p-8 text-white shadow-pop">
-        <p className="text-sm font-semibold tracking-wide text-cyan uppercase">Phase 1 · Étape A</p>
+        <p className="text-sm font-semibold tracking-wide text-cyan uppercase">Phase 1 · Étape B</p>
         <h2 className="mt-2 text-3xl font-semibold sm:text-4xl">
-          Construire et tester un flux, <span className="text-pink-2">sans WhatsApp</span>.
+          Un bot par resto, <span className="text-pink-2">branché sur le CRM</span>.
         </h2>
         <p className="mt-3 max-w-2xl text-white/75">
-          Le moteur tourne déjà : déclencheurs, boutons, listes, questions, conditions au fuseau du resto, lien de
-          commande, IA de secours, transfert humain et pause quand le gérant répond lui-même.
+          Le modèle maître, l&apos;agent IA et le simulateur sont prêts. Les restos, leurs horaires, zones et cartes sont lus dans le CRM, sans
+          jamais le modifier. Prochaine étape : WhatsApp.
         </p>
         <Link
           href="/clients"
@@ -54,15 +62,7 @@ export default function Home() {
           >
             <div className="flex items-center justify-between">
               <span className="font-title text-sm font-semibold text-blue">{step.id}</span>
-              <span
-                className={
-                  step.done
-                    ? "rounded-full bg-wa/15 px-2.5 py-0.5 text-xs font-semibold text-green-700"
-                    : "rounded-full bg-navy/5 px-2.5 py-0.5 text-xs font-semibold text-muted"
-                }
-              >
-                {step.done ? "Fait" : "À venir"}
-              </span>
+              <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATE_LABELS[step.state].className}`}>{STATE_LABELS[step.state].label}</span>
             </div>
             <h3 className="mt-2 text-lg font-semibold">{step.title}</h3>
             <p className="mt-1 text-sm text-muted">{step.detail}</p>
