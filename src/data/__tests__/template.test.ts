@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_CHANNEL_SETTINGS, findTrigger, runEngine, type Flow } from "@/engine";
+import { DEFAULT_CHANNEL_SETTINGS, findTrigger, runEngine, type Flow, type InfoSheet } from "@/engine";
 import { lintFlow } from "@/editor/lint";
 import { createLocalRepositories } from "../local/repositories";
 import { createMemoryStore } from "../local/store";
@@ -79,6 +79,41 @@ describe("modèle maître", () => {
     const r3 = await runEngine({ ...base, contact: r2.contact, session: r2.session, message: { kind: "button_reply", id: buttons.buttons[2].id, title: "💳 Paiement" } });
     expect(r3.outgoing[0]).toEqual({ kind: "text", text: "💳 *Paiement*\nEspèces" });
     expect(r3.outgoing[1]).toMatchObject({ kind: "link", buttonLabel: "😋 Je commande" });
+  });
+
+  it("Infos pratiques > Livraison : tournées à venir (planning automatique), points de vente, et pas de titre vide", async () => {
+    const repos = setup();
+    const template = await createMasterTemplate(repos);
+    const flows = (await repos.flows.listByOwner(template.id)).map(toEngineFlow).filter((f): f is Flow => f !== null);
+    const livraison = async (infoSheet: InfoSheet) => {
+      const base = {
+        now: new Date("2026-11-03T16:00:00Z"),
+        client: { id: "c", nomResto: "Cookies An Nou", orderSlug: "cookies-an-nou", timezone: "America/Guadeloupe" },
+        channel: { id: "ch", clientId: "c", triggerMode: "mots_cles_uniquement" as const, ...DEFAULT_CHANNEL_SETTINGS },
+        flows,
+        infoSheet,
+        contact: { id: "x", pause: null, aiUsage: { day: "", calls: 0 } },
+        session: null,
+      };
+      const r1 = await runEngine({ ...base, message: { kind: "text", text: "livraison" } });
+      const buttons = r1.outgoing[0];
+      if (buttons.kind !== "buttons") throw new Error("boutons attendus");
+      const r2 = await runEngine({ ...base, contact: r1.contact, session: r1.session, message: { kind: "button_reply", id: buttons.buttons[1].id, title: "🛵 Livraison" } });
+      return r2.outgoing.flatMap((m) => (m.kind === "text" ? [m.text] : []));
+    };
+    // Comme Cookies An Nou : zones lues dans le CRM, tournées et points de vente saisis côté bot, mode non choisi.
+    const cookies: InfoSheet = {
+      horaires: [],
+      livraison: true,
+      zonesLivraison: "• Jarry : livraison offerte",
+      tournees: [{ id: "t1", date: "2026-11-05", de: "11:00", a: "13:00", lieux: "Jarry (entreprises)" }],
+      pointsDeVente: "• Station Vito, Le Gosier",
+    };
+    expect(await livraison(cookies)).toEqual([
+      "🛵 *Livraison*\n• *Jeudi 5 novembre* (11h – 13h) : Jarry (entreprises)\n\n🏪 *Points de vente*\n• Station Vito, Le Gosier",
+    ]);
+    // Sans points de vente : le titre « Points de vente » n'est pas envoyé.
+    expect(await livraison({ ...cookies, pointsDeVente: undefined })).toEqual(["🛵 *Livraison*\n• *Jeudi 5 novembre* (11h – 13h) : Jarry (entreprises)"]);
   });
 
   it("IA - Proposer commande sans réponse de l'IA : seule la bulle « Je commande » part", async () => {

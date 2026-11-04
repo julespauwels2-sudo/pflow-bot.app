@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   NO_ROUND_TEXT,
+  isPlanningDelivery,
   formatDateFr,
   formatHour,
   formatRound,
@@ -164,5 +165,29 @@ describe("dans le moteur", () => {
       { ai: ai.port },
     );
     expect(ai.calls[0].infoSheet.tournees?.map((r) => r.id)).toEqual(["r2", "r4", "r3"]);
+  });
+});
+
+describe("passage automatique « sur planning »", () => {
+  const now = new Date("2026-11-03T16:00:00Z");
+  const base = { horaires: [], livraison: true, zonesLivraison: "• Jarry : livraison offerte" };
+
+  it("des tournées à venir font passer en planning, même sans mode choisi ou en mode zones", () => {
+    for (const livraisonMode of [undefined, "zones" as const]) {
+      const v = infoSheetVariables({ ...base, livraisonMode, tournees: [{ id: "t1", date: "2026-11-05", lieux: "Jarry (entreprises)" }] }, now, "America/Guadeloupe");
+      expect(v.infos_livraison).toContain("Jarry (entreprises)");
+      expect(v.zones_livraison).toBe("");
+      expect(v.prochaines_livraisons).toContain("Jeudi 5 novembre");
+    }
+  });
+
+  it("sans tournée à venir (passées seulement), les zones restent", () => {
+    const v = infoSheetVariables({ ...base, tournees: [{ id: "t0", date: "2026-10-01", lieux: "Passée" }] }, now, "America/Guadeloupe");
+    expect(v.infos_livraison).toBe("• Jarry : livraison offerte");
+  });
+
+  it("isPlanningDelivery : seulement si le resto livre", () => {
+    expect(isPlanningDelivery({ livraison: false }, 3)).toBe(false);
+    expect(isPlanningDelivery({ livraison: true, livraisonMode: "planning" }, 0)).toBe(true);
   });
 });

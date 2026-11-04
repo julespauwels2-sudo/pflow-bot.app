@@ -130,10 +130,19 @@ export interface InfoVariables {
   infos_pratiques: string;
 }
 
+/**
+ * Livraison sur planning : mode choisi dans la fiche, ou passage automatique dès qu'il existe des
+ * tournées à venir (elles priment alors sur les zones).
+ */
+export function isPlanningDelivery(sheet: Pick<InfoSheet, "livraison" | "livraisonMode">, upcomingCount: number): boolean {
+  return Boolean(sheet.livraison) && (sheet.livraisonMode === "planning" || upcomingCount > 0);
+}
+
 export function infoSheetVariables(sheet: InfoSheet, now: Date, timezone: string): InfoVariables {
   const horaires = formatWeeklyHours(sheet);
-  const planning = sheet.livraison && sheet.livraisonMode === "planning";
-  const rounds = planning ? upcomingRounds(sheet.tournees, now, timezone).slice(0, MAX_LISTED_ROUNDS) : [];
+  const upcoming = upcomingRounds(sheet.tournees, now, timezone);
+  const planning = isPlanningDelivery(sheet, upcoming.length);
+  const rounds = planning ? upcoming.slice(0, MAX_LISTED_ROUNDS) : [];
   const prochaines = planning ? (rounds.length ? rounds.map(formatRound).join("\n") : NO_ROUND_TEXT) : "";
   // En mode planning, un ancien texte de zones resté dans la fiche ne doit jamais ressortir.
   const zones = sheet.livraison && !planning ? (sheet.zonesLivraison?.trim() ?? "") : "";

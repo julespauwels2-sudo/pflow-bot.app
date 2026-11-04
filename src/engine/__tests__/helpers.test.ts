@@ -51,6 +51,17 @@ describe("variables", () => {
     expect(renderTemplate("Bonjour {{prenom}} !", {})).toBe("Bonjour !");
   });
 
+  it("n'envoie pas un titre suivi d'une info vide", () => {
+    const text = "🛵 *Livraison*\n{{infos_livraison}}\n\n🏪 *Points de vente*\n{{points_de_vente}}";
+    expect(renderTemplate(text, { infos_livraison: "• Jarry", points_de_vente: "" })).toBe("🛵 *Livraison*\n• Jarry");
+    expect(renderTemplate(text, { infos_livraison: "", points_de_vente: "• Station" })).toBe("🏪 *Points de vente*\n• Station");
+    expect(renderTemplate(text, { infos_livraison: "", points_de_vente: "" })).toBe("");
+    // Une ligne de variable vide disparaît sans emporter le reste du paragraphe.
+    expect(renderTemplate("*Infos*\n{{a}}\n{{b}}\nÀ bientôt", { a: "", b: "B" })).toBe("*Infos*\nB\nÀ bientôt");
+    // Une phrase qui contient une variable n'est jamais retirée.
+    expect(renderTemplate("Merci !\n\nBonjour {{prenom}} !", {})).toBe("Merci !\n\nBonjour !");
+  });
+
   it("prénom = premier mot du nom de profil", () => {
     expect(firstName("Jules Pauwels")).toBe("Jules");
     expect(firstName(undefined)).toBe("");

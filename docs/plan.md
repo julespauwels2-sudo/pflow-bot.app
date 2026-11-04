@@ -24,8 +24,13 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - Fiche d'infos lue **directement** dans le CRM (atelier) et le dashboard PFlow Order : horaires, carte…
   Les champs propres au bot (consigne IA, FAQ) restent dans les tables `bot_`. Regarder le CRM en
   lecture seule et proposer comment faire.
-- **Planning de livraison** : la gérante doit pouvoir mettre ses tournées à jour elle-même depuis son
-  dashboard (aujourd'hui : saisi dans la fiche d'infos du bot).
+- **Planning de livraison et points de vente** : absents du CRM aujourd'hui (vérifié en lecture seule le
+  5 novembre 2026 : ni table, ni colonne, ni champ JSON). En attendant, ils se saisissent dans la fiche du bot
+  (`bot_tournees`, `bot_fiches`). **Plus tard** : les ajouter dans le CRM / le dashboard de la gérante (qui
+  pourra mettre ses tournées à jour elle-même), puis les brancher comme les horaires : lus dans le CRM,
+  grisés « CRM » dans la fiche du bot. Modification du CRM à montrer à Jules avant de la faire.
+- Livraison : des tournées à venir font passer le resto « sur planning » automatiquement ; un titre suivi
+  d'une variable vide (ex. « 🏪 Points de vente ») n'est pas envoyé.
 - Création automatique du bot quand un client passe en onboarding dans le CRM (même action que le
   bouton « Créer le bot depuis le modèle »), sans risquer de casser le CRM.
 - Option 3 du lien de commande (étapes B/C) : pré-remplissage du téléphone et du prénom + rattachement

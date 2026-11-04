@@ -3,7 +3,7 @@
  * l'IA sait du resto (affiché tel quel sur la page client, « Ce que l'IA sait de ce resto »).
  * Étape B : horaires et carte lus dans le CRM et PFlow Order.
  */
-import { formatRound, formatWeeklyHours, NO_ROUND_TEXT, type InfoSheet } from "@/engine";
+import { formatRound, formatWeeklyHours, isPlanningDelivery, NO_ROUND_TEXT, type InfoSheet } from "@/engine";
 
 /** Nombre maximum de tournées données à l'IA (les plus proches). */
 export const MAX_AI_ROUNDS = 12;
@@ -37,7 +37,8 @@ export function buildKnowledgeBase({ nomResto, infoSheet: sheet, lienCommande }:
   parts.push(section("Modes de service", modes.join("\n")));
 
   if (sheet.livraison) {
-    if (sheet.livraisonMode === "planning") {
+    // La fiche reçue ne contient que les tournées à venir.
+    if (isPlanningDelivery(sheet, sheet.tournees?.length ?? 0)) {
       const rounds = (sheet.tournees ?? []).slice(0, MAX_AI_ROUNDS);
       parts.push(
         section(
@@ -84,7 +85,7 @@ export function missingKnowledge(sheet: InfoSheet): string[] {
   if (!sheet.horaires.length) missing.push("horaires");
   if (!sheet.resumeCarte?.trim()) missing.push("carte");
   if (!sheet.modesPaiement?.trim()) missing.push("moyens de paiement");
-  if (sheet.livraison && sheet.livraisonMode !== "planning" && !sheet.zonesLivraison?.trim()) missing.push("zones de livraison");
+  if (sheet.livraison && !isPlanningDelivery(sheet, sheet.tournees?.length ?? 0) && !sheet.zonesLivraison?.trim()) missing.push("zones de livraison");
   if (sheet.livraison === undefined && sheet.retrait === undefined) missing.push("modes de service (livraison, retrait)");
   return missing;
 }

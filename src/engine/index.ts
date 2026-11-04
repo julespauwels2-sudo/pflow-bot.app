@@ -18,6 +18,7 @@ export {
   formatHour,
   upcomingRounds,
   withUpcomingRounds,
+  isPlanningDelivery,
   NO_ROUND_TEXT,
   type InfoVariables,
 } from "./info-vars";

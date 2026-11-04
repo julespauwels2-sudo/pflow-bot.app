@@ -220,9 +220,11 @@ function DeliveryEditor({
   zonesLocked?: boolean;
 }) {
   const minute = useCurrentMinute();
-  const mode = sheet.livraisonMode ?? "zones";
   const rounds = sheet.tournees ?? [];
   const upcoming = minute === null ? null : new Set(upcomingRounds(rounds, new Date(minute * 60_000), timezone).map((r) => r.id));
+  // Sans choix explicite, des tournées à venir font passer le resto « sur planning ».
+  const mode = sheet.livraisonMode ?? (upcoming?.size ? "planning" : "zones");
+  const forcedPlanning = mode === "zones" && Boolean(upcoming?.size);
   const past = upcoming ? rounds.filter((r) => !upcoming.has(r.id)) : [];
   const setRounds = (tournees: DeliveryRound[]) => onChange({ ...sheet, tournees });
   const updateRound = (id: string, patch: Partial<DeliveryRound>) => setRounds(rounds.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -244,6 +246,12 @@ function DeliveryEditor({
         ))}
       </div>
 
+      {forcedPlanning && (
+        <p className="mt-2 rounded-xl bg-pink/10 p-2 text-xs text-navy" data-testid="planning-force">
+          Il reste {upcoming!.size} tournée{upcoming!.size > 1 ? "s" : ""} à venir : le bot reste « sur planning » tant qu&apos;elles existent
+          (les zones ne sont pas annoncées). Supprime-les pour revenir aux zones.
+        </p>
+      )}
       {mode === "zones" ? (
         <Field
           label={zonesLocked ? "Zones de livraison (CRM)" : "Zones de livraison"}
