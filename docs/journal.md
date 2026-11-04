@@ -146,3 +146,12 @@ Tout ce qui pouvait être fait **sans Meta et sans migration** est fait et test�
 des bots, canal WhatsApp complet (testé contre un faux Meta), boîte de réception, patches PFlow Order.
 Ce qui reste bloqué volontairement : C0 (compte Meta, par Jules), la migration C (à valider), la route
 `/api/webhooks/pflow-order` (dépend de la migration C), l'application des patches (à valider).
+
+## 5 novembre 2026 (suite) — réponses de Jules
+
+- Patch 4 : le numéro WhatsApp remplace le téléphone mémorisé → **validé**.
+- Texte « ✅ Commande n° 42 passée » → **validé**.
+- Boîte de réception pour les gérants → **plus tard** (noté dans `docs/plan.md`).
+- Bot désactivé → **jamais recréé automatiquement** (comportement actuel, confirmé).
+- Hébergement → **Vercel gratuit pendant les tests** sur le numéro Meta ; décision avant la bascule du
+  premier client.

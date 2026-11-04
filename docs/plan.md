@@ -59,6 +59,12 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   ouverte. Notification par e-mail (présente dans le template UChat) : proposer une solution gratuite.
 - Décision Vercel (plan Hobby non commercial) et webhook isolé pour pouvoir l'héberger ailleurs.
 
+### Plus tard (décidé par Jules le 5 novembre 2026)
+- **Boîte de réception pour les gérants** : chaque gérant voit seulement les conversations de son resto
+  (compte du dashboard, droit limité à son resto). Pas maintenant.
+- **Hébergement** : Vercel gratuit pendant les tests sur le numéro de test Meta ; décision (Vercel Pro ou
+  Supabase Edge Functions) avant la bascule du premier client.
+
 ### Phase 2
 - Fonctions IA `annuler_commande` et `suivre_commande` (API PFlow Order), avec accord de Jules sur ce
   que l'app peut modifier.
