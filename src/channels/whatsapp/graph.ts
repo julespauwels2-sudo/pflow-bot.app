@@ -1,9 +1,11 @@
 /**
  * Envoi par l'API Graph de Meta (WhatsApp Cloud API) : texte, boutons de réponse, liste, bouton lien
- * (CTA URL), accusé de lecture avec « en train d'écrire ». L'adresse de base est réglable pour les tests
+ * (CTA URL), accusé de lecture avec « en train d'écrire », téléchargement des messages vocaux. L'adresse de base est réglable pour les tests
  * (faux serveur Meta local).
  */
 import type { OutgoingMessage } from "@/engine";
+import { allowedMediaUrl, fetchMedia, MediaError } from "../core/media";
+import type { MediaRef } from "../core/types";
 
 export interface GraphConfig {
   token: string;
@@ -113,6 +115,16 @@ export function createGraphClient(config: GraphConfig) {
         message_id: wamid,
         ...(typing ? { typing_indicator: { type: "text" } } : {}),
       });
+    },
+    /** Message vocal : adresse temporaire demandée à Meta, puis téléchargement avec le token. */
+    async downloadMedia(media: MediaRef): Promise<{ data: Uint8Array; mimeType: string }> {
+      if (!media.id) throw new MediaError("Média sans identifiant");
+      const auth = { authorization: `Bearer ${config.token}` };
+      const infoUrl = `${config.base.replace(/\/$/, "")}/${config.version}/${encodeURIComponent(media.id)}`;
+      const info = await fetchMedia(doFetch, infoUrl, auth, "application/json");
+      const json = JSON.parse(new TextDecoder().decode(info.data)) as { url?: string; mime_type?: string };
+      if (!json.url || !allowedMediaUrl(json.url, config.base.startsWith("https://") ? "" : config.base)) throw new MediaError("Adresse du média refusée");
+      return fetchMedia(doFetch, json.url, auth, json.mime_type || media.mimeType || "audio/ogg");
     },
   };
 }

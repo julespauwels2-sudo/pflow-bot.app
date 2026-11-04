@@ -72,7 +72,7 @@ export function parseInstagramWebhook(payload: unknown): { inbound: InboundEvent
       const type = str(attachment.type) || "inconnu";
       const url = str(obj(attachment.payload).url);
       inbound.push({
-        ...event(account, sender, mid, timestamp, { kind: "unsupported", mediaType: type }, type, { type, ...(url ? { url } : {}) }),
+        ...event(account, sender, mid, timestamp, { kind: "unsupported", mediaType: type }, type, { type }),
         ...(type === "audio" && url ? { media: { url } } : {}),
         // Réactions, partages de story : notés, sans réponse.
         ...(type === "story_mention" || type === "share" || type === "reel" ? { ignored: true } : {}),

@@ -37,7 +37,7 @@ export function messageText(m: Pick<StoredMessage, "type" | "contenu">): string 
   if (out.kind === "buttons") return `${out.text}\n${(out.buttons ?? []).map((b) => `[${b.title}]`).join(" ")}`;
   if (out.kind === "list") return `${out.text}\n[${out.buttonLabel}] ${(out.items ?? []).map((i) => i.title).join(", ")}`;
   if (out.kind === "link") return `${out.text}\n[🔗 ${out.buttonLabel}] ${out.url}`;
-  if (m.type === "audio") return "🎤 Message vocal";
+  if (m.type === "audio") return typeof c.erreur === "string" ? `🎤 Message vocal (non transcrit : ${c.erreur})` : "🎤 Message vocal";
   if (m.type === "image") return "📷 Photo";
   return `(${m.type})`;
 }

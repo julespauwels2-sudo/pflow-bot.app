@@ -16,6 +16,7 @@ import { createMasterTemplate } from "@/data/template-seed";
 import type { WorkspaceData } from "@/data/types";
 import { createInstagramSender } from "../instagram/send";
 import { createGraphClient } from "../whatsapp/graph";
+import { transcriberFromEnv } from "../voice/transcriber";
 import { loadBotFromWorkspace } from "./bot-loader";
 import { createMemoryChannelStore } from "./memory-store";
 import type { ProcessorDeps } from "./processor";
@@ -109,6 +110,7 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
   const ai = serverAiPort();
   const sendersByPlatform = senders();
   const secret = env("PFLOW_BOTS_SECRET") || undefined;
+  const transcriber = transcriberFromEnv();
   let store: ChannelStore;
   let repos: Repositories;
   let workspace: () => Promise<WorkspaceData>;
@@ -156,6 +158,7 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
         loadBot: async (id) => loadBotFromWorkspace(await workspace(), id),
         onAiCall: async (info) => void (await logAiCall(repos, info)),
         pflowBotsSecret: secret,
+        transcriber,
       };
     },
   };

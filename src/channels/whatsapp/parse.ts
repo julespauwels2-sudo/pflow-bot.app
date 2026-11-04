@@ -5,7 +5,7 @@
  * Format de l'écho à revérifier dans la documentation de Meta au moment de C6.
  */
 import type { IncomingMessage } from "@/engine";
-import type { InboundEvent, StatusEvent } from "../core/types";
+import type { InboundEvent, MediaRef, StatusEvent } from "../core/types";
 
 type Json = Record<string, unknown>;
 const obj = (v: unknown): Json => (v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : {});
@@ -13,8 +13,17 @@ const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const str = (v: unknown): string => (typeof v === "string" ? v : typeof v === "number" ? String(v) : "");
 
 /** Message WhatsApp → message du moteur. */
-export function toIncoming(m: Json): { message: IncomingMessage; ignored?: boolean; contenu: unknown } {
+export function toIncoming(m: Json): { message: IncomingMessage; ignored?: boolean; contenu: unknown; media?: MediaRef } {
   const type = str(m.type);
+  // Message vocal (ou fichier audio) : transcrit si un service est configuré (tâche 6).
+  if (type === "audio") {
+    const a = obj(m.audio);
+    return {
+      message: { kind: "unsupported", mediaType: "audio" },
+      contenu: { type, ...(a.voice === true ? { vocal: true } : {}) },
+      ...(str(a.id) ? { media: { id: str(a.id), ...(str(a.mime_type) ? { mimeType: str(a.mime_type) } : {}) } } : {}),
+    };
+  }
   if (type === "text") {
     const body = str(obj(m.text).body);
     return { message: { kind: "text", text: body }, contenu: { texte: body } };
@@ -74,6 +83,7 @@ export function parseWebhook(payload: unknown): { inbound: InboundEvent[]; statu
             ignored: parsed.ignored,
             type: str(m.type) || "inconnu",
             contenu: parsed.contenu,
+            ...(parsed.media ? { media: parsed.media } : {}),
           });
         }
         for (const raw of arr(value.statuses)) {

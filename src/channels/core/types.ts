@@ -13,6 +13,15 @@ export interface ChannelSender {
   send(accountId: string, to: string, message: OutgoingMessage): Promise<string | undefined>;
   /** Accusé de lecture et « en train d'écrire ». */
   markRead(accountId: string, messageId: string, typing: boolean, to?: string): Promise<void>;
+  /** Téléchargement d'un média reçu (message vocal). */
+  downloadMedia?(media: MediaRef): Promise<{ data: Uint8Array; mimeType: string }>;
+}
+
+/** Média à télécharger : identifiant WhatsApp ou adresse Instagram. */
+export interface MediaRef {
+  id?: string;
+  url?: string;
+  mimeType?: string;
 }
 
 export interface Canal {
@@ -117,7 +126,7 @@ export interface InboundEvent {
   type: string;
   contenu: unknown;
   /** Média à télécharger (message vocal) : identifiant WhatsApp ou adresse Instagram. */
-  media?: { id?: string; url?: string; mimeType?: string };
+  media?: MediaRef;
 }
 
 export interface StatusEvent {

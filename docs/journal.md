@@ -205,3 +205,41 @@ Mêmes règles : aucune écriture dans le CRM ni dans les tables `bot_` réelles
   (`https://ig.me/m/<compte>`) au lieu de « Retour sur WhatsApp » ? Je n'ai rien modifié.
 - Le token Instagram expire après 60 jours : renouvellement automatique à prévoir avant le premier
   client Instagram (noté dans le guide).
+
+### Tâche 6 — Messages vocaux ✅ (inactif sans clé)
+
+**Fait**
+- Réception des vocaux WhatsApp (identifiant du média → adresse temporaire demandée à Meta →
+  téléchargement avec le token) et Instagram (adresse dans la notification). Plafond 10 Mo ; adresses
+  acceptées en https uniquement, jamais une adresse interne.
+- `src/channels/voice/transcriber.ts` : **une interface, trois services interchangeables** (OpenAI,
+  Mistral, Deepgram), choisis par `TRANSCRIPTION_PROVIDER` + `TRANSCRIPTION_API_KEY` (Vercel). Sans clé :
+  rien ne change, le bot répond « je ne peux lire que les messages écrits » comme avant.
+- Avec un service : le texte transcrit est passé au moteur **comme si le client l'avait écrit**
+  (mots-clés, questions, IA). La boîte de réception affiche « 🎤 bonjour » ; en cas d'échec,
+  « 🎤 Message vocal (non transcrit : …) » et le bot répond comme avant (pas de plantage).
+- L'audio n'est **jamais stocké** : seul le texte transcrit est gardé avec le message.
+
+**Vérifié** : 9 tests contre un faux Meta et un faux service (format d'appel de chaque service, token
+envoyé à Meta mais pas au CDN Instagram, audio trop long refusé, service en panne, inactif sans clé,
+statut qui ne contient jamais la clé, adresses internes refusées).
+
+**Comparaison des services (aucun choisi — à toi de décider)** — prix relevés le 4 novembre 2026 sur des
+sites tiers, **à vérifier sur les pages officielles** :
+
+| Service (modèle par défaut) | Prix / minute | 100 vocaux de 30 s / mois | Français | Créole |
+|---|---|---|---|---|
+| Mistral — Voxtral Mini Transcribe | ≈ 0,003 à 0,0035 $ | ≈ 0,17 $ | Très bon (entreprise française, le français est une langue phare) | Rien d'annoncé |
+| OpenAI — gpt-4o-mini-transcribe | ≈ 0,003 $ (whisper-1 : 0,006 $) | ≈ 0,15 $ | Très bon | Whisper connaît le créole haïtien, proche mais pas identique au créole antillais ; rien d'annoncé pour la Guadeloupe/Martinique |
+| Deepgram — Nova-3 | ≈ 0,0043 $ (multilingue ≈ 0,0052 $) | ≈ 0,22 $ | Bon | Rien d'annoncé |
+
+Dans tous les cas le coût reste négligeable (quelques centimes par mois et par resto). Le vrai critère
+est la qualité sur **des vocaux réels de clients antillais** (accent, mélange français/créole, bruit) :
+proposition de test quand tu auras du temps → 10 vocaux de toi ou d'amis, passés dans les trois
+services (il suffit de changer `TRANSCRIPTION_PROVIDER`), et on compare. Le créole pur sera
+probablement mal transcrit partout ; l'IA du bot peut quand même comprendre une transcription
+approximative.
+
+**Choix faits sans toi** : pas de limite de vocaux par client (le plafond de taille suffit au vu des
+prix) ; la transcription a lieu même si le bot est en pause, pour que le gérant puisse lire le vocal
+dans la boîte de réception.

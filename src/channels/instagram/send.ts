@@ -10,6 +10,7 @@
 import type { OutgoingMessage } from "@/engine";
 import type { ChannelSender } from "../core/types";
 import { GraphError } from "../whatsapp/graph";
+import { allowedMediaUrl, fetchMedia, MediaError } from "../core/media";
 
 export const INSTAGRAM_LIMITS = { text: 1000, quickReplies: 13, quickReplyTitle: 20, buttonTemplateText: 640, buttonTitle: 20 } as const;
 
@@ -113,6 +114,11 @@ export function createInstagramSender(config: InstagramConfig): ChannelSender {
       if (!to) return;
       await post(accountId, { recipient: { id: to }, sender_action: "mark_seen" });
       if (typing) await post(accountId, { recipient: { id: to }, sender_action: "typing_on" });
+    },
+    /** Message vocal : l'adresse (temporaire) est dans la notification ; pas de token à envoyer. */
+    async downloadMedia(media) {
+      if (!media.url || !allowedMediaUrl(media.url, config.base.startsWith("https://") ? "" : config.base)) throw new MediaError("Adresse du média refusée");
+      return fetchMedia(doFetch, media.url, {}, media.mimeType || "audio/mp4");
     },
   };
 }

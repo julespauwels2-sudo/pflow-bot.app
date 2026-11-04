@@ -7,6 +7,7 @@ import { createContactToken } from "@/channels/pflow-order/contact-token";
 import type { LoadedBot } from "./bot-loader";
 import { parseWebhook } from "../whatsapp/parse";
 import type { ChannelSender, ChannelStore, InboundEvent, StatusEvent } from "./types";
+import type { Transcriber } from "../voice/transcriber";
 
 /** Plafond d'un « en train d'écrire » côté serveur (le webhook ne doit pas attendre trop longtemps). */
 export const MAX_TYPING_MS = 3000;
@@ -31,6 +32,8 @@ export interface ProcessorDeps {
   maxTypingMs?: number;
   /** Secret partagé avec PFlow Order : jeton de pré-remplissage dans le lien « Commander ». */
   pflowBotsSecret?: string;
+  /** Transcription des messages vocaux (absente : le bot demande d'écrire, comme avant). */
+  transcriber?: Transcriber | null;
 }
 
 export interface ProcessReport {
@@ -86,8 +89,9 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   if (canal.etat === "coupe") return skip("canal coupé");
   if (canal.etat === "test" && !canal.testNumeros.includes(event.waId)) return skip("canal en test : numéro hors liste");
 
-  const echo = event.message.kind === "echo";
   const contact = await store.getOrCreateContact(canal.id, event.waId, event.profileName);
+  event = await transcribeVoice(event, deps, report);
+  const echo = event.message.kind === "echo";
   await store.addMessage({
     canalId: canal.id,
     contactId: contact.id,
@@ -188,6 +192,26 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
 
   report.handled.push({ wamid: event.wamid, outgoing: sent });
   await store.finishEvent(event.plateforme, event.wamid);
+}
+
+/**
+ * Message vocal : téléchargé puis transcrit ; le moteur reçoit alors le texte comme si le client l'avait
+ * écrit. En cas d'échec (service absent, audio inaudible, trop long), le message reste « non lu » et le
+ * bot répond comme avant (« je ne peux lire que les messages écrits »).
+ */
+async function transcribeVoice(event: InboundEvent, deps: ProcessorDeps, report: ProcessReport): Promise<InboundEvent> {
+  if (!event.media || event.message.kind !== "unsupported" || event.message.mediaType !== "audio") return event;
+  const base = (event.contenu && typeof event.contenu === "object" ? event.contenu : {}) as Record<string, unknown>;
+  if (!deps.transcriber || !deps.graph.downloadMedia) return event;
+  try {
+    const audio = await deps.graph.downloadMedia(event.media);
+    const text = (await deps.transcriber.transcribe(audio.data, audio.mimeType)).trim();
+    if (!text) return { ...event, contenu: { ...base, erreur: "Vocal inaudible" } };
+    return { ...event, message: { kind: "text", text }, contenu: { ...base, texte: `🎤 ${text}`, transcription: text } };
+  } catch (error) {
+    report.errors.push(`Transcription ${event.wamid} : ${message(error)}`);
+    return { ...event, contenu: { ...base, erreur: message(error) } };
+  }
 }
 
 function orderLinkQuery(bot: LoadedBot, event: InboundEvent, secret: string | undefined): string {
