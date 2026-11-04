@@ -168,6 +168,8 @@ async function logAiCall(repos: Repositories, info: Parameters<NonNullable<Proce
   await repos.aiCalls.add({
     clientId: info.restaurantId,
     at: new Date().toISOString(),
+    // « whatsapp » = canal réel, Instagram compris : la contrainte de bot_appels_ia n'accepte pas encore
+    // « instagram » (élargie dans la migration C, non appliquée).
     source: "whatsapp",
     model: info.result?.model ?? info.request.model,
     message: info.request.message,

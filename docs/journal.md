@@ -243,3 +243,22 @@ approximative.
 **Choix faits sans toi** : pas de limite de vocaux par client (le plafond de taille suffit au vu des
 prix) ; la transcription a lieu même si le bot est en pause, pour que le gérant puisse lire le vocal
 dans la boîte de réception.
+
+### Tâche 7 — Page « État du système » ✅
+
+**Fait** : page `/etat` (lien « État » dans le menu du compte) et route `/api/etat`, réservée aux comptes
+de `bot_admins` (sans Supabase configuré, protégée par le mot de passe provisoire du site).
+- **Clés détectées** : 14 variables, affichées « présente / absente ». La valeur n'est jamais lue
+  au-delà de « vide ou pas », ni renvoyée (un test le vérifie avec de fausses clés).
+- **Canaux** : webhook WhatsApp / Instagram actif ou non, ce qui manque, nombre de comptes reliés
+  (actifs / en test) ; IA (modèle utilisé) ; messages vocaux (service) ; stockage ; hébergement.
+- **Bots** : nombre de bots actifs (liés au modèle, non désactivés), désactivés, coût IA sur 30 jours.
+- **Derniers appels IA** (10) et **dernières erreurs IA** (10), avec le resto et le coût.
+- **Derniers événements reçus** par les webhooks, identifiants masqués, avec l'erreur s'il y en a.
+
+**Vérifié** : 2 tests de la route (aucune valeur de clé dans la réponse, refus sans connexion), capture
+en mode démo après le test WhatsApp de bout en bout.
+
+**Choix fait sans toi** : les appels IA venus d'Instagram sont notés « whatsapp » (canal réel) car la
+contrainte de `bot_appels_ia` n'accepte pas « instagram ». L'élargissement est ajouté à la migration C
+(**non appliquée**, nom de la contrainte vérifié en lecture seule : `bot_appels_ia_source_check`).

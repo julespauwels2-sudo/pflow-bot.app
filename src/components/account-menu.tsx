@@ -5,7 +5,7 @@ import { useState } from "react";
 import { isCrmMode, readBrowserWorkspace } from "@/data/browser";
 import { useAuth } from "./auth-gate";
 
-/** Compte connecté, déconnexion, et lien d'import tant que des données restent dans le navigateur. */
+/** Compte connecté, état du système, déconnexion, et lien d'import tant que des données restent dans le navigateur. */
 export function AccountMenu() {
   const { email, signOut } = useAuth();
   // Rendu seulement dans le navigateur une fois connecté (la porte de connexion bloque le rendu serveur).
@@ -18,6 +18,9 @@ export function AccountMenu() {
           Importer
         </Link>
       )}
+      <Link href="/etat" className="rounded-full px-3 py-1.5 hover:bg-navy/5" title="État du système">
+        État
+      </Link>
       <span className="hidden text-xs font-normal text-muted sm:inline" title={email}>
         {email}
       </span>

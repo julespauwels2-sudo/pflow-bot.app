@@ -5,7 +5,8 @@
 -- jouée par erreur. Elle y sera déplacée après validation de Jules.
 --
 -- Mêmes règles que bot_init :
--- * uniquement des CRÉATIONS de tables préfixées bot_ ; rien n'est modifié dans le CRM ;
+-- * uniquement des tables préfixées bot_ (créations, plus une contrainte élargie sur bot_appels_ia) ;
+--   rien n'est modifié dans le CRM ;
 -- * pas de clé étrangère vers les tables du CRM (restaurant_id = simple uuid vérifié par l'app) ;
 -- * pas de fonction, pas de trigger ; RLS sur chaque table, accès réservé à bot_admins ;
 -- * le webhook (serveur) utilise la clé service_role : l'app n'y écrit que dans les tables bot_.
@@ -120,6 +121,11 @@ create table public.bot_webhook_evenements (
   erreur text
 );
 create index bot_webhook_evenements_date on public.bot_webhook_evenements (recu_le);
+
+-- bot_appels_ia (créée par bot_init, table du bot) : accepter la source « instagram ». En attendant, les
+-- appels IA venus d'Instagram sont notés « whatsapp » (= canal réel), voir src/channels/core/runtime.ts.
+alter table public.bot_appels_ia drop constraint bot_appels_ia_source_check;
+alter table public.bot_appels_ia add constraint bot_appels_ia_source_check check (source in ('simulateur', 'whatsapp', 'instagram'));
 
 -- Sécurité : RLS partout, accès réservé aux administrateurs du bot.
 alter table public.bot_canaux enable row level security;
