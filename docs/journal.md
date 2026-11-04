@@ -44,3 +44,43 @@ Règles respectées : aucune écriture dans les tables du CRM, aucune migration 
 **Questions en attente**
 - Faut-il aussi créer automatiquement les bots des restos repassés en « perdu » puis en « signé » qui ont
   été désactivés entre-temps ? (Choix actuel, le plus prudent : non, un bot désactivé le reste.)
+
+### Tâche 2 — Webhook WhatsApp, sans Meta ✅
+
+**Fait** (`src/channels/whatsapp/`, indépendant de Next.js)
+- **Webhook** `/api/webhooks/whatsapp` : vérification de l'adresse par Meta (GET, phrase
+  `WHATSAPP_VERIFY_TOKEN`), **signature** `X-Hub-Signature-256` vérifiée sur le corps exact (clé
+  `WHATSAPP_APP_SECRET`), **réponse 200 immédiate** puis traitement (`after()` de Next.js),
+  **idempotence** (un message renvoyé par Meta n'est jamais retraité).
+- **Lecture des notifications** : texte, boutons, listes, médias (réponse « je ne lis que l'écrit »),
+  réactions ignorées, statuts d'envoi (envoyé, délivré, lu, échec), **échos de coexistence**
+  (`smb_message_echoes` : le gérant a répondu depuis son appli → le bot se tait 12 h).
+- **Envoi par l'API Graph** : texte, boutons de réponse, liste, bouton lien « Commander » (CTA URL),
+  accusé de lecture avec « en train d'écrire » ; un envoi refusé par Meta est noté en échec, sans planter.
+- **Branchement sur le moteur** : même bot que le simulateur (modèle + flux du client + agent IA, IA
+  appelée côté serveur et journalisée « whatsapp »), canal en mode « test » (réponses seulement aux
+  numéros de test), transferts notés pour la boîte de réception, alerte WhatsApp au gérant si possible.
+- **Stockage** : deux implémentations de la même interface : Supabase (tables de la **migration C, pas
+  encore appliquée**) et mémoire (tests et démo locale, refusée sur Vercel).
+- **Inactif** (réponse 503) tant que `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_TOKEN`,
+  `NEXT_PUBLIC_SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` ne sont pas toutes définies.
+
+**Comment vérifier**
+- Tests : `npm test` (`src/channels/whatsapp/__tests__/whatsapp.test.ts` : signature, lecture des
+  notifications, formats Graph, et un scénario complet contre un faux serveur Meta lancé dans le test).
+- De bout en bout (faux Meta, aucun vrai envoi) : voir `scripts/e2e/whatsapp.js` (commandes en tête du
+  fichier). Résultat : vérification GET, refus d'un appel non signé, Accueil envoyé (bouton lien +
+  boutons) avec réponse 200 en quelques ms, pas de doublon, boutons « Infos pratiques » → « Livraison »
+  (jours fixes et points de vente), écho du gérant → silence.
+
+**Choix faits sans Jules**
+- Version de l'API Graph par défaut : `v24.0` (réglable par `WHATSAPP_GRAPH_VERSION`), à confirmer en C1.
+- « En train d'écrire » plafonné à 3 s côté serveur (le webhook ne doit pas attendre trop longtemps).
+- Format exact des échos de coexistence (`message_echoes`, champ `to`) écrit d'après la documentation
+  connue : **à revérifier en C6**.
+- Verrou de conversation « optimiste » simple (relecture de la version avant écriture) ; suffisant pour
+  un message à la fois par contact, à renforcer si besoin.
+
+**Questions en attente**
+- Aucune bloquante. Rappel : la migration C (`docs/etape-c/migration-c.sql`) doit être validée et
+  appliquée avant que le stockage Supabase du canal serve.

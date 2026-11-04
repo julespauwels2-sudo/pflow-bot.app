@@ -1,0 +1,106 @@
+/**
+ * Canal WhatsApp (étape C) : types partagés par le webhook, l'envoi et la boîte de réception.
+ * La logique ne dépend pas de Next.js : elle peut être déplacée (ex. Supabase Edge Functions).
+ */
+import type { ContactState, IncomingMessage, Session, TriggerMode } from "@/engine";
+
+export interface Canal {
+  id: string;
+  restaurantId: string;
+  phoneNumberId: string;
+  wabaId: string;
+  numeroAffiche?: string;
+  triggerMode: TriggerMode;
+  coexistence: boolean;
+  echoPauseHours: number;
+  handoffPauseHours: number;
+  sessionMinutes: number;
+  /** Numéro du gérant prévenu lors d'un transfert. */
+  telAlerte?: string;
+  /** test : ne répond qu'aux numéros de testNumeros ; coupe : ne répond à personne. */
+  etat: "test" | "actif" | "coupe";
+  testNumeros: string[];
+}
+
+export interface ChannelContact {
+  id: string;
+  canalId: string;
+  waId: string;
+  /** État vu par le moteur (pause, fenêtre de 24 h, compteur IA). */
+  state: ContactState;
+  stopOptions: boolean;
+  updatedAt: string;
+}
+
+export type MessageDirection = "entrant" | "sortant" | "echo";
+
+export interface StoredMessage {
+  id: string;
+  canalId: string;
+  contactId: string;
+  sens: MessageDirection;
+  auteur?: "bot" | "humain";
+  wamid?: string;
+  type: string;
+  contenu: unknown;
+  statut?: "recu" | "envoye" | "delivre" | "lu" | "echec";
+  erreur?: string;
+  at: string;
+}
+
+export interface Transfert {
+  id: string;
+  canalId: string;
+  contactId: string;
+  source: "bloc" | "ia" | "limite_ia" | "erreur_ia";
+  dernierMessage?: string;
+  gerantPrevenu: boolean;
+  at: string;
+  vuLe?: string;
+  resoluLe?: string;
+}
+
+/** Stockage du canal : Supabase (tables de la migration C) ou mémoire (tests, démo locale). */
+export interface ChannelStore {
+  /** Note un événement reçu. Faux s'il a déjà été reçu (renvoi de Meta) : il n'est pas retraité. */
+  claimEvent(source: "whatsapp" | "pflow_order", key: string, charge: unknown): Promise<boolean>;
+  finishEvent(source: "whatsapp" | "pflow_order", key: string, error?: string): Promise<void>;
+  canalByPhone(phoneNumberId: string): Promise<Canal | null>;
+  listCanaux(): Promise<Canal[]>;
+  getOrCreateContact(canalId: string, waId: string, profileName?: string): Promise<ChannelContact>;
+  getContact(contactId: string): Promise<ChannelContact | null>;
+  saveContact(contact: ChannelContact): Promise<void>;
+  getSession(contactId: string): Promise<{ session: Session; version: number } | null>;
+  /** Faux si la session a changé entre-temps (autre message traité en parallèle). */
+  saveSession(contactId: string, session: Session | null, expectedVersion: number | null): Promise<boolean>;
+  addMessage(message: Omit<StoredMessage, "id" | "at"> & { at?: string }): Promise<StoredMessage>;
+  updateMessageStatus(wamid: string, statut: NonNullable<StoredMessage["statut"]>, erreur?: string): Promise<void>;
+  addTransfert(transfert: Omit<Transfert, "id" | "at" | "gerantPrevenu"> & { gerantPrevenu?: boolean }): Promise<Transfert>;
+  listContacts(canalId: string): Promise<ChannelContact[]>;
+  listMessages(contactId: string, limit?: number): Promise<StoredMessage[]>;
+  listTransferts(canalId: string): Promise<Transfert[]>;
+  resolveTransferts(contactId: string): Promise<void>;
+}
+
+/** Un message reçu par le webhook, prêt pour le moteur. */
+export interface InboundEvent {
+  phoneNumberId: string;
+  /** Numéro du client (pour un écho : le destinataire du message du gérant). */
+  waId: string;
+  profileName?: string;
+  wamid: string;
+  timestamp: string;
+  message: IncomingMessage;
+  /** Réaction, message système… : noté, sans réponse. */
+  ignored?: boolean;
+  /** Contenu pour la boîte de réception. */
+  type: string;
+  contenu: unknown;
+}
+
+export interface StatusEvent {
+  phoneNumberId: string;
+  wamid: string;
+  statut: "envoye" | "delivre" | "lu" | "echec";
+  erreur?: string;
+}

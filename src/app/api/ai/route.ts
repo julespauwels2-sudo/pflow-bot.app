@@ -6,16 +6,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { askClaude } from "@/ai/claude";
-import { AI_MODELS, DEFAULT_AI_MODEL } from "@/ai/models";
 import { aiRequestSchema } from "@/ai/schemas";
+import { allowedModel, serverModel } from "@/ai/server-port";
 import { checkBotAdmin } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function serverModel(): string {
-  return process.env.ANTHROPIC_MODEL?.trim() || DEFAULT_AI_MODEL;
-}
 
 const fail = (error: string, status: number) => NextResponse.json({ error }, { status });
 
@@ -44,8 +40,7 @@ export async function POST(request: Request) {
 
   // Seuls les modèles proposés dans l'app (ou celui du serveur) sont acceptés.
   const req = parsed.data;
-  const allowed = new Set([...AI_MODELS.map((m) => m.id), serverModel()]);
-  const model = req.model && allowed.has(req.model) ? req.model : serverModel();
+  const model = allowedModel(req.model);
 
   const client = new Anthropic({ apiKey, timeout: 25_000, maxRetries: 1 });
   try {

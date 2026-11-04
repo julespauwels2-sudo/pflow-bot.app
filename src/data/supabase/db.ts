@@ -19,6 +19,8 @@ export interface DbReader {
 }
 
 export interface Db extends DbReader {
+  /** Insertion simple ; renvoie { conflict: true } si la ligne existe déjà (clé unique). */
+  insert?(table: string, row: Row): Promise<{ conflict: boolean }>;
   upsert(table: string, rows: Row[], onConflict: string): Promise<void>;
   remove(table: string, column: string, values: string[]): Promise<void>;
 }
@@ -54,6 +56,13 @@ export function supabaseDb(sb: SupabaseClient): Db {
       };
       if (!options.in) return run();
       return (await Promise.all(chunks(options.in.values).map(run))).flat();
+    },
+    async insert(table, row) {
+      assertBotTable(table);
+      const { error } = await sb.from(table).insert(row);
+      if (error?.code === "23505") return { conflict: true };
+      fail(table, error);
+      return { conflict: false };
     },
     async upsert(table, rows, onConflict) {
       assertBotTable(table);
