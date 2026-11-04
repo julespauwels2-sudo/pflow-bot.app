@@ -5,7 +5,8 @@ import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { LocalClock } from "@/components/local-clock";
 import { Badge, Button, Card, Field, FileButton, Input, Loading, Notice, Select } from "@/components/ui";
-import { errorText, getRepositories, isCrmMode, useLoad } from "@/data/browser";
+import { ensureAutoBots, errorText, getRepositories, isCrmMode, useLoad } from "@/data/browser";
+import { botChecklist, type ChecklistItem } from "@/data/resolve";
 import { loadDemo } from "@/data/demo";
 import { exportBackup, exportFileName, parseBackup } from "@/data/transfer";
 import { DEFAULT_ORDER_BASE_URL, DEFAULT_TIMEZONE } from "@/engine";
@@ -18,9 +19,28 @@ const CRM_STATUTS: Record<string, string> = { signe: "Signé", actif: "Actif", d
 
 export default function ClientsPage() {
   const { state, reload } = useLoad(async (repos) => {
+    const auto = await ensureAutoBots();
     const clients = await repos.clients.list();
-    const counts = await Promise.all(clients.map((c) => repos.flows.listByOwner(c.id).then((f) => f.length)));
-    return clients.map((client, i) => ({ client, flowCount: counts[i] }));
+    const templates = await repos.templates.list();
+    const now = new Date();
+    const rows = await Promise.all(
+      clients.map(async (client) => {
+        const template = templates.find((t) => t.id === client.template?.templateId);
+        const [clientFlows, clientFolders, infoSheet, templateFlows, templateFolders] = await Promise.all([
+          repos.flows.listByOwner(client.id),
+          repos.folders.listByOwner(client.id),
+          repos.infoSheets.get(client.id),
+          template ? repos.flows.listByOwner(template.id) : Promise.resolve([]),
+          template ? repos.folders.listByOwner(template.id) : Promise.resolve([]),
+        ]);
+        // Liste de contrôle d'onboarding, pour chaque bot lié au modèle.
+        const checklist: ChecklistItem[] = client.template
+          ? botChecklist({ client, templateFlows, templateFolders, clientFlows, clientFolders }, infoSheet, now)
+          : [];
+        return { client, flowCount: clientFlows.length, checklist };
+      }),
+    );
+    return { rows, auto };
   }, []);
   const [message, setMessage] = useState<Message>(null);
 
@@ -101,12 +121,20 @@ export default function ClientsPage() {
         <div>
           {state.status === "loading" && <Loading />}
           {state.status === "error" && <Notice tone="error">{state.error}</Notice>}
-          {state.status === "ready" && state.data.length === 0 && isCrmMode && (
+          {state.status === "ready" && state.data.auto && (state.data.auto.linked.length > 0 || state.data.auto.skipped) && (
+            <div className="mb-4">
+              <Notice tone={state.data.auto.skipped ? "info" : "success"}>
+                {state.data.auto.skipped ??
+                  `Bot créé automatiquement (lié au modèle maître) : ${state.data.auto.linked.map((c) => c.nomResto).join(", ")}.`}
+              </Notice>
+            </div>
+          )}
+          {state.status === "ready" && state.data.rows.length === 0 && isCrmMode && (
             <Card title="Aucun resto à afficher">
               <p className="text-sm text-muted">Aucun resto signé, actif ou en démo dans le CRM pour l&apos;instant.</p>
             </Card>
           )}
-          {state.status === "ready" && state.data.length === 0 && !isCrmMode && (
+          {state.status === "ready" && state.data.rows.length === 0 && !isCrmMode && (
             <Card title="Aucun client pour l'instant">
               <p className="text-sm text-muted">Créez votre premier resto, ou chargez un resto d&apos;exemple déjà configuré.</p>
               <Button className="mt-4" variant="secondary" onClick={() => run(async () => void (await loadDemo(getRepositories())))}>
@@ -114,9 +142,9 @@ export default function ClientsPage() {
               </Button>
             </Card>
           )}
-          {state.status === "ready" && state.data.length > 0 && (
+          {state.status === "ready" && state.data.rows.length > 0 && (
             <ul className="grid gap-3 sm:grid-cols-2">
-              {state.data.map(({ client, flowCount }) => (
+              {state.data.rows.map(({ client, flowCount, checklist }) => (
                 <li key={client.id}>
                   <Link
                     href={`/clients/${client.id}`}
@@ -138,6 +166,7 @@ export default function ClientsPage() {
                     <p className="mt-2 text-xs text-muted">
                       {timezoneLabel(client.timezone)} · <LocalClock timezone={client.timezone} />
                     </p>
+                    <BotStatus client={client} checklist={checklist} />
                   </Link>
                 </li>
               ))}
@@ -212,5 +241,30 @@ function NewClientForm({ onCreated }: { onCreated: (name: string) => void }) {
         </Button>
       </form>
     </Card>
+  );
+}
+
+/** État du bot et liste de contrôle d'onboarding, en résumé sur la carte du client. */
+function BotStatus({ client, checklist }: { client: import("@/data/types").BotClient; checklist: ChecklistItem[] }) {
+  if (client.botDisabledAt) return <p className="mt-2 text-xs font-semibold text-muted">Bot désactivé</p>;
+  if (!client.template) {
+    return <p className="mt-2 text-xs text-muted">{client.hasBotRecord ? "Bot détaché du modèle" : "Pas encore de bot"}</p>;
+  }
+  const blocking = checklist.filter((i) => i.level !== "info");
+  if (!blocking.length) return <p className="mt-2 text-xs font-semibold text-green-700">✓ Bot prêt (lié au modèle)</p>;
+  return (
+    <div className="mt-2 text-xs" data-testid="client-checklist">
+      <p className="font-semibold text-coral">
+        {blocking.length} point{blocking.length > 1 ? "s" : ""} à vérifier
+      </p>
+      <ul className="mt-0.5 space-y-0.5 text-muted">
+        {blocking.slice(0, 3).map((i) => (
+          <li key={i.message} className="truncate" title={i.message}>
+            {i.level === "error" ? "⚠" : "•"} {i.message}
+          </li>
+        ))}
+        {blocking.length > 3 && <li>… et {blocking.length - 3} autre{blocking.length - 3 > 1 ? "s" : ""} (voir la fiche)</li>}
+      </ul>
+    </div>
   );
 }

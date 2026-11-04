@@ -171,6 +171,9 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
         timezone: crmTimezone(r) || DEFAULT_TIMEZONE,
         triggerMode: (bc?.mode_declenchement as BotClient["triggerMode"]) ?? DEFAULT_TRIGGER,
         ...(bc?.modele_id ? { template: { templateId: String(bc.modele_id), linkedAt: toIso(bc.lie_le) ?? toIso(bc.cree_le)! } } : {}),
+        // Pas de modèle mais une date de lien : convention pour « bot désactivé » (sans nouvelle colonne).
+        ...(bc && !bc.modele_id && bc.lie_le ? { botDisabledAt: toIso(bc.lie_le)! } : {}),
+        ...(bc ? { hasBotRecord: true } : {}),
         options: { panier_abandonne: crm.relance.has(r.id) },
         crmStatut: r.statut,
         createdAt: toIso(bc?.cree_le) ?? toIso(r.created_at)!,
@@ -255,9 +258,16 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
         lieux: t.lieux,
       }));
       const hasSheet = Object.entries(part).some(([k, v]) => !(k === "horaires" && Array.isArray(v) && v.length === 0));
-      const hasBot = Boolean(c.template) || c.triggerMode !== DEFAULT_TRIGGER || owned.has(c.id) || hasSheet || rounds.length > 0;
+      // Une ligne existante est toujours gardée : sans elle, le bot serait recréé automatiquement.
+      const hasBot =
+        Boolean(c.template) || Boolean(c.botDisabledAt) || Boolean(c.hasBotRecord) || c.triggerMode !== DEFAULT_TRIGGER || owned.has(c.id) || hasSheet || rounds.length > 0;
       if (hasBot) {
-        clientRows.push({ restaurant_id: c.id, mode_declenchement: c.triggerMode, modele_id: c.template?.templateId ?? null, lie_le: c.template?.linkedAt ?? null });
+        clientRows.push({
+          restaurant_id: c.id,
+          mode_declenchement: c.triggerMode,
+          modele_id: c.template?.templateId ?? null,
+          lie_le: c.template?.linkedAt ?? c.botDisabledAt ?? null,
+        });
       }
       if (hasSheet) ficheRows.push({ restaurant_id: c.id, donnees: part });
       tourneeRows.push(...rounds);

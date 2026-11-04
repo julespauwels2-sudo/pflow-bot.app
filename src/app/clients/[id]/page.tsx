@@ -213,7 +213,7 @@ function DangerZone({ client }: { client: BotClient }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">
           {isCrmMode
-            ? "Supprime le bot de ce resto : ses flux, la partie bot de sa fiche, ses tournées et son journal IA. Le resto reste dans le CRM, sans aucune modification."
+            ? "Supprime le contenu du bot de ce resto (flux, partie bot de la fiche, tournées, journal IA) et le désactive : il ne sera pas recréé automatiquement. Le resto reste dans le CRM, sans aucune modification."
             : "Supprime ce client, ses flux et sa fiche d'infos de ce navigateur."}
         </p>
         <Button variant="danger" onClick={remove}>

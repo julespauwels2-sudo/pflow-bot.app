@@ -5,6 +5,8 @@ import { createMasterTemplate } from "../template-seed";
 import { crmMenuText, crmOpeningHours, crmZonesText } from "../supabase/crm";
 import { assertBotTable, type Db, type Row, type SelectOptions } from "../supabase/db";
 import { createSupabaseStore } from "../supabase/store";
+import { autoLinkBots } from "../auto-bots";
+import { resolveBot } from "../resolve";
 
 const R1 = "00000000-0000-4000-8000-000000000001"; // signé, avec carte et zones
 const R2 = "00000000-0000-4000-8000-000000000002"; // démo
@@ -197,5 +199,72 @@ describe("écritures : uniquement dans les tables bot_, jamais dans le CRM", () 
     const crm = readFileSync(new URL("../supabase/crm.ts", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
     expect(crm).not.toMatch(/\.(upsert|remove|insert|update|delete|rpc)\s*\(/);
     expect(crm).not.toMatch(/\bDb\b(?!Reader)/);
+  });
+});
+
+describe("création automatique des bots", () => {
+  it("sans modèle maître : rien n'est créé, avec la raison", async () => {
+    const { repos, tables } = setup();
+    expect(await autoLinkBots(repos)).toEqual({ linked: [], skipped: expect.stringContaining("modèle maître") });
+    expect(tables.bot_clients).toHaveLength(1);
+  });
+
+  it("lie au modèle les restos signés, actifs ou en démo qui n'ont pas encore de bot ; une seule fois", async () => {
+    const fake = fakeDb();
+    const crmBefore = structuredClone(CRM_TABLES.map((t) => fake.tables[t]));
+    const { repos, tables, writes } = setup(fake);
+    const template = await createMasterTemplate(repos);
+    const result = await autoLinkBots(repos);
+    expect(result.linked.map((c) => c.nomResto).sort()).toEqual(["Cookies An Nou", "Démo Burger"]);
+    // L'ancien client (perdu) avait déjà une ligne : pas touché. Le prospect n'est pas concerné.
+    expect(tables.bot_clients.find((c) => c.restaurant_id === R4)?.modele_id).toBeNull();
+    expect(tables.bot_clients.find((c) => c.restaurant_id === R3)).toBeUndefined();
+    expect(tables.bot_clients.filter((c) => c.modele_id === template.id).map((c) => c.restaurant_id).sort()).toEqual([R1, R2].sort());
+    expect(writes.every((t) => t.startsWith("bot_"))).toBe(true);
+    expect(CRM_TABLES.map((t) => fake.tables[t])).toEqual(crmBefore);
+
+    // Relu par un autre navigateur : rien de plus à créer.
+    expect((await autoLinkBots(setup(fake).repos)).linked).toEqual([]);
+  });
+
+  it("désactiver ou « supprimer le bot » : la ligne reste, le bot n'est jamais recréé ; réactiver le relie", async () => {
+    const fake = fakeDb();
+    const { repos } = setup(fake);
+    const template = await createMasterTemplate(repos);
+    await autoLinkBots(repos);
+    await repos.bots.disable(R1);
+    await repos.clients.delete(R2);
+
+    const other = setup(fake).repos;
+    expect((await autoLinkBots(other)).linked).toEqual([]);
+    const r1 = (await other.clients.get(R1))!;
+    expect(r1.botDisabledAt).toBeTruthy();
+    expect(r1.template).toBeUndefined();
+    expect((await other.clients.get(R2))?.botDisabledAt).toBeTruthy();
+    expect(fake.tables.bot_clients.find((c) => c.restaurant_id === R1)).toMatchObject({ modele_id: null });
+
+    // Un bot désactivé n'a aucun flux actif.
+    const templateFlows = await other.flows.listByOwner(template.id);
+    const linkedCopy = { ...r1, template: { templateId: template.id, linkedAt: "x" } };
+    expect(resolveBot({ client: linkedCopy, templateFlows, clientFlows: [] }).flows).toEqual([]);
+
+    await other.bots.enable(R1, template.id);
+    const third = setup(fake).repos;
+    expect((await third.clients.get(R1))).toMatchObject({ template: { templateId: template.id } });
+    expect((await third.clients.get(R1))?.botDisabledAt).toBeUndefined();
+  });
+
+  it("un bot détaché garde sa ligne et n'est pas recréé", async () => {
+    const fake = fakeDb();
+    const { repos } = setup(fake);
+    await createMasterTemplate(repos);
+    await autoLinkBots(repos);
+    await repos.bots.detach(R1);
+    const other = setup(fake).repos;
+    expect((await autoLinkBots(other)).linked).toEqual([]);
+    const r1 = (await other.clients.get(R1))!;
+    expect(r1.template).toBeUndefined();
+    expect(r1.botDisabledAt).toBeUndefined();
+    expect((await other.flows.listByOwner(R1)).length).toBe(11);
   });
 });

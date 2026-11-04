@@ -46,6 +46,26 @@ export function BotCard({
     }
   }
 
+  if (client.botDisabledAt) {
+    return (
+      <Card title={<span className="flex items-center gap-2">Bot <Badge>Désactivé</Badge></span>} description="Aucun flux de ce bot n'est actif : il ne répond plus.">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-muted">
+            Désactivé le {new Date(client.botDisabledAt).toLocaleDateString("fr-FR")}. Il n&apos;est jamais recréé automatiquement.
+          </p>
+          <Button onClick={() => run(() => getRepositories().bots.enable(client.id, template?.id))}>
+            {template ? "Réactiver (lié au modèle)" : "Réactiver"}
+          </Button>
+        </div>
+        {error && (
+          <div className="mt-3">
+            <Notice tone="error">{error}</Notice>
+          </div>
+        )}
+      </Card>
+    );
+  }
+
   if (!linked) {
     return (
       <Card title="Bot" description="Le bot de ce client = les flux du modèle maître + ses flux propres.">
@@ -93,6 +113,17 @@ export function BotCard({
       }
       description="Les flux publiés du modèle s'appliquent à ce client, plus ses flux propres (carte « Flux » ci-dessous)."
       actions={
+        <span className="flex flex-wrap gap-2">
+        <Button
+          variant="secondary"
+          onClick={() => {
+            if (window.confirm("Désactiver ce bot ? Il ne répondra plus. Ses flux propres sont gardés, et il ne sera pas recréé automatiquement.")) {
+              run(() => getRepositories().bots.disable(client.id));
+            }
+          }}
+        >
+          Désactiver
+        </Button>
         <Button
           variant="danger"
           onClick={() => {
@@ -104,6 +135,7 @@ export function BotCard({
         >
           Détacher du modèle
         </Button>
+        </span>
       }
     >
       <div className="space-y-5">

@@ -90,6 +90,11 @@ export function resolveBot(input: BotInput): { entries: ResolvedFlow[]; flows: F
   }
 
   for (const e of entries) {
+    if (client.botDisabledAt) {
+      e.active = false;
+      e.inactiveReason = "Bot désactivé";
+      continue;
+    }
     if (!e.engineFlow) {
       e.active = false;
       e.inactiveReason = "Jamais publié";

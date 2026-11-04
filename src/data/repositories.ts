@@ -50,6 +50,10 @@ export interface BotRepository {
   link(clientId: string, templateId: string): Promise<BotClient>;
   /** Copie un flux publié du modèle chez ce client ; la copie le remplace pour lui seul (publiée). */
   personalize(clientId: string, templateFlowId: string): Promise<StoredFlow>;
+  /** Désactive le bot : plus aucun flux actif ; les flux du client sont gardés. Jamais recréé automatiquement. */
+  disable(clientId: string): Promise<BotClient>;
+  /** Réactive le bot ; avec un modèle, le relie aussi au modèle. */
+  enable(clientId: string, templateId?: string): Promise<BotClient>;
   /** « Revenir au modèle » : supprime la copie personnalisée. */
   revert(flowId: string): Promise<void>;
   /**

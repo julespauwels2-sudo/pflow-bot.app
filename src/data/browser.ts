@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { createLocalRepositories } from "./local/repositories";
 import { createLocalStorageStore, STORAGE_KEY } from "./local/store";
+import { autoLinkBots, type AutoBotsResult } from "./auto-bots";
 import type { Repositories } from "./repositories";
 import { supabaseDb } from "./supabase/db";
 import { createSupabaseStore } from "./supabase/store";
@@ -32,6 +33,30 @@ export function getRepositories(): Repositories {
   return instance;
 }
 
+let autoBots: Promise<AutoBotsResult | null> | null = null;
+
+/**
+ * Étape B : crée automatiquement les bots manquants (restos signés, actifs ou en démo), une fois par
+ * chargement de l'app. Si rien n'a pu être fait (pas encore de modèle, erreur), on réessaiera au
+ * prochain chargement de données.
+ */
+export function ensureAutoBots(): Promise<AutoBotsResult | null> {
+  if (!isCrmMode || typeof window === "undefined") return Promise.resolve(null);
+  if (!autoBots) {
+    autoBots = autoLinkBots(getRepositories()).then(
+      (result) => {
+        if (result.skipped) autoBots = null;
+        return result;
+      },
+      (error: unknown) => {
+        autoBots = null;
+        return { linked: [], skipped: `Création automatique des bots impossible : ${errorText(error)}` };
+      },
+    );
+  }
+  return autoBots;
+}
+
 /** Données de l'étape A restées dans ce navigateur (pour l'import dans Supabase). */
 export function readBrowserWorkspace(): WorkspaceData | null {
   if (typeof window === "undefined" || !window.localStorage.getItem(STORAGE_KEY)) return null;
@@ -52,6 +77,7 @@ export function useLoad<T>(load: (repos: Repositories) => Promise<T>, deps: read
   useEffect(() => {
     let cancelled = false;
     Promise.resolve()
+      .then(() => ensureAutoBots())
       .then(() => load(getRepositories()))
       .then(
         (data) => !cancelled && setState({ status: "ready", data }),

@@ -21,6 +21,10 @@ export interface BotClient {
   options?: Partial<Record<BotOption, boolean>>;
   /** Statut du resto dans le CRM (étape B : signe, actif, demo…). Absent en local. */
   crmStatut?: string;
+  /** Étape B : une ligne bot_clients existe déjà (le bot n'est alors plus créé automatiquement). */
+  hasBotRecord?: boolean;
+  /** Bot désactivé (date) : aucun flux actif, jamais recréé automatiquement. */
+  botDisabledAt?: string;
   createdAt: string;
   updatedAt: string;
 }

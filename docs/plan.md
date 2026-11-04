@@ -35,8 +35,8 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   grisés « CRM » dans la fiche du bot. Modification du CRM à montrer à Jules avant de la faire.
 - Livraison : des tournées à venir font passer le resto « sur planning » automatiquement ; un titre suivi
   d'une variable vide (ex. « 🏪 Points de vente ») n'est pas envoyé.
-- Création automatique du bot quand un client passe en onboarding dans le CRM (même action que le
-  bouton « Créer le bot depuis le modèle »), sans risquer de casser le CRM.
+- ~~Création automatique du bot~~ **Fait le 5 novembre 2026** : restos signés, actifs ou en démo, à
+  l'ouverture de l'app, écriture dans `bot_clients` uniquement (voir `docs/journal.md`).
 - Option 3 du lien de commande (étapes B/C) : pré-remplissage du téléphone et du prénom + rattachement
   des commandes au bot pour les stats. **Montrer la modification prévue dans PFlow Order avant de la faire.**
 

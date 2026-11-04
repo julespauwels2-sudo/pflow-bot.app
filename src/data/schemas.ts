@@ -164,6 +164,8 @@ export const clientSchema = z.object({
   template: z.object({ templateId: id, linkedAt: z.string() }).optional(),
   options: z.object({ panier_abandonne: z.boolean().optional() }).optional(),
   crmStatut: z.string().optional(),
+  hasBotRecord: z.boolean().optional(),
+  botDisabledAt: z.string().optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
 });

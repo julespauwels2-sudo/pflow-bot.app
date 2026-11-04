@@ -222,7 +222,16 @@ export function createLocalRepositories(store: JsonStore | WorkspaceStore, optio
 
       async delete(id) {
         await mutate((data) => {
-          data.clients = data.clients.filter((c) => c.id !== id);
+          if (options.crmClients) {
+            // Le resto reste dans le CRM : son bot est vidé et désactivé (jamais recréé automatiquement).
+            const client = findClient(data, id);
+            delete client.template;
+            client.triggerMode = "mots_cles_uniquement";
+            client.botDisabledAt = now();
+            client.updatedAt = now();
+          } else {
+            data.clients = data.clients.filter((c) => c.id !== id);
+          }
           data.flows = data.flows.filter((f) => f.ownerId !== id);
           data.folders = data.folders.filter((f) => f.ownerId !== id);
           delete data.infoSheets[id];
@@ -358,6 +367,30 @@ export function createLocalRepositories(store: JsonStore | WorkspaceStore, optio
           const client = findClient(data, clientId);
           findTemplate(data, templateId);
           client.template = { templateId, linkedAt: now() };
+          delete client.botDisabledAt;
+          client.updatedAt = now();
+          return client;
+        });
+      },
+
+      async disable(clientId) {
+        return mutate((data) => {
+          const client = findClient(data, clientId);
+          delete client.template;
+          client.botDisabledAt = now();
+          client.updatedAt = now();
+          return client;
+        });
+      },
+
+      async enable(clientId, templateId) {
+        return mutate((data) => {
+          const client = findClient(data, clientId);
+          delete client.botDisabledAt;
+          if (templateId) {
+            findTemplate(data, templateId);
+            client.template = { templateId, linkedAt: now() };
+          }
           client.updatedAt = now();
           return client;
         });
