@@ -90,7 +90,10 @@ export interface InfoSheet {
   modesPaiement?: string;
   zonesLivraison?: string;
   pointsDeVente?: string;
+  /** Carte complète pour l'IA (produits, prix, allergènes). Étape B : lue dans PFlow Order. */
   resumeCarte?: string;
+  /** Questions fréquentes, en texte libre (pour l'IA). */
+  faq?: string;
   reglesSpeciales?: string;
 }
 
@@ -186,7 +189,25 @@ export interface NodeDataMap {
     maxRetries?: number;
   };
   condition: { rules: ConditionRule[]; match?: "toutes" | "une" };
-  ai: { intro?: string; instructions?: string };
+  /**
+   * Agent IA (comme l'action « Agent IA » d'UChat). Le bot reste sur ce bloc et l'IA répond à
+   * chaque message, jusqu'à une fonction, un transfert, un mot-clé ou l'inactivité.
+   */
+  ai: {
+    /** Message envoyé en arrivant sur le bloc (facultatif). */
+    intro?: string;
+    /**
+     * Texte d'entrée : si rempli, l'IA est appelée tout de suite avec ce texte (variables
+     * acceptées), sans attendre de message. Ex. : « Le client a choisi le goût {{choix}}. »
+     */
+    input?: string;
+    /** Consigne propre à ce bloc, ajoutée à celle de l'agent. */
+    instructions?: string;
+    /** Noms des fonctions autorisées dans ce bloc. Absent = toutes les fonctions de l'agent. */
+    functions?: string[];
+    /** Délai d'inactivité (minutes) avant que l'IA ne lâche la conversation. Absent = réglage de l'agent. */
+    inactivityMinutes?: number;
+  };
   handoff: { text?: string };
   goto_flow: { flowId: string };
   end: { text?: string };
@@ -238,6 +259,12 @@ export interface ContactState {
   aiUsage: { day: string; calls: number };
 }
 
+/** Échange gardé en mémoire pendant une conversation avec l'IA (bloc IA). */
+export interface AiTurn {
+  role: "client" | "assistant";
+  text: string;
+}
+
 export interface Session {
   flowId: string;
   /** Bloc qui attend la réponse du contact. */
@@ -247,6 +274,8 @@ export interface Session {
   retries: number;
   startedAt: string;
   expiresAt: string;
+  /** Derniers échanges avec l'IA dans le bloc IA en cours (mémoire courte). */
+  aiHistory?: AiTurn[];
 }
 
 // ---------------------------------------------------------------------------
@@ -278,24 +307,72 @@ export type OutgoingMessage =
 // IA (port injecté)
 // ---------------------------------------------------------------------------
 
+/**
+ * Ce que devient le texte de l'IA quand elle appelle une fonction :
+ * - « silence » : l'IA se tait, le flux répond seul (lancer_commande, parler_equipe) ;
+ * - « avant » : le texte de l'IA part, puis le flux ;
+ * - « variable » : le texte est passé au flux dans {{ia_reponse}} (proposer_commande).
+ */
+export type AiTextMode = "silence" | "avant" | "variable";
+
+/** Fonction de l'agent : un flux que l'IA a le droit de lancer. */
+export interface AgentFunction {
+  /** Nom vu par l'IA, ex. lancer_commande. */
+  name: string;
+  /** Id du flux dans le bot. */
+  flowId: string;
+  /** Quand l'utiliser : lu par l'IA pour choisir. */
+  description: string;
+  aiText: AiTextMode;
+}
+
+/** Agent IA du bot (consigne et fonctions du modèle maître). */
+export interface AgentConfig {
+  /** Consigne générale ({{nom_resto}} accepté). */
+  consigne: string;
+  /** Modèle Claude (absent = celui du serveur). */
+  model?: string;
+  functions: AgentFunction[];
+  /** Délai d'inactivité par défaut des blocs IA (minutes). */
+  inactivityMinutes?: number;
+}
+
 export interface AiDecision {
-  action: "aller_au_flux" | "repondre" | "transfert_humain";
-  flux_id?: string;
+  action: "repondre" | "fonction" | "transfert_humain";
+  /** Nom de la fonction (action « fonction »). */
+  fonction?: string;
+  /** Réponse au client, ou texte passé au flux de la fonction. */
   texte?: string;
 }
 
 export interface AiRequest {
   message: string;
-  client: { nomResto: string; timezone: string; maintenantLocal: string; lienCommande: string };
+  /** Échanges précédents dans le bloc IA (du plus ancien au plus récent). */
+  history: AiTurn[];
+  client: { nomResto: string; timezone: string; maintenantLocal: string; lienCommande: string; prenomContact?: string };
+  /** Consigne de l'agent, déjà rendue ({{nom_resto}} remplacé). */
+  consigne: string;
+  model?: string;
   infoSheet: InfoSheet;
-  flows: { id: string; name: string; description?: string }[];
-  /** Consignes du bloc IA, le cas échéant. */
+  /** Fonctions que l'IA peut appeler ici. */
+  functions: { name: string; description: string }[];
+  /** Consigne du bloc IA, le cas échéant. */
   instructions?: string;
+}
+
+export interface AiUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
 }
 
 export interface AiResult {
   decision: AiDecision;
-  usage: { inputTokens: number; outputTokens: number };
+  usage: AiUsage;
+  model?: string;
+  /** Coût estimé en dollars (null si le tarif du modèle est inconnu). */
+  costUsd?: number | null;
 }
 
 export type AiPort = (request: AiRequest) => Promise<AiResult>;
@@ -314,6 +391,8 @@ export interface EngineInput {
   contact: ContactState;
   session: Session | null;
   message: IncomingMessage;
+  /** Agent IA (absent = l'IA répond seulement avec la fiche d'infos, sans fonctions). */
+  agent?: AgentConfig;
 }
 
 export interface EngineDeps {
@@ -336,7 +415,7 @@ export type EngineEvent =
   | { type: "flow_ended"; flowId: string }
   | { type: "paused"; reason: PauseReason; until: string | null }
   | { type: "handoff"; source: "bloc" | "ia" | "limite_ia" | "erreur_ia"; message?: string }
-  | { type: "ai_called"; decision: AiDecision; usage: AiResult["usage"] }
+  | { type: "ai_called"; decision: AiDecision; usage: AiUsage; model?: string; costUsd?: number | null; message: string }
   | { type: "ai_unavailable" }
   | { type: "error"; message: string };
 

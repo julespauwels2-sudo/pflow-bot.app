@@ -22,4 +22,16 @@ node scripts/e2e/bot.js /tmp
 node scripts/e2e/simulateur.js /tmp
 ```
 
+Agent IA, sans clé ni coût, avec un faux serveur Anthropic local :
+
+```bash
+node scripts/e2e/fake-anthropic.js /tmp/requetes-ia.jsonl
+```
+```bash
+npm run build && ANTHROPIC_API_KEY=cle-de-test ANTHROPIC_BASE_URL=http://127.0.0.1:4555 BASIC_AUTH_PASSWORD=test123 PORT=3123 npm start
+```
+```bash
+node scripts/e2e/agent-ia.js /tmp /tmp/requetes-ia.jsonl
+```
+
 Chaque script part d'un navigateur vierge et charge le resto d'exemple.

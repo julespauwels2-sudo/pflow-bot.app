@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import { AiCallsCard, AiKnowledgeCard } from "@/components/ai-cards";
 import { AppShell } from "@/components/app-shell";
 import { BotCard } from "@/components/bot-card";
 import { FlowsCard } from "@/components/flows-card";
@@ -21,17 +22,18 @@ export default function ClientPage() {
     async (repos) => {
       const client = await repos.clients.get(id);
       if (!client) return null;
-      const [flows, folders, infoSheet, templates] = await Promise.all([
+      const [flows, folders, infoSheet, templates, aiCalls] = await Promise.all([
         repos.flows.listByOwner(id),
         repos.folders.listByOwner(id),
         repos.infoSheets.get(id),
         repos.templates.list(),
+        repos.aiCalls.listByClient(id),
       ]);
       const template = templates.find((t) => t.id === client.template?.templateId) ?? templates[0] ?? null;
       const [templateFlows, templateFolders] = template
         ? await Promise.all([repos.flows.listByOwner(template.id), repos.folders.listByOwner(template.id)])
         : [[], []];
-      return { client, flows, folders, infoSheet, template, templateFlows, templateFolders };
+      return { client, flows, folders, infoSheet, template, templateFlows, templateFolders, aiCalls };
     },
     [id],
   );
@@ -79,7 +81,19 @@ export default function ClientPage() {
               templateFlowNames={Object.fromEntries(state.data.templateFlows.map((f) => [f.id, f.name]))}
             />
           </div>
+          <AiKnowledgeCard
+            input={{
+              client: state.data.client,
+              templateFlows: state.data.templateFlows,
+              templateFolders: state.data.templateFolders,
+              clientFlows: state.data.flows,
+              clientFolders: state.data.folders,
+            }}
+            template={state.data.template}
+            infoSheet={state.data.infoSheet}
+          />
           <InfoSheetForm key={id} clientId={id} timezone={state.data.client.timezone} initial={state.data.infoSheet} onSaved={reload} />
+          <AiCallsCard clientId={id} calls={state.data.aiCalls} onChange={reload} />
           <DangerZone client={state.data.client} />
         </div>
       )}

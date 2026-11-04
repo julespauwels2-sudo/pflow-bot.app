@@ -1,0 +1,82 @@
+/**
+ * Base de connaissances d'un client, générée depuis sa fiche d'infos : c'est exactement ce que
+ * l'IA sait du resto (affiché tel quel sur la page client, « Ce que l'IA sait de ce resto »).
+ * Étape B : horaires et carte lus dans le CRM et PFlow Order.
+ */
+import { formatRound, formatWeeklyHours, NO_ROUND_TEXT, type InfoSheet } from "@/engine";
+
+/** Nombre maximum de tournées données à l'IA (les plus proches). */
+export const MAX_AI_ROUNDS = 12;
+
+export interface KnowledgeInput {
+  nomResto: string;
+  /** Fiche d'infos sans les tournées passées (voir withUpcomingRounds). */
+  infoSheet: InfoSheet;
+  lienCommande: string;
+}
+
+function section(title: string, body: string | undefined): string | null {
+  const text = body?.trim();
+  return text ? `## ${title}\n${text}` : null;
+}
+
+export function buildKnowledgeBase({ nomResto, infoSheet: sheet, lienCommande }: KnowledgeInput): string {
+  const parts: (string | null)[] = [];
+
+  const hours = sheet.horaires.length ? formatWeeklyHours(sheet) : "";
+  parts.push(section("Horaires d'ouverture", hours || (sheet.horairesNote?.trim() ? "" : "Non renseignés.")));
+  if (sheet.horairesNote?.trim() && !hours.includes(sheet.horairesNote.trim())) parts.push(sheet.horairesNote.trim());
+
+  parts.push(section("Adresse", sheet.adresse));
+
+  const modes: string[] = [];
+  if (sheet.livraison === true) modes.push("Livraison : oui.");
+  if (sheet.livraison === false) modes.push("Livraison : non, le resto ne livre pas.");
+  if (sheet.retrait === true) modes.push("Retrait sur place : oui.");
+  if (sheet.retrait === false) modes.push("Retrait sur place : non.");
+  parts.push(section("Modes de service", modes.join("\n")));
+
+  if (sheet.livraison) {
+    if (sheet.livraisonMode === "planning") {
+      const rounds = (sheet.tournees ?? []).slice(0, MAX_AI_ROUNDS);
+      parts.push(
+        section(
+          "Livraison sur planning (tournées à venir)",
+          [
+            rounds.length ? rounds.map(formatRound).join("\n") : NO_ROUND_TEXT,
+            "Le resto livre uniquement à ces dates et à ces endroits. Ne propose jamais une autre date ou un autre lieu.",
+          ].join("\n"),
+        ),
+      );
+    } else {
+      parts.push(
+        section(
+          "Zones de livraison",
+          sheet.zonesLivraison?.trim()
+            ? `${sheet.zonesLivraison.trim()}\nSi une adresse n'est dans aucune de ces zones, la livraison n'y est pas prévue.`
+            : "Non renseignées : ne garantis aucune zone, propose de vérifier avec l'équipe.",
+        ),
+      );
+    }
+  }
+
+  parts.push(section("Points de vente", sheet.pointsDeVente));
+  parts.push(section("Moyens de paiement", sheet.modesPaiement));
+  parts.push(section("Carte", sheet.resumeCarte));
+  parts.push(section("Questions fréquentes", sheet.faq));
+  parts.push(section("Règles spéciales du resto", sheet.reglesSpeciales));
+  parts.push(section("Commander", lienCommande ? `Lien de la page de commande : ${lienCommande}` : "Pas de page de commande en ligne."));
+
+  return [`# ${nomResto}`, ...parts.filter((p): p is string => Boolean(p))].join("\n\n");
+}
+
+/** Champs de la fiche utiles à l'IA et encore vides (aide à l'onboarding). */
+export function missingKnowledge(sheet: InfoSheet): string[] {
+  const missing: string[] = [];
+  if (!sheet.horaires.length) missing.push("horaires");
+  if (!sheet.resumeCarte?.trim()) missing.push("carte");
+  if (!sheet.modesPaiement?.trim()) missing.push("moyens de paiement");
+  if (sheet.livraison && sheet.livraisonMode !== "planning" && !sheet.zonesLivraison?.trim()) missing.push("zones de livraison");
+  if (sheet.livraison === undefined && sheet.retrait === undefined) missing.push("modes de service (livraison, retrait)");
+  return missing;
+}

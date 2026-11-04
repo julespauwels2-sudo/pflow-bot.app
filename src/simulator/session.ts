@@ -2,9 +2,11 @@
 import {
   DEFAULT_CHANNEL_SETTINGS,
   runEngine,
+  type AgentConfig,
   type ChannelConfig,
   type ClientContext,
   type ContactState,
+  type EngineDeps,
   type EngineInput,
   type EngineResult,
   type Flow,
@@ -43,6 +45,10 @@ export interface Bot {
   flows: Flow[];
   infoSheet: InfoSheet;
   triggerMode: TriggerMode;
+  /** Agent IA du modèle (consigne, fonctions). */
+  agent?: AgentConfig;
+  /** Appels IA maximum par contact et par jour. */
+  aiDailyLimit?: number;
 }
 
 let counter = 0;
@@ -59,11 +65,29 @@ export function newSimulation(now: Date, profileName = "Léa"): SimState {
 }
 
 export function channelFor(bot: Bot): ChannelConfig {
-  return { id: "simulateur", clientId: bot.client.id, triggerMode: bot.triggerMode, ...DEFAULT_CHANNEL_SETTINGS };
+  return {
+    id: "simulateur",
+    clientId: bot.client.id,
+    triggerMode: bot.triggerMode,
+    ...DEFAULT_CHANNEL_SETTINGS,
+    aiDailyLimitPerContact: bot.aiDailyLimit ?? DEFAULT_CHANNEL_SETTINGS.aiDailyLimitPerContact,
+  };
+}
+
+/** Message du client affiché tout de suite, avant la réponse du bot (l'IA peut prendre 1 ou 2 s). */
+export function pendingClientEntry(state: SimState, message: EngineInput["message"], chatText?: string): ChatEntry | null {
+  if (message.kind !== "text" && message.kind !== "button_reply" && message.kind !== "list_reply") return null;
+  return { id: uid(), from: "client", text: chatText ?? (message.kind === "text" ? message.text : message.title), at: state.now };
 }
 
 /** Joue un message entrant : moteur réel, puis conversation et journal mis à jour. */
-export async function playTurn(state: SimState, bot: Bot, message: EngineInput["message"], chatText?: string): Promise<{ state: SimState; result: EngineResult }> {
+export async function playTurn(
+  state: SimState,
+  bot: Bot,
+  message: EngineInput["message"],
+  chatText?: string,
+  deps: EngineDeps = {},
+): Promise<{ state: SimState; result: EngineResult }> {
   const input: EngineInput = {
     now: new Date(state.now),
     client: bot.client,
@@ -73,12 +97,14 @@ export async function playTurn(state: SimState, bot: Bot, message: EngineInput["
     contact: state.contact,
     session: state.session,
     message,
+    agent: bot.agent,
   };
-  const result = await runEngine(input);
+  const result = await runEngine(input, deps);
   const at = state.now;
   const chat = [...state.chat];
-  if (message.kind === "text" || message.kind === "button_reply" || message.kind === "list_reply") {
-    chat.push({ id: uid(), from: "client", text: chatText ?? (message.kind === "text" ? message.text : message.title), at });
+  const clientEntry = pendingClientEntry(state, message, chatText);
+  if (clientEntry) {
+    chat.push(clientEntry);
   } else if (message.kind === "unsupported") {
     chat.push({ id: uid(), from: "client", text: "🎤 Message vocal", at });
   } else if (message.kind === "echo") {

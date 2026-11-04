@@ -9,15 +9,20 @@ import {
   ORDER_EVENT_TYPES,
   exampleEventData,
   localTime,
+  type AiPort,
   type EngineInput,
   type InfoSheet,
   type OrderEvent,
   type TriggerMode,
 } from "@/engine";
+import { fetchAiStatus, httpAiPort, type AiStatus } from "@/ai/http-port";
+import { formatUsd, modelLabel } from "@/ai/models";
+import { agentConfigFor, aiDailyLimit } from "@/data/agent";
+import { getRepositories } from "@/data/browser";
 import { resolveBot } from "@/data/resolve";
-import type { BotClient, StoredFlow } from "@/data/types";
+import type { BotClient, BotTemplate, StoredFlow } from "@/data/types";
 import { ADVANCES, formatLocal, formatShort, zonedToUtc } from "@/simulator/clock";
-import { advanceTime, newSimulation, playTurn, withSystemLine, type Bot, type SimState } from "@/simulator/session";
+import { advanceTime, newSimulation, pendingClientEntry, playTurn, withSystemLine, type Bot, type SimState } from "@/simulator/session";
 import { Chat } from "./chat";
 import { FlowView } from "./flow-view";
 import { Journal, StatePanel } from "./panels";
@@ -29,16 +34,30 @@ export interface SimulatorProps {
   infoSheet: InfoSheet;
   templateFlows: StoredFlow[];
   clientFlows: StoredFlow[];
+  /** Modèle maître lié (agent IA). */
+  template?: BotTemplate | null;
   /** Flux à mettre en avant (ouvert depuis l'éditeur). */
   focusFlowId?: string;
   initialDrafts?: boolean;
 }
 
-export function Simulator({ client, infoSheet, templateFlows, clientFlows, focusFlowId, initialDrafts = false }: SimulatorProps) {
+export function Simulator({ client, infoSheet, templateFlows, clientFlows, template, focusFlowId, initialDrafts = false }: SimulatorProps) {
   const tz = client.timezone;
   const [triggerMode, setTriggerMode] = useState<TriggerMode>(client.triggerMode);
   const [useDrafts, setUseDrafts] = useState(initialDrafts);
   const [realDelays, setRealDelays] = useState(true);
+  // IA réelle : appelle Claude via /api/ai (quelques centièmes de centime par message).
+  const [aiStatus, setAiStatus] = useState<AiStatus | null | undefined>(undefined);
+  const [realAi, setRealAi] = useState(true);
+  const [aiSpent, setAiSpent] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    fetchAiStatus().then((status) => !cancelled && setAiStatus(status));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const aiReady = Boolean(aiStatus?.configured);
   const [sim, setSim] = useState<SimState>(() => newSimulation(new Date()));
   // Dernier état connu, pour les actions (la ref est mise à jour après chaque rendu).
   const simRef = useRef(sim);
@@ -63,9 +82,38 @@ export function Simulator({ client, infoSheet, templateFlows, clientFlows, focus
       flows: resolved.flows,
       infoSheet,
       triggerMode,
+      agent: agentConfigFor(client.template ? template : null, resolved.flows),
+      aiDailyLimit: aiDailyLimit(client.template ? template : null),
     }),
-    [client, tz, resolved.flows, infoSheet, triggerMode],
+    [client, tz, resolved.flows, infoSheet, triggerMode, template],
   );
+
+  /** Port IA qui note chaque appel dans le journal des appels IA du client. */
+  const aiPort: AiPort = useMemo(() => {
+    const http = httpAiPort();
+    return async (request) => {
+      const at = new Date().toISOString();
+      const repo = getRepositories().aiCalls;
+      try {
+        const result = await http(request);
+        setAiSpent((total) => total + (result.costUsd ?? 0));
+        await repo.add({
+          clientId: client.id,
+          at,
+          source: "simulateur",
+          model: result.model,
+          message: request.message,
+          decision: result.decision,
+          usage: result.usage,
+          costUsd: result.costUsd,
+        });
+        return result;
+      } catch (error) {
+        await repo.add({ clientId: client.id, at, source: "simulateur", model: request.model, message: request.message, error: error instanceof Error ? error.message : String(error) });
+        throw error;
+      }
+    };
+  }, [client.id]);
   const format = (iso: string) => formatShort(new Date(iso), tz, now);
   const orderUrl = `${DEFAULT_ORDER_BASE_URL}${client.orderSlug}`;
 
@@ -74,7 +122,14 @@ export function Simulator({ client, infoSheet, templateFlows, clientFlows, focus
     setBusy(true);
     try {
       const before = simRef.current;
-      const { state: next } = await playTurn(before, bot, message, label);
+      const pending = pendingClientEntry(before, message, label);
+      if (pending) {
+        // Le message du client s'affiche tout de suite ; « en train d'écrire » pendant que le bot (ou l'IA) réfléchit.
+        setSim({ ...before, chat: [...before.chat, pending] });
+        setTyping(true);
+      }
+      const { state: next } = await playTurn(before, bot, message, label, realAi && aiReady ? { ai: aiPort } : {});
+      setTyping(false);
       const newEntries = next.chat.slice(before.chat.length);
       // Le message entrant tout de suite, puis les réponses du bot une à une (avec « en train d'écrire »).
       let shown = before.chat.length + 1;
@@ -159,6 +214,21 @@ export function Simulator({ client, infoSheet, templateFlows, clientFlows, focus
         <label className="flex items-center gap-1.5 text-xs font-semibold">
           <input type="checkbox" className="accent-pink" checked={realDelays} onChange={(e) => setRealDelays(e.target.checked)} />
           Délais réels
+        </label>
+        <label
+          className={`flex items-center gap-1.5 text-xs font-semibold ${aiReady ? "" : "text-muted"}`}
+          title={
+            aiStatus === undefined
+              ? "Vérification de la clé API…"
+              : aiReady
+                ? `Appelle vraiment Claude (${modelLabel(bot.agent?.model ?? aiStatus?.model)}) : quelques centièmes de centime par message.`
+                : "Clé API Anthropic absente sur le serveur (variable ANTHROPIC_API_KEY)."
+          }
+        >
+          <input type="checkbox" className="accent-pink" aria-label="IA réelle" disabled={!aiReady} checked={realAi && aiReady} onChange={(e) => setRealAi(e.target.checked)} />
+          IA réelle
+          {aiStatus !== undefined && !aiReady && <span className="font-normal">(clé API absente)</span>}
+          {aiSpent > 0 && <span className="font-normal text-muted" data-testid="ai-spent">· {formatUsd(aiSpent)}</span>}
         </label>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-muted" data-testid="clock">
@@ -340,7 +410,7 @@ export function Simulator({ client, infoSheet, templateFlows, clientFlows, focus
             session={sim.session}
             flows={resolved.flows}
             infoSheet={infoSheet}
-            aiLimit={DEFAULT_CHANNEL_SETTINGS.aiDailyLimitPerContact}
+            aiLimit={bot.aiDailyLimit ?? DEFAULT_CHANNEL_SETTINGS.aiDailyLimitPerContact}
             sessionTimeout={DEFAULT_CHANNEL_SETTINGS.sessionTimeoutMinutes}
             format={format}
             onProfileName={(profileName) => setSim({ ...simRef.current, contact: { ...simRef.current.contact, profileName } })}

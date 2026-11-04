@@ -3,6 +3,7 @@
  * écrite uniquement avec des variables — rien de propre à un client.
  */
 import type { BubbleButton, FlowNode, OrderEvent } from "@/engine";
+import { defaultAgent } from "./agent";
 import type { Repositories } from "./repositories";
 import type { BotTemplate, FlowGraph } from "./types";
 
@@ -154,7 +155,7 @@ const recommandation: FlowGraph = {
       data: {
         intro: "⭐ Je vous aide à choisir ! Dites-moi ce qui vous fait envie aujourd'hui 😋",
         instructions:
-          "Recommande 2 ou 3 produits de la carte qui correspondent à l'envie du client. Réponse courte et appétissante, puis propose de commander.",
+          "Recommande 2 ou 3 produits de la carte qui correspondent à l'envie du client, en réponse courte et appétissante. Utilise proposer_commande avec ta recommandation dans « texte ». Si rien dans la carte ne correspond, dis-le et propose ce qui s'en rapproche le plus.",
       },
     },
   ],
@@ -331,5 +332,6 @@ export async function createMasterTemplate(repos: Repositories): Promise<BotTemp
   if (existing) return existing;
   const template = await repos.templates.create({ name: MASTER_TEMPLATE_NAME });
   await completeMasterTemplate(repos, template.id);
-  return template;
+  // Agent IA par défaut : consigne PFlow et fonctions reliées au dossier « Fonctions IA ».
+  return repos.templates.updateAgent(template.id, defaultAgent(await repos.flows.listByOwner(template.id)));
 }

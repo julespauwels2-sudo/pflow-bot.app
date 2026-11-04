@@ -263,8 +263,17 @@ function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
       return (
         <div className="space-y-1.5">
           {node.data.intro?.trim() && <Bubble text={node.data.intro} />}
+          {node.data.input?.trim() && (
+            <p className="rounded-lg bg-pink/10 px-2 py-1 text-[11px] text-navy">
+              <span className="font-semibold">Entrée :</span> {node.data.input.trim().slice(0, 90)}
+            </p>
+          )}
           <p className="text-[11px] text-muted">
-            Répond avec la fiche d&apos;infos jusqu&apos;à un mot-clé ou un transfert.
+            {node.data.functions
+              ? node.data.functions.length
+                ? `Fonctions : ${node.data.functions.join(", ")}`
+                : "Aucune fonction : répond ou passe la main"
+              : "Toutes les fonctions de l'agent"}
             {node.data.instructions?.trim() && <span className="block italic">« {node.data.instructions.trim().slice(0, 80)} »</span>}
           </p>
         </div>

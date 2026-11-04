@@ -14,6 +14,8 @@ export interface EditorContextValue {
   orderUrl: string;
   updateData: (id: string, data: FlowNode["data"], key: string) => void;
   deleteEdge: (id: string) => void;
+  /** Fonctions de l'agent IA du modèle (pour le bloc IA). */
+  agentFunctions?: { name: string; description: string }[];
   /** Vue en lecture seule (simulateur) : pas de boutons d'ajout sur les blocs. */
   readOnly?: boolean;
 }

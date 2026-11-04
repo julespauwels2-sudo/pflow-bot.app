@@ -1,5 +1,6 @@
 import { DEFAULT_TIMEZONE, isValidTimezone, type InfoSheet } from "@/engine";
 import { DataError, type Repositories } from "../repositories";
+import { checkAgent } from "../agent";
 import { infoSheetSchema, slugSchema } from "../schemas";
 import {
   EMPTY_INFO_SHEET,
@@ -13,6 +14,8 @@ import {
 } from "../types";
 import { workspaceSchema } from "../schemas";
 import type { JsonStore } from "./store";
+
+export const MAX_LOCAL_AI_CALLS = 1000;
 
 export interface LocalRepoOptions {
   now?: () => Date;
@@ -198,6 +201,7 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
           data.flows = data.flows.filter((f) => f.ownerId !== id);
           data.folders = data.folders.filter((f) => f.ownerId !== id);
           delete data.infoSheets[id];
+          data.aiCalls = data.aiCalls.filter((c) => c.clientId !== id);
         });
       },
     },
@@ -430,6 +434,43 @@ export function createLocalRepositories(store: JsonStore, options: LocalRepoOpti
           template.name = name.trim();
           template.updatedAt = now();
           return template;
+        });
+      },
+
+      async updateAgent(id, agent) {
+        return mutate((data) => {
+          const template = findTemplate(data, id);
+          const flows = data.flows.filter((f) => f.ownerKind === "template" && f.ownerId === id);
+          const errors = checkAgent(agent, flows).filter((i) => i.level === "error");
+          if (errors.length) throw new DataError(errors[0].message);
+          template.agent = structuredClone(agent);
+          template.updatedAt = now();
+          return template;
+        });
+      },
+    },
+
+    aiCalls: {
+      async add(entry) {
+        return mutate((data) => {
+          const log = { ...entry, id: newId() };
+          data.aiCalls.push(log);
+          // Le navigateur garde les 1 000 derniers appels (étape B : table bot_ai_calls).
+          if (data.aiCalls.length > MAX_LOCAL_AI_CALLS) data.aiCalls = data.aiCalls.slice(-MAX_LOCAL_AI_CALLS);
+          return log;
+        });
+      },
+
+      async listByClient(clientId) {
+        return store
+          .read()
+          .aiCalls.filter((c) => c.clientId === clientId)
+          .reverse();
+      },
+
+      async clearByClient(clientId) {
+        mutate((data) => {
+          data.aiCalls = data.aiCalls.filter((c) => c.clientId !== clientId);
         });
       },
     },

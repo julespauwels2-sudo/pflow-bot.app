@@ -162,10 +162,16 @@ export function InfoSheetForm({
           <Field label="Points de vente">
             <Textarea placeholder="Restaurant, food truck le samedi au marché…" {...text("pointsDeVente")} />
           </Field>
-          <Field label="Résumé de la carte" hint="Les grandes familles de plats. Les prix restent sur le mini-site de commande.">
-            <Textarea placeholder="Tacos, burritos, bowls, menu enfant…" {...text("resumeCarte")} />
+          <Field
+            label="Carte (pour l'IA)"
+            hint="Colle la carte : produits, prix, descriptions, allergènes. C'est la seule source de l'IA sur les produits. À l'étape B, elle sera lue directement dans PFlow Order."
+          >
+            <Textarea rows={8} placeholder={"== Cookies ==\n• Cookies Nutella : 4 €\nCœur fondant au chocolat\nAllergènes : Gluten, Œufs, Lait"} {...text("resumeCarte")} />
           </Field>
-          <Field label="Règles spéciales">
+          <Field label="Questions fréquentes (pour l'IA)" hint="Une question et sa réponse par ligne ou par paragraphe. Uniquement des faits sûrs.">
+            <Textarea rows={4} placeholder={"Vous faites des box ? Oui : 6, 10 ou 15 cookies.\nVous livrez le dimanche ? Non."} {...text("faq")} />
+          </Field>
+          <Field label="Règles spéciales" hint="Lues par l'IA en priorité (ex. exceptions, produits du week-end).">
             <Textarea placeholder="L'agneau n'est dispo que le week-end…" {...text("reglesSpeciales")} />
           </Field>
         </div>

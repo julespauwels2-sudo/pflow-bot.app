@@ -9,6 +9,8 @@ import { localTime } from "./time";
 import { validateAnswer } from "./validators";
 import {
   DEFAULT_ORDER_BASE_URL,
+  type AgentFunction,
+  type AiTurn,
   type ChoiceOption,
   type ContactState,
   type EngineDeps,
@@ -28,6 +30,10 @@ import {
 /** Garde-fou contre les boucles (ex. deux « Aller à un flux » qui se renvoient l'un l'autre). */
 export const MAX_STEPS_PER_MESSAGE = 50;
 export const DEFAULT_MAX_RETRIES = 2;
+/** Échanges gardés en mémoire dans un bloc IA (client + IA). */
+export const AI_HISTORY_MAX_TURNS = 10;
+/** Appels IA « texte d'entrée » enchaînés au maximum pour un même message. */
+const MAX_CHAINED_AI_INPUTS = 3;
 
 export const TEXTS = {
   handoff: "Je transmets votre message à l'équipe, on vous répond très vite 🙏",
@@ -76,6 +82,8 @@ class EngineRun {
   private outgoing: OutgoingMessage[] = [];
   private events: EngineEvent[] = [];
   private steps = 0;
+  /** Bloc IA atteint avec un texte d'entrée : l'IA est appelée à la fin du traitement. */
+  private pendingAiInput: { flowId: string; nodeId: string; text: string } | null = null;
 
   constructor(
     private readonly input: EngineInput,
@@ -94,6 +102,19 @@ class EngineRun {
   // -------------------------------------------------------------------------
 
   async process(): Promise<void> {
+    await this.processMessage();
+    // Blocs IA avec un texte d'entrée : l'IA est appelée sans attendre de message.
+    for (let i = 0; this.pendingAiInput && i < MAX_CHAINED_AI_INPUTS; i++) {
+      const pending = this.pendingAiInput;
+      this.pendingAiInput = null;
+      const node = this.currentWaitingNode();
+      if (node?.type !== "ai" || this.session?.flowId !== pending.flowId || node.id !== pending.nodeId) continue;
+      await this.callAi(pending.text, { aiNode: node });
+    }
+    this.pendingAiInput = null;
+  }
+
+  private async processMessage(): Promise<void> {
     const { message, now } = this.input;
 
     // Le gérant a répondu lui-même depuis l'appli : le bot se tait pour ce contact.
@@ -271,7 +292,7 @@ class EngineRun {
 
       case "ai": {
         if (this.tryKeyword(text)) return;
-        await this.callAi(text, { instructions: node.data.instructions, stayInAiNode: true });
+        await this.callAi(text, { aiNode: node });
         return;
       }
     }
@@ -289,20 +310,29 @@ class EngineRun {
   // IA de secours
   // -------------------------------------------------------------------------
 
-  private async callAi(
-    text: string,
-    opts: { instructions?: string; repromptNode?: WaitingNode; stayInAiNode?: boolean },
-  ): Promise<void> {
+  /** Fonctions de l'agent utilisables ici : autorisées par le bloc IA et dont le flux est actif. */
+  private availableFunctions(aiNode?: FlowNodeOf<"ai">): AgentFunction[] {
+    const allowed = aiNode?.data.functions;
+    const seen = new Set<string>();
+    return (this.input.agent?.functions ?? []).filter((f) => {
+      if (seen.has(f.name) || (allowed && !allowed.includes(f.name)) || !this.flow(f.flowId)) return false;
+      seen.add(f.name);
+      return true;
+    });
+  }
+
+  private async callAi(text: string, opts: { repromptNode?: WaitingNode; aiNode?: FlowNodeOf<"ai"> }): Promise<void> {
     const { ai } = this.deps;
-    const { client, channel, now, flows, infoSheet } = this.input;
+    const { client, channel, now, infoSheet, agent } = this.input;
+    const { repromptNode, aiNode } = opts;
 
     if (!ai) {
       this.events.push({ type: "ai_unavailable" });
-      if (opts.repromptNode) {
+      if (repromptNode) {
         this.send({ kind: "text", text: TEXTS.chooseOption });
-        this.sendPrompt(opts.repromptNode);
+        this.sendPrompt(repromptNode);
         this.refreshExpiry();
-      } else if (opts.stayInAiNode) {
+      } else if (aiNode) {
         this.handoff("erreur_ia", undefined, text);
       }
       return;
@@ -318,20 +348,26 @@ class EngineRun {
     }
     this.contact.aiUsage.calls += 1;
 
+    const functions = this.availableFunctions(aiNode);
+    const history: AiTurn[] = aiNode ? (this.session?.aiHistory ?? []) : [];
     let result;
     try {
       result = await ai({
         message: text,
+        history,
         client: {
           nomResto: client.nomResto,
           timezone: client.timezone,
           maintenantLocal: `${local.date} ${local.hhmm}`,
           lienCommande: this.orderUrl() ?? "",
+          prenomContact: firstName(this.contact.profileName) || undefined,
         },
+        consigne: agent?.consigne.trim() ? this.render(agent.consigne) : "",
+        model: agent?.model,
         // L'IA ne voit jamais les tournées de livraison passées.
         infoSheet: withUpcomingRounds(infoSheet, now, client.timezone),
-        flows: flows.map((f) => ({ id: f.id, name: f.name, description: f.description })),
-        instructions: opts.instructions,
+        functions: functions.map((f) => ({ name: f.name, description: f.description })),
+        instructions: aiNode?.data.instructions?.trim() ? this.render(aiNode.data.instructions) : undefined,
       });
     } catch (error) {
       this.events.push({ type: "error", message: `IA : ${errorMessage(error)}` });
@@ -340,38 +376,45 @@ class EngineRun {
     }
 
     const { decision, usage } = result;
-    this.events.push({ type: "ai_called", decision, usage });
+    this.events.push({ type: "ai_called", decision, usage, model: result.model, costUsd: result.costUsd, message: text });
+    const answer = decision.texte?.trim();
 
     switch (decision.action) {
-      case "aller_au_flux": {
-        const target = decision.flux_id ? this.flow(decision.flux_id) : undefined;
-        if (!target) {
-          this.events.push({ type: "error", message: `IA : flux inconnu « ${decision.flux_id ?? ""} »` });
+      case "fonction": {
+        const fn = functions.find((f) => f.name === decision.fonction);
+        const target = fn ? this.flow(fn.flowId) : undefined;
+        if (!fn || !target) {
+          this.events.push({ type: "error", message: `IA : fonction inconnue « ${decision.fonction ?? ""} »` });
           this.handoff("ia", undefined, text);
           return;
         }
-        this.startFlow(target, "ia");
+        const vars: Record<string, string> = {};
+        if (fn.aiText === "variable") vars.ia_reponse = answer ?? "";
+        if (fn.aiText === "avant" && answer) this.send({ kind: "text", text: answer });
+        // Le flux de la fonction remplace le bloc IA : l'agent ne reprend qu'au prochain message libre.
+        this.startFlow(target, "ia", vars);
         return;
       }
 
       case "repondre": {
-        const answer = decision.texte?.trim();
         if (!answer) {
           this.handoff("ia", undefined, text);
           return;
         }
         this.send({ kind: "text", text: answer });
-        if (opts.repromptNode) {
-          this.sendPrompt(opts.repromptNode);
+        if (repromptNode) {
+          this.sendPrompt(repromptNode);
           this.refreshExpiry();
-        } else if (opts.stayInAiNode) {
+        } else if (aiNode && this.session) {
+          const turns: AiTurn[] = [...history, { role: "client", text }, { role: "assistant", text: answer }];
+          this.session.aiHistory = turns.slice(-AI_HISTORY_MAX_TURNS);
           this.refreshExpiry();
         }
         return;
       }
 
       case "transfert_humain":
-        this.handoff("ia", decision.texte, text);
+        this.handoff("ia", answer, text);
         return;
 
       default:
@@ -464,7 +507,9 @@ class EngineRun {
 
         case "ai":
           if (node.data.intro?.trim()) this.send({ kind: "text", text: this.render(node.data.intro) });
+          session.aiHistory = [];
           this.refreshExpiry();
+          if (node.data.input?.trim()) this.pendingAiInput = { flowId: flow.id, nodeId: node.id, text: this.render(node.data.input) };
           return;
 
         case "condition": {
@@ -612,12 +657,17 @@ class EngineRun {
     };
   }
 
+  /** Repousse l'expiration de la session (délai d'inactivité du bloc IA s'il attend sur un bloc IA). */
   private refreshExpiry(): void {
-    if (this.session) this.session.expiresAt = this.expiryFrom(this.input.now);
+    if (!this.session) return;
+    const node = this.flow(this.session.flowId)?.nodes.find((n) => n.id === this.session!.nodeId);
+    const minutes =
+      node?.type === "ai" ? (node.data.inactivityMinutes ?? this.input.agent?.inactivityMinutes ?? undefined) : undefined;
+    this.session.expiresAt = this.expiryFrom(this.input.now, minutes);
   }
 
-  private expiryFrom(now: Date): string {
-    return new Date(now.getTime() + this.input.channel.sessionTimeoutMinutes * 60_000).toISOString();
+  private expiryFrom(now: Date, minutes = this.input.channel.sessionTimeoutMinutes): string {
+    return new Date(now.getTime() + minutes * 60_000).toISOString();
   }
 
   private flow(id: string): Flow | undefined {

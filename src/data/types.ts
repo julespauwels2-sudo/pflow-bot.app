@@ -1,4 +1,4 @@
-import type { Flow, FlowEdge, FlowNode, InfoSheet, TriggerMode } from "@/engine";
+import type { AiDecision, AiTextMode, AiUsage, Flow, FlowEdge, FlowNode, InfoSheet, TriggerMode } from "@/engine";
 import type { BotOption } from "./options";
 
 /** Client (resto) tel que vu par l'app bots. À l'étape B : lu depuis le CRM + réglages bot_. */
@@ -48,11 +48,45 @@ export interface BotTemplate {
   updatedAt: string;
 }
 
-/** Emplacement réservé (A6) : rien n'est encore utilisé par le moteur. */
+/** Fonction de l'agent : un flux du modèle que l'IA a le droit de lancer. */
+export interface TemplateAgentFunction {
+  /** Nom vu par l'IA (minuscules, chiffres et _), ex. lancer_commande. */
+  name: string;
+  /** Flux du modèle (dans un bot lié, sa personnalisation éventuelle). */
+  flowId: string;
+  description: string;
+  /** Absent = « silence » (l'IA se tait, le flux répond seul). */
+  aiText?: AiTextMode;
+}
+
+/** Agent IA du modèle maître : consigne générale, réglages et fonctions. */
 export interface TemplateAgent {
+  /** Consigne générale ({{nom_resto}} et les autres variables sont remplacées pour chaque client). */
   consigne?: string;
+  /** Modèle Claude (absent = celui du serveur, ANTHROPIC_MODEL). */
   model?: string;
-  functions?: { name: string; flowId: string; description: string }[];
+  /** Appels IA maximum par contact et par jour (jour du fuseau du client). */
+  dailyLimit?: number;
+  /** Délai d'inactivité par défaut des blocs IA, en minutes. */
+  inactivityMinutes?: number;
+  functions?: TemplateAgentFunction[];
+}
+
+/** Ligne du journal des appels IA (coût et tokens suivis par client). */
+export interface AiCallLog {
+  id: string;
+  clientId: string;
+  /** Date réelle de l'appel. */
+  at: string;
+  source: "simulateur" | "whatsapp";
+  model?: string;
+  /** Message (ou texte d'entrée) envoyé à l'IA. */
+  message: string;
+  decision?: AiDecision;
+  usage?: AiUsage;
+  costUsd?: number | null;
+  /** Erreur (l'IA n'a pas répondu : le contact a été passé à l'équipe). */
+  error?: string;
 }
 
 /**
@@ -148,4 +182,6 @@ export interface WorkspaceData {
   folders: BotFolder[];
   templates: BotTemplate[];
   infoSheets: Record<string, InfoSheet>;
+  /** Journal des appels IA (les plus récents à la fin). */
+  aiCalls: AiCallLog[];
 }

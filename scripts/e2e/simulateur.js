@@ -34,6 +34,9 @@ const BASE = 'http://localhost:3123';
   await p.waitForURL(/\/simulateur\?client=/);
   await p.getByText('10 flux actifs · modèle + flux du client').waitFor(); // panier abandonné : option non activée
   await p.getByLabel('Délais réels').uncheck();
+  // Sans IA (le serveur de test peut avoir une clé) : on teste le comportement de secours.
+  await p.waitForFunction(() => document.querySelector('[aria-label="IA réelle"]')?.closest('label')?.title !== 'Vérification de la clé API…');
+  if (await p.getByLabel('IA réelle').isEnabled()) await p.getByLabel('IA réelle').uncheck();
   step('simulateur ouvert depuis la page client : bot assemblé (modèle + client, option panier exclue)');
 
   // Mot-clé → Accueil
@@ -56,7 +59,7 @@ const BASE = 'http://localhost:3123';
 
   // Texte libre pendant une attente de boutons
   await say('euh');
-  await lastTurnHas('IA de secours non disponible dans le simulateur');
+  await lastTurnHas('IA non appelée');
   await chat().getByText('Merci de choisir une des options ci-dessous 👇').waitFor();
   step('texte libre : l\'IA (A6) n\'est pas branchée, le bot repose les boutons');
 

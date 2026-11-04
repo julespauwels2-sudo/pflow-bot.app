@@ -40,7 +40,8 @@ function SimulatorLoader() {
         repos.flows.listByOwner(client.id),
         templateId ? repos.flows.listByOwner(templateId) : Promise.resolve([]),
       ]);
-      return { clients, ready: { client: linkedClient, infoSheet, clientFlows, templateFlows } };
+      const template = templates.find((t) => t.id === templateId) ?? null;
+      return { clients, ready: { client: linkedClient, infoSheet, clientFlows, templateFlows, template } };
     },
     [clientId, forceTemplate],
   );
@@ -93,6 +94,7 @@ function SimulatorLoader() {
       infoSheet={ready.infoSheet}
       clientFlows={ready.clientFlows}
       templateFlows={ready.templateFlows}
+      template={ready.template}
       focusFlowId={focus}
       initialDrafts={drafts}
     />

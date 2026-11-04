@@ -5,10 +5,12 @@
  */
 import type { InfoSheet } from "@/engine";
 import type {
+  AiCallLog,
   BotClient,
   BotFolder,
   BotTemplate,
   ClientPatch,
+  TemplateAgent,
   FlowPatch,
   NewClient,
   NewFlow,
@@ -62,6 +64,16 @@ export interface TemplateRepository {
   get(id: string): Promise<BotTemplate | null>;
   create(input: { name: string }): Promise<BotTemplate>;
   rename(id: string, name: string): Promise<BotTemplate>;
+  /** Enregistre l'agent IA du modèle (consigne, réglages, fonctions). */
+  updateAgent(id: string, agent: TemplateAgent): Promise<BotTemplate>;
+}
+
+/** Journal des appels IA. Étape B : table bot_ai_calls. */
+export interface AiCallRepository {
+  add(entry: Omit<AiCallLog, "id">): Promise<AiCallLog>;
+  /** Appels d'un client, du plus récent au plus ancien. */
+  listByClient(clientId: string): Promise<AiCallLog[]>;
+  clearByClient(clientId: string): Promise<void>;
 }
 
 export interface FolderRepository {
@@ -94,6 +106,7 @@ export interface Repositories {
   templates: TemplateRepository;
   bots: BotRepository;
   infoSheets: InfoSheetRepository;
+  aiCalls: AiCallRepository;
   workspace: WorkspaceRepository;
 }
 

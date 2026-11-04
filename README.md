@@ -50,10 +50,11 @@ src/editor/   Logique pure de l'éditeur, testée : catalogue des blocs et de le
 src/components/editor/  Tableau blanc React Flow (état centralisé dans state.ts).
 src/lib/      Utilitaires (protection par mot de passe, fuseaux, fichiers).
 src/proxy.ts  Protection de toutes les pages sauf /api/webhooks/.
-src/app/      Interface Next.js : /clients, /clients/[id], /flows/[id].
+src/app/      Interface Next.js : /clients, /clients/[id], /flows/[id], /modele, /simulateur.
+src/ai/       Agent IA : base de connaissances, prompt, appel à Claude, tarifs (route /api/ai).
 ```
 
-À venir : simulateur (A5), IA (A6),
+À venir :
 `src/channels/whatsapp` (webhook isolé, hébergeable ailleurs si besoin), `supabase/migrations/`.
 
 ## Données (étape A)
@@ -118,8 +119,27 @@ l'éditeur) : le **vrai moteur** sur le **bot assemblé** du client (modèle + f
 - Horloge simulée au fuseau du client : régler l'heure et le jour, avancer de +5 min, +31 min, +1 h,
   +13 h, +25 h ; « Réinitialiser ». Options : mode de déclenchement, brouillons, délais réels.
 - Depuis l'éditeur : flux mis en avant (« ▶ Lancer … ») et brouillons ; pour un flux du modèle, le
-  simulateur demande avec quel client tester. L'IA de secours n'est pas encore branchée (A6).
+  simulateur demande avec quel client tester.
+- Option « IA réelle » : appelle vraiment Claude via `/api/ai` (cochée si la clé est configurée) ;
+  le journal donne la décision, les tokens et le coût, et chaque appel est noté sur la page client.
 - Logique testée à part : `src/simulator/` (horloge, tour de conversation, journal).
+
+## Agent IA (A6)
+
+- **Clé** : variable d'environnement `ANTHROPIC_API_KEY` (Vercel ou `.env.local`), lue côté serveur
+  uniquement par `src/app/api/ai/route.ts` (protégée par le mot de passe de l'app). `ANTHROPIC_MODEL`
+  facultatif (défaut `claude-haiku-5-5`). Sans clé, la route répond 503 et le bot passe la main.
+- **Modèle maître → Agent IA** (`/modele/agent`) : consigne générale (`{{nom_resto}}`…), modèle,
+  appels par contact et par jour, délai d'inactivité, fonctions (un flux du modèle chacune, avec
+  sa description et ce que devient le texte de l'IA : silence, avant le flux, ou `{{ia_reponse}}`).
+- **Bloc IA** : texte d'entrée (IA appelée tout de suite), consigne de l'étape, fonctions autorisées,
+  délai d'inactivité ; mémoire des 10 derniers échanges du bloc.
+- **Base de connaissances** générée depuis la fiche d'infos (+ carte et FAQ) : `src/ai/knowledge.ts`,
+  visible sur la page client (« Ce que l'IA sait de ce resto »).
+- **Prompt** (`src/ai/prompt.ts`) : règles PFlow prioritaires, consigne, base de connaissances (en
+  cache), puis contexte. Réponse en JSON (sorties structurées), sans réflexion préalable sur Haiku.
+- **Coût** : tarifs dans `src/ai/models.ts`, journal des appels par client (page client).
+- Erreur, refus, réponse illisible ou limite atteinte : transfert humain.
 
 ## Bots liés au modèle (M3d)
 

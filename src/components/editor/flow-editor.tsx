@@ -46,6 +46,8 @@ interface Props {
   owner: EditorOwner;
   /** Tous les flux du même propriétaire (id, nom, flux par défaut ou non). */
   flows: { id: string; name: string; isDefault?: boolean; event?: string }[];
+  /** Fonctions de l'agent IA du modèle (bloc IA). */
+  agentFunctions?: { name: string; description: string }[];
 }
 
 export function FlowEditor(props: Props) {
@@ -105,7 +107,7 @@ function ownerSettings(owner: EditorOwner) {
   };
 }
 
-function EditorInner({ flow: initialFlow, owner, flows }: Props) {
+function EditorInner({ flow: initialFlow, owner, flows, agentFunctions }: Props) {
   const settings = ownerSettings(owner);
   const [state, dispatch] = useReducer(editorReducer, initialFlow.draft, initEditor);
   const [flow, setFlow] = useState(initialFlow);
@@ -293,10 +295,11 @@ function EditorInner({ flow: initialFlow, owner, flows }: Props) {
       flows,
       flowId: botFlowId,
       orderUrl,
+      agentFunctions,
       updateData: (id, data, key) => dispatch({ type: "updateData", id, data, key, now: Date.now() }),
       deleteEdge: (id) => dispatch({ type: "deleteEdge", id, now: Date.now() }),
     }),
-    [byNode, graph.nodes, flows, botFlowId, orderUrl],
+    [byNode, graph.nodes, flows, botFlowId, orderUrl, agentFunctions],
   );
 
   const edges = useMemo(

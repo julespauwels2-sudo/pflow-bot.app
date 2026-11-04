@@ -11,7 +11,7 @@ export interface JsonStore {
 export const STORAGE_KEY = "pflow-bots:v1";
 
 export function emptyWorkspace(): WorkspaceData {
-  return { clients: [], flows: [], folders: [], templates: [], infoSheets: {} };
+  return { clients: [], flows: [], folders: [], templates: [], infoSheets: {}, aiCalls: [] };
 }
 
 /** Pour les tests : tout en mémoire. */

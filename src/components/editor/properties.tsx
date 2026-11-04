@@ -389,7 +389,7 @@ function MessageFields({ node }: { node: Extract<FlowNode, { type: "message" }> 
 }
 
 function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unknown>, field: string) => void }) {
-  const { variables, flows, flowId } = useEditor();
+  const { variables, flows, flowId, agentFunctions = [] } = useEditor();
   const vf = (field: string, value: string | undefined, opts: { multiline?: boolean; placeholder?: string; max?: number } = {}) => (
     <VariableField value={value ?? ""} variables={variables} onChange={(v) => set({ [field]: v }, field)} ariaLabel={field} {...opts} />
   );
@@ -605,17 +605,82 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
       );
     }
 
-    case "ai":
+    case "ai": {
+      const allowed = node.data.functions;
+      const unknown = (allowed ?? []).filter((n) => !agentFunctions.some((f) => f.name === n));
+      const toggle = (name: string, on: boolean) => {
+        const current = allowed ?? agentFunctions.map((f) => f.name);
+        const next = on ? [...new Set([...current, name])] : current.filter((n) => n !== name);
+        set({ functions: next }, "functions");
+      };
       return (
         <>
+          <p className="rounded-xl bg-page p-2.5 text-[11px] text-muted">
+            Le bot reste sur ce bloc : l&apos;IA répond à chaque message avec la fiche d&apos;infos du client, jusqu&apos;à une fonction, un transfert,
+            un mot-clé ou le délai d&apos;inactivité.
+          </p>
           <Row label="Message d'introduction" hint="Envoyé en arrivant sur ce bloc (facultatif).">
             {vf("intro", node.data.intro, { multiline: true })}
           </Row>
-          <Row label="Consignes pour l'IA" hint="Ex. : « Réponds surtout aux questions sur la livraison. » L'IA ne donne jamais de prix ni de disponibilité absents de la fiche.">
-            <textarea className={`${inputCls} min-h-20`} value={node.data.instructions ?? ""} onChange={(e) => set({ instructions: e.target.value || undefined }, "instructions")} />
+          <Row
+            label="Texte d'entrée"
+            hint="Facultatif. S'il est rempli, l'IA est appelée tout de suite avec ce texte, sans attendre de message. Ex. : « Le client a choisi le goût chocolat, propose-lui 2 cookies. »"
+          >
+            {vf("input", node.data.input, { multiline: true, placeholder: "Le client a choisi {{choix}}…" })}
+          </Row>
+          <Row label="Consigne pour cette étape" hint="Ajoutée à la consigne de l'agent. L'IA ne donne jamais de prix ni de disponibilité absents de la fiche.">
+            <textarea
+              aria-label="Consigne pour cette étape"
+              className={`${inputCls} min-h-20`}
+              value={node.data.instructions ?? ""}
+              onChange={(e) => set({ instructions: e.target.value || undefined }, "instructions")}
+            />
+          </Row>
+          <Row
+            label="Fonctions autorisées"
+            hint={
+              agentFunctions.length
+                ? "Chaque fonction lance un flux du modèle. Décochées : l'IA ne peut que répondre ou passer la main."
+                : "Aucune fonction : configure l'agent IA du modèle maître (page Modèle maître → Agent IA)."
+            }
+          >
+            <div className="space-y-1">
+              {agentFunctions.map((f) => (
+                <label key={f.name} className="flex items-start gap-2 text-xs" title={f.description}>
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 accent-pink"
+                    checked={!allowed || allowed.includes(f.name)}
+                    onChange={(e) => toggle(f.name, e.target.checked)}
+                  />
+                  <span className="font-mono">{f.name}</span>
+                </label>
+              ))}
+              {unknown.length > 0 && <p className="text-[11px] font-semibold text-coral">Fonctions inconnues de l&apos;agent : {unknown.join(", ")}</p>}
+              {allowed && agentFunctions.length > 0 && (
+                <button type="button" className="text-[11px] font-semibold text-blue" onClick={() => set({ functions: undefined }, "functions")}>
+                  Toutes les fonctions de l&apos;agent
+                </button>
+              )}
+            </div>
+          </Row>
+          <Row label="Délai d'inactivité (minutes)" hint="Sans message du client pendant ce délai, l'IA lâche la conversation. Vide : réglage de l'agent (10 min par défaut).">
+            <input
+              type="number"
+              min={1}
+              max={1440}
+              aria-label="Délai d'inactivité"
+              className={inputCls}
+              value={node.data.inactivityMinutes ?? ""}
+              onChange={(e) => {
+                const n = Math.round(Number(e.target.value));
+                set({ inactivityMinutes: e.target.value && n >= 1 ? Math.min(n, 1440) : undefined }, "inactivityMinutes");
+              }}
+            />
           </Row>
         </>
       );
+    }
 
     case "handoff":
       return (

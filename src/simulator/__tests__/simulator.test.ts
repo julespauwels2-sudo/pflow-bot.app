@@ -68,7 +68,7 @@ describe("journal : pourquoi le bot a réagi ou non", () => {
     const r1 = await playTurn(newSimulation(NOW), bot(), { kind: "text", text: "menu" });
     const r2 = await playTurn(advanceTime(r1.state, 31), bot(), { kind: "text", text: "2" });
     expect(texts(r2.state.turns[1].lines)).toEqual([
-      "Conversation expirée (inactive depuis plus de 30 min) dans « Accueil »",
+      "Conversation expirée (délai d'inactivité dépassé) dans « Accueil »",
       "Ignoré : aucun mot-clé reconnu, et le canal est en mode « mots-clés uniquement »",
     ]);
   });
@@ -83,8 +83,22 @@ describe("journal : pourquoi le bot a réagi ou non", () => {
     expect(texts(r3.state.turns[2].lines)[0]).toBe("La pause du bot pour ce contact est terminée");
   });
 
-  it("IA non branchée : le journal l'indique", async () => {
+  it("IA désactivée : le journal l'indique", async () => {
     const r1 = await playTurn(newSimulation(NOW), bot("toujours"), { kind: "text", text: "vous êtes ouverts ?" });
-    expect(texts(r1.state.turns[0].lines)).toContain("IA de secours non disponible dans le simulateur (branchée à l'étape A6)");
+    expect(texts(r1.state.turns[0].lines)).toContain("IA non appelée : l'option « IA réelle » est décochée (ou la clé API manque)");
+  });
+
+  it("IA réelle : le journal donne la décision, les tokens et le coût", async () => {
+    const r1 = await playTurn(newSimulation(NOW), bot("toujours"), { kind: "text", text: "vous êtes ouverts ?" }, undefined, {
+      ai: async () => ({
+        decision: { action: "repondre", texte: "Oui, jusqu'à 22h 🙂" },
+        usage: { inputTokens: 300, outputTokens: 40, cacheReadTokens: 2500 },
+        model: "claude-haiku-5-5",
+        costUsd: 0.000075,
+      }),
+    });
+    // Les nombres en français utilisent une espace insécable : on la normalise.
+    expect(texts(r1.state.turns[0].lines).map((t) => t.replace(/\s/g, " "))).toContain("IA (Claude Haiku 5.5) : répond elle-même — 2 800 tokens lus dont 2 500 en cache, 40 écrits · 0,0001 $");
+    expect(r1.state.chat.at(-1)).toMatchObject({ from: "bot", message: { kind: "text", text: "Oui, jusqu'à 22h 🙂" } });
   });
 });

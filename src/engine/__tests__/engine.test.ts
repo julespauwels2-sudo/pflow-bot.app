@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { decodeReplyId, encodeReplyId } from "../reply-id";
 import { runEngine, TEXTS, MAX_STEPS_PER_MESSAGE } from "../run";
-import type { EngineInput, EngineResult, Flow } from "../types";
+import type { AgentConfig, EngineInput, EngineResult, Flow } from "../types";
 import {
   NOW,
   addMinutes,
@@ -12,6 +12,7 @@ import {
   client,
   edge,
   fakeAi,
+  flows,
   freshContact,
   input,
   node,
@@ -68,8 +69,12 @@ describe("ordre de traitement d'un message entrant", () => {
       timezone: "America/Guadeloupe",
       maintenantLocal: "2026-11-03 12:00",
       lienCommande: "https://order.pflow.fr/c/mexico",
+      prenomContact: "Jules",
     });
-    expect(ai.calls[0].flows.map((f) => f.id)).toEqual(["f_accueil", "f_agneau", "f_resa", "f_aide"]);
+    // Sans agent : pas de fonctions, pas de consigne, pas d'historique.
+    expect(ai.calls[0].functions).toEqual([]);
+    expect(ai.calls[0].consigne).toBe("");
+    expect(ai.calls[0].history).toEqual([]);
     expect(r.session).toBeNull();
     expect(r.contact.aiUsage).toEqual({ day: "2026-11-03", calls: 1 });
   });
@@ -316,19 +321,67 @@ describe("pause, coexistence et transfert humain", () => {
 describe("IA de secours : garde-fous", () => {
   const toujours = { ...channel, triggerMode: "toujours" as const };
 
-  it("l'IA peut envoyer vers un flux", async () => {
-    const ai = fakeAi({ action: "aller_au_flux", flux_id: "f_resa" });
-    const r = await runEngine(input({ channel: toujours, message: { kind: "text", text: "une table pour ce soir" } }), {
+  const agent: AgentConfig = {
+    consigne: "Tu es l'assistant de {{nom_resto}}.",
+    functions: [
+      { name: "reserver", flowId: "f_resa", description: "Le client veut réserver", aiText: "silence" },
+      { name: "proposer", flowId: "f_propose", description: "Proposer de commander", aiText: "variable" },
+      { name: "agneau", flowId: "f_agneau", description: "Questions sur l'agneau", aiText: "avant" },
+      { name: "fantome", flowId: "f_supprime", description: "Flux supprimé", aiText: "silence" },
+    ],
+  };
+  const propose: Flow = {
+    id: "f_propose",
+    name: "Proposer",
+    nodes: [node("t", "trigger", { keywords: [] }), say("m", "{{ia_reponse}}"), say("m2", "Ça vous tente ?")],
+    edges: [edge("t", "m"), edge("m", "m2")],
+  };
+  const withPropose = [...flows, propose];
+
+  it("l'IA reçoit la consigne rendue et seulement les fonctions dont le flux existe", async () => {
+    const ai = fakeAi({ action: "repondre", texte: "ok" });
+    await runEngine(input({ channel: toujours, agent, flows: withPropose, message: { kind: "text", text: "?" } }), { ai: ai.port });
+    expect(ai.calls[0].consigne).toBe("Tu es l'assistant de Mexico.");
+    expect(ai.calls[0].functions.map((f) => f.name)).toEqual(["reserver", "proposer", "agneau"]);
+  });
+
+  it("fonction « silence » : l'IA se tait, le flux répond seul", async () => {
+    const ai = fakeAi({ action: "fonction", fonction: "reserver", texte: "Je regarde…" });
+    const r = await runEngine(input({ channel: toujours, agent, message: { kind: "text", text: "une table pour ce soir" } }), {
       ai: ai.port,
     });
     expect(texts(r)).toEqual(["Pour combien de personnes ?"]);
     expect(r.events).toContainEqual({ type: "flow_started", flowId: "f_resa", via: "ia" });
   });
 
-  it("un flux inconnu proposé par l'IA donne un transfert humain", async () => {
-    const ai = fakeAi({ action: "aller_au_flux", flux_id: "f_invente" });
+  it("fonction « variable » : la réponse de l'IA est passée au flux dans {{ia_reponse}}", async () => {
+    const ai = fakeAi({ action: "fonction", fonction: "proposer", texte: "Le burrito poulet est parfait 🌯" });
+    const r = await runEngine(input({ channel: toujours, agent, flows: withPropose, message: { kind: "text", text: "un conseil ?" } }), {
+      ai: ai.port,
+    });
+    expect(texts(r)).toEqual(["Le burrito poulet est parfait 🌯", "Ça vous tente ?"]);
+  });
+
+  it("fonction « avant » : le texte de l'IA part, puis le flux", async () => {
+    const ai = fakeAi({ action: "fonction", fonction: "agneau", texte: "Bonne question !" });
+    const r = await runEngine(input({ channel: toujours, agent, message: { kind: "text", text: "un plat du week-end ?" } }), { ai: ai.port });
+    expect(texts(r)[0]).toBe("Bonne question !");
+    expect(r.events).toContainEqual({ type: "flow_started", flowId: "f_agneau", via: "ia" });
+  });
+
+  it("une fonction inconnue (ou dont le flux n'existe plus) donne un transfert humain", async () => {
+    for (const fonction of ["inventee", "fantome"]) {
+      const ai = fakeAi({ action: "fonction", fonction });
+      const r = await runEngine(input({ channel: toujours, agent, message: { kind: "text", text: "?" } }), { ai: ai.port });
+      expect(r.contact.pause?.reason).toBe("transfert_humain");
+      expect(r.events).toContainEqual({ type: "error", message: `IA : fonction inconnue « ${fonction} »` });
+    }
+  });
+
+  it("le texte d'un transfert demandé par l'IA est envoyé au client", async () => {
+    const ai = fakeAi({ action: "transfert_humain", texte: "Je préviens l'équipe 🙏" });
     const r = await runEngine(input({ channel: toujours, message: { kind: "text", text: "?" } }), { ai: ai.port });
-    expect(r.contact.pause?.reason).toBe("transfert_humain");
+    expect(texts(r)).toEqual(["Je préviens l'équipe 🙏"]);
   });
 
   it("une réponse vide de l'IA donne un transfert humain", async () => {
@@ -400,6 +453,78 @@ describe("IA de secours : garde-fous", () => {
     expect(texts(r3)).toEqual(["On est au 12 rue Frébault."]);
     expect(ai.calls[0].instructions).toBe("Sois bref.");
     expect(r3.session?.nodeId).toBe("ia");
+  });
+});
+
+describe("bloc IA (agent)", () => {
+  const toujours = { ...channel, triggerMode: "toujours" as const };
+  const agent: AgentConfig = {
+    consigne: "",
+    inactivityMinutes: 10,
+    functions: [
+      { name: "reserver", flowId: "f_resa", description: "Réserver", aiText: "silence" },
+      { name: "agneau", flowId: "f_agneau", description: "Agneau", aiText: "silence" },
+    ],
+  };
+  const reco = (data: Partial<import("../types").NodeDataMap["ai"]> = {}): Flow => ({
+    id: "f_reco",
+    name: "Reco",
+    nodes: [node("t", "trigger", { keywords: ["conseil"] }), node("ia", "ai", { intro: "Qu'est-ce qui vous ferait plaisir ?", ...data })],
+    edges: [edge("t", "ia")],
+  });
+
+  it("garde en mémoire les échanges précédents du bloc IA", async () => {
+    const ai = fakeAi((req) => ({ action: "repondre", texte: `réponse ${req.history.length / 2 + 1}` }));
+    const flowsReco = [...flows, reco()];
+    const r1 = await runEngine(input({ agent, flows: flowsReco, message: { kind: "text", text: "conseil" } }), { ai: ai.port });
+    expect(ai.calls).toHaveLength(0);
+    const r2 = await runEngine(next(r1, { agent, flows: flowsReco, message: { kind: "text", text: "du sucré" } }), { ai: ai.port });
+    const r3 = await runEngine(next(r2, { agent, flows: flowsReco, message: { kind: "text", text: "et moins cher ?" } }), { ai: ai.port });
+    expect(texts(r3)).toEqual(["réponse 2"]);
+    expect(ai.calls[1].history).toEqual([
+      { role: "client", text: "du sucré" },
+      { role: "assistant", text: "réponse 1" },
+    ]);
+    expect(r3.session?.aiHistory).toHaveLength(4);
+  });
+
+  it("n'autorise que les fonctions cochées dans le bloc", async () => {
+    const ai = fakeAi({ action: "repondre", texte: "ok" });
+    const flowsReco = [...flows, reco({ functions: ["agneau"] })];
+    const r1 = await runEngine(input({ agent, flows: flowsReco, message: { kind: "text", text: "conseil" } }));
+    await runEngine(next(r1, { agent, flows: flowsReco, message: { kind: "text", text: "?" } }), { ai: ai.port });
+    expect(ai.calls[0].functions.map((f) => f.name)).toEqual(["agneau"]);
+  });
+
+  it("texte d'entrée : l'IA est appelée tout de suite, avec les variables et la consigne du bloc", async () => {
+    const ai = fakeAi({ action: "repondre", texte: "Je vous conseille le burrito 🌯" });
+    const flowsReco = [...flows, reco({ input: "Le client {{prenom}} veut un conseil.", instructions: "Propose 2 plats." })];
+    const r = await runEngine(input({ agent, channel: toujours, flows: flowsReco, message: { kind: "text", text: "conseil" } }), {
+      ai: ai.port,
+    });
+    expect(texts(r)).toEqual(["Qu'est-ce qui vous ferait plaisir ?", "Je vous conseille le burrito 🌯"]);
+    expect(ai.calls[0].message).toBe("Le client Jules veut un conseil.");
+    expect(ai.calls[0].instructions).toBe("Propose 2 plats.");
+    expect(r.session?.nodeId).toBe("ia");
+  });
+
+  it("une fonction appelée depuis le bloc IA remplace le bloc (l'agent s'arrête)", async () => {
+    const ai = fakeAi({ action: "fonction", fonction: "reserver" });
+    const flowsReco = [...flows, reco()];
+    const r1 = await runEngine(input({ agent, flows: flowsReco, message: { kind: "text", text: "conseil" } }));
+    const r2 = await runEngine(next(r1, { agent, flows: flowsReco, message: { kind: "text", text: "je veux réserver" } }), { ai: ai.port });
+    expect(texts(r2)).toEqual(["Pour combien de personnes ?"]);
+    expect(r2.session?.flowId).toBe("f_resa");
+    expect(r2.session?.aiHistory).toBeUndefined();
+  });
+
+  it("délai d'inactivité : celui du bloc, sinon celui de l'agent", async () => {
+    const r1 = await runEngine(input({ agent, flows: [...flows, reco()], message: { kind: "text", text: "conseil" } }));
+    expect(r1.session?.expiresAt).toBe(addMinutes(NOW, 10).toISOString());
+    const r2 = await runEngine(input({ agent, flows: [...flows, reco({ inactivityMinutes: 3 })], message: { kind: "text", text: "conseil" } }));
+    expect(r2.session?.expiresAt).toBe(addMinutes(NOW, 3).toISOString());
+    const r3 = await runEngine(next(r2, { agent, flows: [...flows, reco({ inactivityMinutes: 3 })], now: addMinutes(NOW, 4), message: { kind: "text", text: "?" } }));
+    expect(r3.events).toContainEqual({ type: "session_expired", flowId: "f_reco" });
   });
 });
 

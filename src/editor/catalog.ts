@@ -17,7 +17,7 @@ export const BLOCKS: Record<NodeType, BlockInfo> = {
   list: { label: "Liste", description: "Jusqu'à 10 choix", accent: "bg-blue", hex: "#2A8BFF", icon: "📋" },
   question: { label: "Question", description: "Pose une question, garde la réponse", accent: "bg-cyan", hex: "#74DDFB", icon: "❓" },
   condition: { label: "Condition", description: "Selon une variable, l'heure ou le jour", accent: "bg-navy-2", hex: "#1B2A6B", icon: "🔀" },
-  ai: { label: "IA", description: "L'IA répond avec la fiche d'infos", accent: "bg-pink-2", hex: "#FF7CCB", icon: "✨" },
+  ai: { label: "Agent IA", description: "L'IA répond, lance une fonction ou passe la main", accent: "bg-pink-2", hex: "#FF7CCB", icon: "✨" },
   handoff: { label: "Transfert humain", description: "Met le bot en pause, prévient le gérant", accent: "bg-coral", hex: "#FF6B6B", icon: "🙋" },
   goto_flow: { label: "Aller à un flux", description: "Saute vers un autre flux", accent: "bg-navy", hex: "#101B4D", icon: "↪️" },
   end: { label: "Fin", description: "Termine la conversation", accent: "bg-muted", hex: "#5E6690", icon: "🏁" },

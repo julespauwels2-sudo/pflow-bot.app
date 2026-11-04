@@ -29,11 +29,13 @@ export default function FlowPage() {
         return { id: f.id, name: f.name, isDefault: trigger?.isDefault ?? false, event: trigger?.event };
       });
       // Client lié au modèle : on raisonne sur le bot assemblé (flux du modèle + flux du client).
+      let agentFunctions = owner.kind === "template" ? (owner.template.agent?.functions ?? []) : [];
       if (owner.kind === "client" && owner.client.template) {
         const templateFlows = await repos.flows.listByOwner(owner.client.template.templateId);
         flows = botFlowList(resolveBot({ client: owner.client, templateFlows, clientFlows: own }).entries);
+        agentFunctions = (await repos.templates.get(owner.client.template.templateId))?.agent?.functions ?? [];
       }
-      return { flow, owner, flows };
+      return { flow, owner, flows, agentFunctions: agentFunctions.map((f) => ({ name: f.name, description: f.description })) };
     },
     [id],
   );
@@ -53,7 +55,7 @@ export default function FlowPage() {
     );
   }
   // Chargé une seule fois : l'éditeur gère ensuite lui-même l'état et la sauvegarde.
-  return <FlowEditor key={state.data.flow.id} flow={state.data.flow} owner={state.data.owner} flows={state.data.flows} />;
+  return <FlowEditor key={state.data.flow.id} flow={state.data.flow} owner={state.data.owner} flows={state.data.flows} agentFunctions={state.data.agentFunctions} />;
 }
 
 function Centered({ children }: { children: React.ReactNode }) {

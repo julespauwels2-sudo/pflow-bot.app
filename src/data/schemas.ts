@@ -79,7 +79,13 @@ export const flowNodeSchema = z.discriminatedUnion("type", [
   z.object({
     ...nodeBase,
     type: z.literal("ai"),
-    data: z.object({ intro: z.string().optional(), instructions: z.string().optional() }),
+    data: z.object({
+      intro: z.string().optional(),
+      input: z.string().optional(),
+      instructions: z.string().optional(),
+      functions: z.array(z.string()).optional(),
+      inactivityMinutes: z.number().int().min(1).max(1440).optional(),
+    }),
   }),
   z.object({ ...nodeBase, type: z.literal("handoff"), data: z.object({ text: z.string().optional() }) }),
   z.object({ ...nodeBase, type: z.literal("goto_flow"), data: z.object({ flowId: z.string() }) }),
@@ -132,6 +138,7 @@ export const infoSheetSchema = z.object({
   zonesLivraison: z.string().optional(),
   pointsDeVente: z.string().optional(),
   resumeCarte: z.string().optional(),
+  faq: z.string().optional(),
   reglesSpeciales: z.string().optional(),
 });
 
@@ -179,7 +186,18 @@ export const templateSchema = z.object({
     .object({
       consigne: z.string().optional(),
       model: z.string().optional(),
-      functions: z.array(z.object({ name: z.string(), flowId: z.string(), description: z.string() })).optional(),
+      dailyLimit: z.number().int().min(1).max(500).optional(),
+      inactivityMinutes: z.number().int().min(1).max(1440).optional(),
+      functions: z
+        .array(
+          z.object({
+            name: z.string(),
+            flowId: z.string(),
+            description: z.string(),
+            aiText: z.enum(["silence", "avant", "variable"]).optional(),
+          }),
+        )
+        .optional(),
     })
     .optional(),
   createdAt: z.string(),
@@ -206,6 +224,28 @@ const storedFlowObject = z.object({
 
 export const storedFlowSchema = z.preprocess(migrateFlowOwner, storedFlowObject);
 
+const usageSchema = z.object({
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  cacheReadTokens: z.number().optional(),
+  cacheWriteTokens: z.number().optional(),
+});
+
+export const aiCallSchema = z.object({
+  id,
+  clientId: id,
+  at: z.string(),
+  source: z.enum(["simulateur", "whatsapp"]),
+  model: z.string().optional(),
+  message: z.string(),
+  decision: z
+    .object({ action: z.enum(["repondre", "fonction", "transfert_humain"]), fonction: z.string().optional(), texte: z.string().optional() })
+    .optional(),
+  usage: usageSchema.optional(),
+  costUsd: z.number().nullable().optional(),
+  error: z.string().optional(),
+});
+
 export const workspaceSchema = z.object({
   clients: z.array(clientSchema),
   flows: z.array(storedFlowSchema),
@@ -214,6 +254,8 @@ export const workspaceSchema = z.object({
   /** Absent dans les sauvegardes d'avant le modèle maître. */
   templates: z.array(templateSchema).default([]),
   infoSheets: z.record(z.string(), infoSheetSchema),
+  /** Absent dans les sauvegardes d'avant l'agent IA. */
+  aiCalls: z.array(aiCallSchema).default([]),
 });
 
 /** Fichier d'export d'un flux. */

@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { FlowsCard } from "@/components/flows-card";
-import { Button, Card, Loading, Notice } from "@/components/ui";
+import { Button, ButtonLink, Card, Loading, Notice } from "@/components/ui";
+import { DEFAULT_AI_MODEL, modelLabel } from "@/ai/models";
 import { errorText, getRepositories, useLoad } from "@/data/browser";
 import { completeMasterTemplate, createMasterTemplate, missingSeedFlows } from "@/data/template-seed";
 import { BUILTIN_VARIABLES } from "@/editor/variables";
@@ -25,7 +26,7 @@ export default function TemplatePage() {
           <h1 className="text-3xl font-semibold">Modèle maître</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">
             Ta trame commune à tous les bots, écrite uniquement avec des variables (nom du resto, lien de commande, horaires…) : rien de propre à
-            un client. Les bots liés au modèle utiliseront ses flux <strong>publiés</strong> (branchement à l&apos;étape M3d).
+            un client. Les bots liés au modèle utilisent ses flux <strong>publiés</strong> et son agent IA.
           </p>
         </div>
       </div>
@@ -104,7 +105,26 @@ export default function TemplatePage() {
             />
             <div className="space-y-6">
               <Card title="Agent IA" description="Consigne générale, réglages du modèle et fonctions (chaque fonction = un flux du dossier « Fonctions IA »).">
-                <p className="rounded-xl bg-page p-3 text-sm text-muted">Se configure ici à l&apos;étape A6.</p>
+                {state.data.template.agent ? (
+                  <ul className="space-y-1 text-sm">
+                    <li>
+                      <span className="text-muted">Modèle :</span> {modelLabel(state.data.template.agent.model ?? DEFAULT_AI_MODEL)}
+                    </li>
+                    <li>
+                      <span className="text-muted">Fonctions :</span>{" "}
+                      {state.data.template.agent.functions?.length ? (
+                        <span className="font-mono text-xs">{state.data.template.agent.functions.map((f) => f.name).join(", ")}</span>
+                      ) : (
+                        "aucune"
+                      )}
+                    </li>
+                  </ul>
+                ) : (
+                  <p className="rounded-xl bg-page p-3 text-sm text-muted">Pas encore configuré : une configuration par défaut (ta consigne UChat) est prête.</p>
+                )}
+                <ButtonLink href="/modele/agent" variant="secondary" className="mt-3">
+                  Configurer l&apos;agent IA
+                </ButtonLink>
               </Card>
               <Card title="Variables disponibles" description="Remplacées par les infos de chaque client au moment de l'envoi.">
                 <ul className="space-y-1.5 text-xs">

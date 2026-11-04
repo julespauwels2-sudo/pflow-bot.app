@@ -1,5 +1,6 @@
 /** Journal du simulateur : pourquoi le bot a réagi (ou non), en clair. */
-import { ORDER_EVENTS, type EngineEvent, type EngineInput, type EngineResult, type Flow, type FlowNode } from "@/engine";
+import { ORDER_EVENTS, type AiDecision, type AiUsage, type EngineEvent, type EngineInput, type EngineResult, type Flow, type FlowNode } from "@/engine";
+import { formatUsd, modelLabel } from "@/ai/models";
 import { BLOCKS } from "@/editor/catalog";
 import { formatShort } from "./clock";
 
@@ -106,7 +107,7 @@ export function explainTurn(input: EngineInput, result: EngineResult): JournalLi
         lines.push({ tone: "info", text: "La pause du bot pour ce contact est terminée" });
         break;
       case "session_expired":
-        lines.push({ tone: "info", text: `Conversation expirée (inactive depuis plus de ${input.channel.sessionTimeoutMinutes} min) dans « ${flowName(e.flowId)} »` });
+        lines.push({ tone: "info", text: `Conversation expirée (délai d'inactivité dépassé) dans « ${flowName(e.flowId)} »` });
         break;
       case "paused": {
         const why = { echo_gerant: "le gérant a répondu", transfert_humain: "transfert humain", manuel: "pause manuelle" }[e.reason];
@@ -119,10 +120,10 @@ export function explainTurn(input: EngineInput, result: EngineResult): JournalLi
         break;
       }
       case "ai_called":
-        lines.push({ tone: "ok", text: `IA appelée : ${e.decision.action} (${e.usage.inputTokens} + ${e.usage.outputTokens} tokens)` });
+        lines.push({ tone: "ok", text: `IA (${modelLabel(e.model)}) : ${describeDecision(e.decision)} — ${describeUsage(e.usage)} · ${formatUsd(e.costUsd)}` });
         break;
       case "ai_unavailable":
-        lines.push({ tone: "skip", text: "IA de secours non disponible dans le simulateur (branchée à l'étape A6)" });
+        lines.push({ tone: "skip", text: "IA non appelée : l'option « IA réelle » est décochée (ou la clé API manque)" });
         break;
       case "error":
         lines.push({ tone: "warn", text: `Erreur : ${e.message}` });
@@ -140,4 +141,25 @@ export function explainTurn(input: EngineInput, result: EngineResult): JournalLi
   }
   if (lines.length === 0 && result.outgoing.length === 0) lines.push({ tone: "skip", text: "Aucune réaction du bot" });
   return lines;
+}
+
+function describeDecision(decision: AiDecision): string {
+  switch (decision.action) {
+    case "repondre":
+      return "répond elle-même";
+    case "fonction":
+      return `fonction ${decision.fonction ?? "?"}`;
+    case "transfert_humain":
+      return "passe la main à l'équipe";
+    default:
+      return String(decision.action);
+  }
+}
+
+function describeUsage(usage: AiUsage): string {
+  const cached = usage.cacheReadTokens ?? 0;
+  const written = usage.cacheWriteTokens ?? 0;
+  const input = usage.inputTokens + cached + written;
+  const cacheNote = cached ? ` dont ${cached.toLocaleString("fr-FR")} en cache` : written ? `, ${written.toLocaleString("fr-FR")} mis en cache` : "";
+  return `${input.toLocaleString("fr-FR")} tokens lus${cacheNote}, ${usage.outputTokens.toLocaleString("fr-FR")} écrits`;
 }

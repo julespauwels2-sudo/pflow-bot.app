@@ -46,7 +46,7 @@ export function nodeTexts(node: FlowNode): (string | undefined)[] {
     case "question":
       return [node.data.text, node.data.errorText];
     case "ai":
-      return [node.data.intro];
+      return [node.data.intro, node.data.input, node.data.instructions];
     case "handoff":
     case "end":
       return [node.data.text];
