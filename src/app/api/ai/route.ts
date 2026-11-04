@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { askClaude } from "@/ai/claude";
 import { aiRequestSchema } from "@/ai/schemas";
 import { allowedModel, serverModel } from "@/ai/server-port";
+import { tooManyRequests } from "@/lib/request-limit";
 import { checkBotAdmin } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
@@ -23,6 +24,9 @@ export async function GET() {
 export async function POST(request: Request) {
   const caller = await checkBotAdmin(request.headers.get("authorization"));
   if (!caller.ok) return fail(caller.error, caller.status);
+  // Chaque appel coûte : 30 par minute et par compte suffisent largement au simulateur.
+  const limited = tooManyRequests("ai", request, caller.userId, 30);
+  if (limited) return limited;
 
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {

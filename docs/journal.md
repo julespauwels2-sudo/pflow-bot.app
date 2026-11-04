@@ -262,3 +262,21 @@ en mode démo après le test WhatsApp de bout en bout.
 **Choix fait sans toi** : les appels IA venus d'Instagram sont notés « whatsapp » (canal réel) car la
 contrainte de `bot_appels_ia` n'accepte pas « instagram ». L'élargissement est ajouté à la migration C
 (**non appliquée**, nom de la contrainte vérifié en lecture seule : `bot_appels_ia_source_check`).
+
+### Tâche 8 — Audit de sécurité ✅
+
+Rapport complet : **[docs/securite.md](securite.md)**. En bref :
+- **Déjà bon** : pages et routes protégées (mot de passe provisoire + connexion + RLS), 8/8 tables
+  `bot_` avec RLS et fermées à `anon` (le conseiller Supabase ne signale rien sur elles), aucun
+  secret dans tout l'historique Git, webhooks signés, journaux sans numéro ni message en clair.
+- **Corrigé sans migration** : en-têtes de sécurité sur tout le site, limites de débit sur l'IA
+  (30/min/compte) et la boîte de réception (120/min/compte), purge des messages après 12 mois
+  **préparée et testée mais non activée**, `.env.example` complet.
+- **Reste à décider** (classé dans le rapport) : activer la purge, politique de confidentialité
+  publique (exigée par Meta), clause RGPD dans les contrats restos, pare-feu Vercel, CSP complète.
+- **Vu côté CRM, pas touché** : le conseiller Supabase signale une vue en *security definer*
+  (`vitrine`) et beaucoup de fonctions appelables par `anon` — à regarder à part, rien à voir avec
+  le bot.
+
+**Vérifié** : 311 tests, lint, types, build ; en-têtes présents (curl) ; sans mot de passe `/clients`
+et `/api/etat` → 401 ; e2e WhatsApp, Instagram et boîte de réception passent avec les nouveaux en-têtes.
