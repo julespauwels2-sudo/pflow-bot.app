@@ -3,8 +3,10 @@
 import { useState } from "react";
 import {
   WEEKDAY_LABELS,
+  fixedDeliveryDays,
   infoSheetVariables,
   upcomingRounds,
+  type DeliveryDays,
   type DeliveryRound,
   type InfoSheet,
   type IsoWeekday,
@@ -222,99 +224,192 @@ function DeliveryEditor({
   const minute = useCurrentMinute();
   const rounds = sheet.tournees ?? [];
   const upcoming = minute === null ? null : new Set(upcomingRounds(rounds, new Date(minute * 60_000), timezone).map((r) => r.id));
+  const fixed = fixedDeliveryDays(sheet);
   // Sans choix explicite, des tournées à venir font passer le resto « sur planning ».
   const mode = sheet.livraisonMode ?? (upcoming?.size ? "planning" : "zones");
-  const forcedPlanning = mode === "zones" && Boolean(upcoming?.size);
+  const forcedPlanning = !fixed.length && mode === "zones" && Boolean(upcoming?.size);
   const past = upcoming ? rounds.filter((r) => !upcoming.has(r.id)) : [];
   const setRounds = (tournees: DeliveryRound[]) => onChange({ ...sheet, tournees });
   const updateRound = (id: string, patch: Partial<DeliveryRound>) => setRounds(rounds.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
   return (
-    <fieldset className="rounded-2xl border border-rule p-3">
+    <fieldset className="space-y-4 rounded-2xl border border-rule p-3">
       <legend className="px-1 text-sm font-semibold">Livraison</legend>
-      <div className="flex flex-wrap gap-4 text-sm">
-        {(
-          [
-            ["zones", "Zones fixes"],
-            ["planning", "Sur planning (tournées à des dates précises)"],
-          ] as const
-        ).map(([value, label]) => (
-          <label key={value} className="flex items-center gap-2">
-            <input type="radio" name="livraisonMode" className="accent-pink" checked={mode === value} onChange={() => onChange({ ...sheet, livraisonMode: value })} />
-            {label}
-          </label>
-        ))}
+
+      <Field
+        label={zonesLocked ? "Zones de livraison (CRM)" : "Zones de livraison"}
+        hint={zonesLocked ? "Zones, frais et minimums lus dans le CRM." : "Une zone par ligne, ex. « • Jarry : livraison offerte »."}
+      >
+        <Textarea
+          disabled={zonesLocked}
+          placeholder={"• Jarry : livraison offerte\n• Dothémare : 2 €"}
+          value={sheet.zonesLivraison ?? ""}
+          onChange={(e) => onChange({ ...sheet, zonesLivraison: e.target.value || undefined })}
+        />
+      </Field>
+
+      <FixedDaysEditor sheet={sheet} onChange={onChange} />
+
+      <div className="space-y-2">
+        <h4 className="text-sm font-semibold">{fixed.length ? "Livraisons exceptionnelles (dates précises)" : "Tournées datées"}</h4>
+        <p className="text-xs text-muted">
+          {fixed.length
+            ? "En plus des jours fixes : une livraison à une date donnée (ex. un samedi de fête). Elles s'affichent après les jours fixes."
+            : "Livraisons à des dates précises (ex. en entreprises). Dès qu'il y en a une à venir, le bot passe « sur planning » et n'annonce plus les zones."}{" "}
+          L&apos;IA ne propose jamais une autre date, ni une tournée passée. Heures facultatives, dans le fuseau du client.
+        </p>
+        {rounds.length === 0 && <p className="text-sm text-muted">Aucune tournée.</p>}
+        <ul className="space-y-2">
+          {rounds.map((r) => {
+            const isPast = upcoming !== null && !upcoming.has(r.id);
+            return (
+              <li key={r.id} className={`flex flex-wrap items-center gap-2 rounded-xl border border-line p-2 ${isPast ? "opacity-50" : ""}`}>
+                <input type="date" aria-label="Date de la tournée" className="rounded-lg border border-line px-2 py-1 text-sm" value={r.date} onChange={(e) => updateRound(r.id, { date: e.target.value })} />
+                <input type="time" aria-label="Début" className="rounded-lg border border-line px-2 py-1 text-sm" value={r.de ?? ""} onChange={(e) => updateRound(r.id, { de: e.target.value || undefined })} />
+                <span className="text-muted">→</span>
+                <input type="time" aria-label="Fin" className="rounded-lg border border-line px-2 py-1 text-sm" value={r.a ?? ""} onChange={(e) => updateRound(r.id, { a: e.target.value || undefined })} />
+                <input
+                  aria-label="Zone ou entreprises desservies"
+                  placeholder="Jarry — Orange, EDF…"
+                  className="min-w-40 flex-1 rounded-lg border border-line px-2 py-1 text-sm"
+                  value={r.lieux}
+                  onChange={(e) => updateRound(r.id, { lieux: e.target.value })}
+                />
+                {isPast && <span className="text-xs font-semibold text-muted">passée</span>}
+                <button type="button" aria-label="Supprimer la tournée" className="px-1 text-coral" onClick={() => setRounds(rounds.filter((x) => x.id !== r.id))}>
+                  ✕
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              const today = minute === null ? "" : new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date(minute * 60_000));
+              setRounds([...rounds, { id: newRoundId(), date: today, lieux: "" }]);
+            }}
+          >
+            + Ajouter une tournée
+          </Button>
+          {past.length > 0 && (
+            <Button variant="ghost" onClick={() => setRounds(rounds.filter((r) => upcoming?.has(r.id)))}>
+              Retirer les {past.length} tournée{past.length > 1 ? "s" : ""} passée{past.length > 1 ? "s" : ""}
+            </Button>
+          )}
+        </div>
       </div>
 
+      {!fixed.length && (
+        <div className="space-y-1 text-sm">
+          <p className="text-xs font-semibold">Sans jour fixe ni tournée à venir, le bot annonce :</p>
+          {(
+            [
+              ["zones", "les zones de livraison"],
+              ["planning", "« aucune tournée prévue pour le moment » (livraison uniquement sur planning)"],
+            ] as const
+          ).map(([value, label]) => (
+            <label key={value} className="flex items-center gap-2">
+              <input type="radio" name="livraisonMode" className="accent-pink" checked={mode === value} onChange={() => onChange({ ...sheet, livraisonMode: value })} />
+              {label}
+            </label>
+          ))}
+        </div>
+      )}
       {forcedPlanning && (
-        <p className="mt-2 rounded-xl bg-pink/10 p-2 text-xs text-navy" data-testid="planning-force">
+        <p className="rounded-xl bg-pink/10 p-2 text-xs text-navy" data-testid="planning-force">
           Il reste {upcoming!.size} tournée{upcoming!.size > 1 ? "s" : ""} à venir : le bot reste « sur planning » tant qu&apos;elles existent
           (les zones ne sont pas annoncées). Supprime-les pour revenir aux zones.
         </p>
       )}
-      {mode === "zones" ? (
-        <Field
-          label={zonesLocked ? "Zones de livraison (CRM)" : "Zones de livraison"}
-          hint={zonesLocked ? "Zones, frais et minimums lus dans le CRM." : undefined}
-          className="mt-3"
-        >
-          <Textarea
-            disabled={zonesLocked}
-            placeholder="Jarry et Dothémare (livraison offerte)…"
-            value={sheet.zonesLivraison ?? ""}
-            onChange={(e) => onChange({ ...sheet, zonesLivraison: e.target.value || undefined })}
-          />
-        </Field>
-      ) : (
-        <div className="mt-3 space-y-2">
-          <p className="text-xs text-muted">
-            L&apos;IA ne propose que les tournées à venir de cette liste : jamais une autre date, jamais une tournée passée. Heures facultatives, dans
-            le fuseau du client.
-          </p>
-          {rounds.length === 0 && <p className="text-sm text-muted">Aucune tournée.</p>}
-          <ul className="space-y-2">
-            {rounds.map((r) => {
-              const isPast = upcoming !== null && !upcoming.has(r.id);
-              return (
-                <li key={r.id} className={`flex flex-wrap items-center gap-2 rounded-xl border border-line p-2 ${isPast ? "opacity-50" : ""}`}>
-                  <input type="date" aria-label="Date de la tournée" className="rounded-lg border border-line px-2 py-1 text-sm" value={r.date} onChange={(e) => updateRound(r.id, { date: e.target.value })} />
-                  <input type="time" aria-label="Début" className="rounded-lg border border-line px-2 py-1 text-sm" value={r.de ?? ""} onChange={(e) => updateRound(r.id, { de: e.target.value || undefined })} />
-                  <span className="text-muted">→</span>
-                  <input type="time" aria-label="Fin" className="rounded-lg border border-line px-2 py-1 text-sm" value={r.a ?? ""} onChange={(e) => updateRound(r.id, { a: e.target.value || undefined })} />
-                  <input
-                    aria-label="Zone ou entreprises desservies"
-                    placeholder="Jarry — Orange, EDF…"
-                    className="min-w-40 flex-1 rounded-lg border border-line px-2 py-1 text-sm"
-                    value={r.lieux}
-                    onChange={(e) => updateRound(r.id, { lieux: e.target.value })}
-                  />
-                  {isPast && <span className="text-xs font-semibold text-muted">passée</span>}
-                  <button type="button" aria-label="Supprimer la tournée" className="px-1 text-coral" onClick={() => setRounds(rounds.filter((x) => x.id !== r.id))}>
-                    ✕
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => {
-                const today = minute === null ? "" : new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date(minute * 60_000));
-                setRounds([...rounds, { id: newRoundId(), date: today, lieux: "" }]);
-              }}
-            >
-              + Ajouter une tournée
-            </Button>
-            {past.length > 0 && (
-              <Button variant="ghost" onClick={() => setRounds(rounds.filter((r) => upcoming?.has(r.id)))}>
-                Retirer les {past.length} tournée{past.length > 1 ? "s" : ""} passée{past.length > 1 ? "s" : ""}
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
     </fieldset>
+  );
+}
+
+/** Zones citées dans le texte des zones (« • Jarry : … » → « Jarry »), pour proposer leurs noms. */
+function zoneNames(text: string | undefined): string[] {
+  return (text ?? "")
+    .split("\n")
+    .map((l) => /^\s*[•\-*]?\s*([^:]+?)\s*:/.exec(l)?.[1]?.replace(/\*/g, "").trim())
+    .filter((n): n is string => Boolean(n));
+}
+
+/** Jours de livraison fixes, chaque semaine, zone par zone. */
+function FixedDaysEditor({ sheet, onChange }: { sheet: InfoSheet; onChange: (s: InfoSheet) => void }) {
+  const rows = sheet.joursLivraison ?? [];
+  const names = zoneNames(sheet.zonesLivraison);
+  const setRows = (joursLivraison: DeliveryDays[]) => onChange({ ...sheet, joursLivraison: joursLivraison.length ? joursLivraison : undefined });
+  const update = (id: string, patch: Partial<DeliveryDays>) => setRows(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const unused = names.filter((n) => !rows.some((r) => r.zone.trim().toLowerCase() === n.toLowerCase()));
+
+  return (
+    <div className="space-y-2" data-testid="fixed-days">
+      <h4 className="text-sm font-semibold">Jours de livraison fixes, par zone</h4>
+      <p className="text-xs text-muted">
+        Chaque semaine, mêmes jours (ex. Jarry : mardi, mercredi, vendredi). S&apos;il y en a, le bot les annonce toujours, avec les infos de la
+        zone (frais, minimum) : jamais « aucune tournée ».
+      </p>
+      <datalist id="zones-connues">
+        {names.map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
+      {rows.length === 0 && <p className="text-sm text-muted">Aucun jour fixe.</p>}
+      <ul className="space-y-2">
+        {rows.map((r) => (
+          <li key={r.id} className="space-y-2 rounded-xl border border-line p-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                aria-label="Zone livrée"
+                list="zones-connues"
+                placeholder="Jarry"
+                className="min-w-32 flex-1 rounded-lg border border-line px-2 py-1 text-sm"
+                value={r.zone}
+                onChange={(e) => update(r.id, { zone: e.target.value })}
+              />
+              <input
+                aria-label="Précision"
+                placeholder="Précision (facultatif) : le midi…"
+                className="min-w-40 flex-1 rounded-lg border border-line px-2 py-1 text-sm"
+                value={r.note ?? ""}
+                onChange={(e) => update(r.id, { note: e.target.value || undefined })}
+              />
+              <button type="button" aria-label="Supprimer la zone" className="px-1 text-coral" onClick={() => setRows(rows.filter((x) => x.id !== r.id))}>
+                ✕
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {DAYS.map((jour) => {
+                const on = r.jours.includes(jour);
+                return (
+                  <button
+                    key={jour}
+                    type="button"
+                    aria-pressed={on}
+                    aria-label={`${r.zone || "Zone"} : ${WEEKDAY_LABELS[jour]}`}
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${on ? "bg-pink text-white" : "bg-navy/5 text-muted hover:bg-navy/10"}`}
+                    onClick={() => update(r.id, { jours: on ? r.jours.filter((d) => d !== jour) : [...r.jours, jour].sort((a, b) => a - b) })}
+                  >
+                    {WEEKDAY_LABELS[jour].slice(0, 3)}
+                  </button>
+                );
+              })}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={() => setRows([...rows, { id: newRoundId(), zone: "", jours: [] }])}>
+          + Ajouter une zone
+        </Button>
+        {unused.length > 0 && (
+          <Button variant="ghost" onClick={() => setRows([...rows, ...unused.map((zone) => ({ id: newRoundId(), zone, jours: [] as IsoWeekday[] }))])}>
+            Reprendre les zones ({unused.join(", ")})
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 

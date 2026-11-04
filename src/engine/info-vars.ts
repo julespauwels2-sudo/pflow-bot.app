@@ -3,7 +3,7 @@
  * calculées dans le fuseau du client. Utilisées par le moteur et par l'aperçu de l'éditeur.
  */
 import { WEEKDAY_LABELS, localTime, parseHhmm } from "./time";
-import type { DeliveryRound, InfoSheet, IsoWeekday, TimeRange } from "./types";
+import type { DeliveryDays, DeliveryRound, InfoSheet, IsoWeekday, TimeRange } from "./types";
 
 const DAYS: IsoWeekday[] = [1, 2, 3, 4, 5, 6, 7];
 const capitalize = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
@@ -117,12 +117,65 @@ export function formatServiceModes(sheet: Pick<InfoSheet, "livraison" | "retrait
   return "";
 }
 
+/** « mardi, mercredi et vendredi », « tous les jours », « du lundi au vendredi ». */
+export function formatWeekdays(jours: IsoWeekday[]): string {
+  const days = [...new Set(jours)].sort((a, b) => a - b);
+  if (days.length === 7) return "tous les jours";
+  const consecutive = days.length >= 3 && days.every((d, i) => i === 0 || d === days[i - 1] + 1);
+  if (consecutive) return `du ${WEEKDAY_LABELS[days[0]]} au ${WEEKDAY_LABELS[days[days.length - 1]]}`;
+  return joinFr(days.map((d) => WEEKDAY_LABELS[d]));
+}
+
+/** Jours fixes réellement renseignés (zone nommée, au moins un jour). */
+export function fixedDeliveryDays(sheet: Pick<InfoSheet, "livraison" | "joursLivraison">): DeliveryDays[] {
+  if (!sheet.livraison) return [];
+  return (sheet.joursLivraison ?? []).filter((d) => d.zone.trim() && d.jours.length);
+}
+
+const zoneKey = (name: string) =>
+  name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+/**
+ * Jours fixes par zone, complétés par les infos de la zone quand elle existe dans le texte des zones
+ * (« • Jarry : livraison offerte ») : « • *Jarry* : mardi, mercredi et vendredi (livraison offerte) ».
+ * Les zones sans jours fixes suivent, telles quelles.
+ */
+export function formatFixedDelivery(days: DeliveryDays[], zonesText = ""): string {
+  const zoneLines = zonesText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const m = /^[•\-*]\s*([^:]+?)\s*:\s*(.+)$/.exec(line);
+      return { line, key: m ? zoneKey(m[1].replace(/\*/g, "")) : null, details: m?.[2].trim() };
+    });
+  const used = new Set<string>();
+  const lines = days.map((d) => {
+    const key = zoneKey(d.zone);
+    const zone = zoneLines.find((z) => z.key === key);
+    if (zone) used.add(zone.line);
+    const extra = [d.note?.trim(), zone?.details].filter(Boolean).join(", ");
+    return `• *${d.zone.trim()}* : ${formatWeekdays(d.jours)}${extra ? ` (${extra})` : ""}`;
+  });
+  for (const z of zoneLines) if (!used.has(z.line)) lines.push(z.line);
+  return lines.join("\n");
+}
+
+export const EXCEPTIONAL_ROUNDS_TITLE = "📅 *Livraisons exceptionnelles*";
+
 export interface InfoVariables {
   horaires: string;
   horaires_du_jour: string;
   adresse: string;
   modes_service: string;
   zones_livraison: string;
+  /** Jours fixes par zone (vide s'il n'y en a pas). */
+  jours_livraison: string;
   prochaines_livraisons: string;
   infos_livraison: string;
   points_de_vente: string;
@@ -141,12 +194,28 @@ export function isPlanningDelivery(sheet: Pick<InfoSheet, "livraison" | "livrais
 export function infoSheetVariables(sheet: InfoSheet, now: Date, timezone: string): InfoVariables {
   const horaires = formatWeeklyHours(sheet);
   const upcoming = upcomingRounds(sheet.tournees, now, timezone);
-  const planning = isPlanningDelivery(sheet, upcoming.length);
-  const rounds = planning ? upcoming.slice(0, MAX_LISTED_ROUNDS) : [];
-  const prochaines = planning ? (rounds.length ? rounds.map(formatRound).join("\n") : NO_ROUND_TEXT) : "";
-  // En mode planning, un ancien texte de zones resté dans la fiche ne doit jamais ressortir.
-  const zones = sheet.livraison && !planning ? (sheet.zonesLivraison?.trim() ?? "") : "";
-  const infosLivraison = !sheet.livraison ? "" : planning ? prochaines : zones;
+  const fixed = fixedDeliveryDays(sheet);
+  const zonesText = sheet.zonesLivraison?.trim() ?? "";
+  let zones: string;
+  let joursLivraison = "";
+  let prochaines: string;
+  let infosLivraison: string;
+  let planning = false;
+  if (fixed.length) {
+    // Jours fixes : toujours annoncés (jamais « aucune tournée ») ; les tournées datées s'ajoutent.
+    joursLivraison = formatFixedDelivery(fixed, zonesText);
+    zones = zonesText;
+    const rounds = upcoming.slice(0, MAX_LISTED_ROUNDS);
+    prochaines = rounds.map(formatRound).join("\n");
+    infosLivraison = prochaines ? `${joursLivraison}\n\n${EXCEPTIONAL_ROUNDS_TITLE}\n${prochaines}` : joursLivraison;
+  } else {
+    planning = isPlanningDelivery(sheet, upcoming.length);
+    const rounds = planning ? upcoming.slice(0, MAX_LISTED_ROUNDS) : [];
+    prochaines = planning ? (rounds.length ? rounds.map(formatRound).join("\n") : NO_ROUND_TEXT) : "";
+    // En mode planning, un ancien texte de zones resté dans la fiche ne doit jamais ressortir.
+    zones = sheet.livraison && !planning ? zonesText : "";
+    infosLivraison = !sheet.livraison ? "" : planning ? prochaines : zones;
+  }
   const adresse = sheet.adresse?.trim() ?? "";
   const pointsDeVente = sheet.pointsDeVente?.trim() ?? "";
   const paiement = sheet.modesPaiement?.trim() ?? "";
@@ -164,6 +233,7 @@ export function infoSheetVariables(sheet: InfoSheet, now: Date, timezone: string
     adresse,
     modes_service: formatServiceModes(sheet),
     zones_livraison: zones,
+    jours_livraison: joursLivraison,
     prochaines_livraisons: prochaines,
     infos_livraison: infosLivraison,
     points_de_vente: pointsDeVente,

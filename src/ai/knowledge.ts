@@ -3,7 +3,15 @@
  * l'IA sait du resto (affiché tel quel sur la page client, « Ce que l'IA sait de ce resto »).
  * Étape B : horaires et carte lus dans le CRM et PFlow Order.
  */
-import { formatRound, formatWeeklyHours, isPlanningDelivery, NO_ROUND_TEXT, type InfoSheet } from "@/engine";
+import {
+  fixedDeliveryDays,
+  formatFixedDelivery,
+  formatRound,
+  formatWeeklyHours,
+  isPlanningDelivery,
+  NO_ROUND_TEXT,
+  type InfoSheet,
+} from "@/engine";
 
 /** Nombre maximum de tournées données à l'IA (les plus proches). */
 export const MAX_AI_ROUNDS = 12;
@@ -36,7 +44,23 @@ export function buildKnowledgeBase({ nomResto, infoSheet: sheet, lienCommande }:
   if (sheet.retrait === false) modes.push("Retrait sur place : non.");
   parts.push(section("Modes de service", modes.join("\n")));
 
-  if (sheet.livraison) {
+  const fixed = fixedDeliveryDays(sheet);
+  if (sheet.livraison && fixed.length) {
+    // Jours fixes chaque semaine ; les tournées datées à venir s'y ajoutent.
+    parts.push(
+      section(
+        "Jours de livraison (chaque semaine)",
+        [
+          formatFixedDelivery(fixed, sheet.zonesLivraison),
+          "Le resto livre ces zones uniquement ces jours-là. Ne promets jamais un autre jour ni une autre zone.",
+        ].join("\n"),
+      ),
+    );
+    const rounds = (sheet.tournees ?? []).slice(0, MAX_AI_ROUNDS);
+    if (rounds.length) {
+      parts.push(section("Livraisons exceptionnelles (dates à venir, en plus des jours fixes)", rounds.map(formatRound).join("\n")));
+    }
+  } else if (sheet.livraison) {
     // La fiche reçue ne contient que les tournées à venir.
     if (isPlanningDelivery(sheet, sheet.tournees?.length ?? 0)) {
       const rounds = (sheet.tournees ?? []).slice(0, MAX_AI_ROUNDS);
@@ -85,7 +109,9 @@ export function missingKnowledge(sheet: InfoSheet): string[] {
   if (!sheet.horaires.length) missing.push("horaires");
   if (!sheet.resumeCarte?.trim()) missing.push("carte");
   if (!sheet.modesPaiement?.trim()) missing.push("moyens de paiement");
-  if (sheet.livraison && !isPlanningDelivery(sheet, sheet.tournees?.length ?? 0) && !sheet.zonesLivraison?.trim()) missing.push("zones de livraison");
+  if (sheet.livraison && !fixedDeliveryDays(sheet).length && !isPlanningDelivery(sheet, sheet.tournees?.length ?? 0) && !sheet.zonesLivraison?.trim()) {
+    missing.push("zones de livraison");
+  }
   if (sheet.livraison === undefined && sheet.retrait === undefined) missing.push("modes de service (livraison, retrait)");
   return missing;
 }

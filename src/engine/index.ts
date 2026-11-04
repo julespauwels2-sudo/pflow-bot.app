@@ -19,6 +19,10 @@ export {
   upcomingRounds,
   withUpcomingRounds,
   isPlanningDelivery,
+  fixedDeliveryDays,
+  formatFixedDelivery,
+  formatWeekdays,
+  EXCEPTIONAL_ROUNDS_TITLE,
   NO_ROUND_TEXT,
   type InfoVariables,
 } from "./info-vars";

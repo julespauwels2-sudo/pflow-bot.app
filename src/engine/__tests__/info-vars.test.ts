@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   NO_ROUND_TEXT,
+  formatFixedDelivery,
+  formatWeekdays,
   isPlanningDelivery,
   formatDateFr,
   formatHour,
@@ -189,5 +191,63 @@ describe("passage automatique « sur planning »", () => {
   it("isPlanningDelivery : seulement si le resto livre", () => {
     expect(isPlanningDelivery({ livraison: false }, 3)).toBe(false);
     expect(isPlanningDelivery({ livraison: true, livraisonMode: "planning" }, 0)).toBe(true);
+  });
+});
+
+describe("jours de livraison fixes par zone", () => {
+  const now = new Date("2026-11-03T16:00:00Z");
+  const tz = "America/Guadeloupe";
+  const zones = "• Jarry : livraison offerte\n• Dothémare : livraison offerte\n• Saint-Anne : livraison 2 €";
+  const jours = [
+    { id: "j1", zone: "Jarry", jours: [2, 3, 5] as (2 | 3 | 5)[] },
+    { id: "j2", zone: "dothemare", jours: [5, 2] as (2 | 5)[], note: "le midi" },
+  ];
+
+  it("formate les jours à la française", () => {
+    expect(formatWeekdays([5, 2, 3])).toBe("mardi, mercredi et vendredi");
+    expect(formatWeekdays([1, 2, 3, 4, 5])).toBe("du lundi au vendredi");
+    expect(formatWeekdays([1, 2, 3, 4, 5, 6, 7])).toBe("tous les jours");
+    expect(formatWeekdays([4])).toBe("jeudi");
+  });
+
+  it("reprend les infos de la zone (frais) et garde les zones sans jour fixe", () => {
+    expect(formatFixedDelivery(jours, zones)).toBe(
+      "• *Jarry* : mardi, mercredi et vendredi (livraison offerte)\n• *dothemare* : mardi et vendredi (le midi, livraison offerte)\n• Saint-Anne : livraison 2 €",
+    );
+  });
+
+  it("jours fixes seuls : annoncés, jamais « aucune tournée », même en mode planning", () => {
+    const v = infoSheetVariables({ horaires: [], livraison: true, livraisonMode: "planning", zonesLivraison: zones, joursLivraison: jours }, now, tz);
+    expect(v.infos_livraison).toContain("• *Jarry* : mardi, mercredi et vendredi");
+    expect(v.infos_livraison).not.toContain(NO_ROUND_TEXT);
+    expect(v.jours_livraison).toBe(v.infos_livraison);
+    expect(v.prochaines_livraisons).toBe("");
+  });
+
+  it("jours fixes + tournées à venir : les deux, les tournées en livraisons exceptionnelles", () => {
+    const v = infoSheetVariables(
+      {
+        horaires: [],
+        livraison: true,
+        zonesLivraison: zones,
+        joursLivraison: jours,
+        tournees: [
+          { id: "t0", date: "2026-10-01", lieux: "Passée" },
+          { id: "t1", date: "2026-11-07", lieux: "Gosier (marché de Noël)" },
+        ],
+      },
+      now,
+      tz,
+    );
+    expect(v.infos_livraison).toBe(
+      `${formatFixedDelivery(jours, zones)}\n\n📅 *Livraisons exceptionnelles*\n• *Samedi 7 novembre* : Gosier (marché de Noël)`,
+    );
+    expect(v.infos_pratiques).toContain("🛵 *Livraison*\n• *Jarry*");
+  });
+
+  it("ignorés si le resto ne livre pas, ou sans jour coché", () => {
+    expect(infoSheetVariables({ horaires: [], livraison: false, joursLivraison: jours }, now, tz).jours_livraison).toBe("");
+    const v = infoSheetVariables({ horaires: [], livraison: true, zonesLivraison: zones, joursLivraison: [{ id: "x", zone: "Jarry", jours: [] }] }, now, tz);
+    expect(v.infos_livraison).toBe(zones);
   });
 });

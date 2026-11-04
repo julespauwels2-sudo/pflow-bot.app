@@ -74,6 +74,16 @@ export interface DeliveryRound {
   lieux: string;
 }
 
+/** Jours de livraison fixes d'une zone, chaque semaine (ex. Jarry : mardi, mercredi, vendredi). */
+export interface DeliveryDays {
+  id: string;
+  /** Nom de la zone (de préférence le même que dans les zones de livraison). */
+  zone: string;
+  jours: IsoWeekday[];
+  /** Précision facultative (ex. « le midi », « à partir de 10 commandes »). */
+  note?: string;
+}
+
 export interface InfoSheet {
   /** Horaires d'ouverture, exprimés dans le fuseau du client. Un jour absent = fermé. */
   horaires: OpeningDay[];
@@ -86,6 +96,11 @@ export interface InfoSheet {
    */
   livraisonMode?: "zones" | "planning";
   tournees?: DeliveryRound[];
+  /**
+   * Jours fixes par zone, chaque semaine. S'il y en a, ils sont toujours annoncés ; des tournées
+   * datées à venir s'y ajoutent comme livraisons exceptionnelles.
+   */
+  joursLivraison?: DeliveryDays[];
   retrait?: boolean;
   modesPaiement?: string;
   zonesLivraison?: string;

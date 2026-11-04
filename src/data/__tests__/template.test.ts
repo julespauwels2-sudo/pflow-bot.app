@@ -112,6 +112,10 @@ describe("modèle maître", () => {
     expect(await livraison(cookies)).toEqual([
       "🛵 *Livraison*\n• *Jeudi 5 novembre* (11h – 13h) : Jarry (entreprises)\n\n🏪 *Points de vente*\n• Station Vito, Le Gosier",
     ]);
+    // Jours fixes par zone (comme UChat) + la tournée datée en livraison exceptionnelle.
+    expect(await livraison({ ...cookies, joursLivraison: [{ id: "j", zone: "Jarry", jours: [2, 3, 5] }] })).toEqual([
+      "🛵 *Livraison*\n• *Jarry* : mardi, mercredi et vendredi (livraison offerte)\n\n📅 *Livraisons exceptionnelles*\n• *Jeudi 5 novembre* (11h – 13h) : Jarry (entreprises)\n\n🏪 *Points de vente*\n• Station Vito, Le Gosier",
+    ]);
     // Sans points de vente : le titre « Points de vente » n'est pas envoyé.
     expect(await livraison({ ...cookies, pointsDeVente: undefined })).toEqual(["🛵 *Livraison*\n• *Jeudi 5 novembre* (11h – 13h) : Jarry (entreprises)"]);
   });

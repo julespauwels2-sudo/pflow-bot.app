@@ -24,6 +24,10 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - Fiche d'infos lue **directement** dans le CRM (atelier) et le dashboard PFlow Order : horaires, carte…
   Les champs propres au bot (consigne IA, FAQ) restent dans les tables `bot_`. Regarder le CRM en
   lecture seule et proposer comment faire.
+- **Jours de livraison fixes par zone** (champ générique de la fiche du bot, ex. Jarry : mardi, mercredi,
+  vendredi ; table `bot_fiches`) : à passer plus tard dans le CRM avec les points de vente et le planning,
+  puis à lire comme les horaires (grisé « CRM »). Les tournées datées à venir s'y ajoutent comme
+  livraisons exceptionnelles.
 - **Planning de livraison et points de vente** : absents du CRM aujourd'hui (vérifié en lecture seule le
   5 novembre 2026 : ni table, ni colonne, ni champ JSON). En attendant, ils se saisissent dans la fiche du bot
   (`bot_tournees`, `bot_fiches`). **Plus tard** : les ajouter dans le CRM / le dashboard de la gérante (qui

@@ -133,6 +133,9 @@ export const infoSheetSchema = z.object({
       }),
     )
     .optional(),
+  joursLivraison: z
+    .array(z.object({ id, zone: z.string(), jours: z.array(weekday), note: z.string().optional() }))
+    .optional(),
   retrait: z.boolean().optional(),
   modesPaiement: z.string().optional(),
   zonesLivraison: z.string().optional(),

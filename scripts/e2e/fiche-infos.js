@@ -26,7 +26,8 @@ const BASE = 'http://localhost:3123';
   step('aperçu : {{horaires}} regroupés, {{horaires_du_jour}} au fuseau du client');
 
   // Planning
-  await p.getByText('Sur planning (tournées à des dates précises)').click();
+  // Les tournées datées sont toujours visibles ; le choix « aucune tournée prévue » ne sert que sans jour fixe.
+  await p.getByText('« aucune tournée prévue pour le moment »', { exact: false }).click();
   await p.getByRole('button', { name: '+ Ajouter une tournée' }).click();
   await p.getByLabel('Date de la tournée').nth(0).fill('2026-10-01');
   await p.getByLabel('Zone ou entreprises desservies').nth(0).fill('Jarry — tournée passée');
@@ -41,6 +42,14 @@ const BASE = 'http://localhost:3123';
   step('planning : tournée passée signalée et absente des variables, tournée à venir formatée');
   await p.getByRole('button', { name: /Retirer les 1 tournée passée/ }).click();
   if (await p.getByText('Jarry — tournée passée').count()) throw new Error('tournée passée non retirée');
+  // Jours fixes par zone : annoncés avec les tournées à venir en « livraisons exceptionnelles ».
+  await p.getByRole('button', { name: '+ Ajouter une zone' }).click();
+  await p.getByLabel('Zone livrée').fill('Jarry');
+  await p.getByRole('button', { name: 'Jarry : mardi' }).click();
+  await p.getByRole('button', { name: 'Jarry : vendredi' }).click();
+  await preview.getByText('• *Jarry* : mardi et vendredi', { exact: false }).first().waitFor();
+  await preview.getByText('📅 *Livraisons exceptionnelles*', { exact: false }).first().waitFor();
+  step('jours fixes par zone : annoncés, et la tournée à venir devient une livraison exceptionnelle');
   await p.getByLabel('Moyens de paiement').fill('Espèces à la livraison');
   await p.getByRole('button', { name: 'Enregistrer' }).last().click();
   await p.getByText("Fiche d'infos enregistrée.").waitFor();
@@ -49,6 +58,8 @@ const BASE = 'http://localhost:3123';
   await p.getByLabel('Zone ou entreprises desservies').first().waitFor();
   if ((await p.getByLabel('Zone ou entreprises desservies').first().inputValue()) !== 'Jarry — Orange, EDF') throw new Error('tournée non sauvegardée');
   if ((await p.getByLabel('Moyens de paiement').inputValue()) !== 'Espèces à la livraison') throw new Error('paiement non sauvegardé');
+  if ((await p.getByLabel('Zone livrée').inputValue()) !== 'Jarry') throw new Error('jours fixes non sauvegardés');
+  if ((await p.getByRole('button', { name: 'Jarry : mardi' }).getAttribute('aria-pressed')) !== 'true') throw new Error('jour non sauvegardé');
   step('enregistré et relu après rechargement (planning + paiement)');
 
   // Éditeur : Infos pratiques sans erreur, menu {x}
@@ -57,7 +68,7 @@ const BASE = 'http://localhost:3123';
   await p.getByText('Aucun problème').waitFor();
   await p.locator('.react-flow__node[data-id="h"]').click({ position: { x: 120, y: 12 } });
   await p.getByLabel('Insérer une variable').first().click();
-  for (const v of ['horaires_du_jour', 'infos_livraison', 'prochaines_livraisons', 'modes_paiement', 'infos_pratiques']) {
+  for (const v of ['horaires_du_jour', 'infos_livraison', 'jours_livraison', 'prochaines_livraisons', 'modes_paiement', 'infos_pratiques']) {
     await p.getByRole('menuitem', { name: new RegExp(v) }).first().waitFor();
   }
   step('éditeur : Infos pratiques sans erreur, nouvelles variables dans le menu {x}');

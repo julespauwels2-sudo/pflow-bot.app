@@ -59,6 +59,17 @@ describe("base de connaissances", () => {
     expect(kb).toContain("bouton « Commander »");
   });
 
+  it("jours fixes par zone : annoncés chaque semaine, les tournées datées en plus", () => {
+    const kb = buildKnowledgeBase({
+      nomResto: "X",
+      infoSheet: { ...sheet, livraisonMode: undefined, zonesLivraison: "• Jarry : livraison offerte", joursLivraison: [{ id: "j", zone: "Jarry", jours: [2, 5] }] },
+      lienCommande: "",
+    });
+    expect(kb).toContain("## Jours de livraison (chaque semaine)\n• *Jarry* : mardi et vendredi (livraison offerte)");
+    expect(kb).toContain("## Livraisons exceptionnelles");
+    expect(kb).not.toContain("Aucune tournée");
+  });
+
   it("dit clairement quand aucune tournée n'est prévue", () => {
     const kb = buildKnowledgeBase({ nomResto: "X", infoSheet: { ...sheet, tournees: [] }, lienCommande: "" });
     expect(kb).toContain("Aucune tournée de livraison n'est prévue");
