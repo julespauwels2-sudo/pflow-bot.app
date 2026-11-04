@@ -122,6 +122,14 @@ export function explainTurn(input: EngineInput, result: EngineResult): JournalLi
       case "ai_called":
         lines.push({ tone: "ok", text: `IA (${modelLabel(e.model)}) : ${describeDecision(e.decision)} — ${describeUsage(e.usage)} · ${formatUsd(e.costUsd)}` });
         break;
+      case "ai_text_cleaned": {
+        const parts: string[] = [];
+        if (e.removedLinks.length) parts.push(`lien retiré (${e.removedLinks.join(", ")})`);
+        if (e.removedGreeting) parts.push("salutation retirée");
+        const then = e.fallback === "proposer_commande" ? " → enchaîne sur proposer_commande" : e.fallback === "bouton_commande" ? " → bouton « Commander » ajouté" : "";
+        lines.push({ tone: "warn", text: `Garde-fou IA : ${parts.join(", ")}${then}` });
+        break;
+      }
       case "ai_unavailable":
         lines.push({ tone: "skip", text: "IA non appelée : l'option « IA réelle » est décochée (ou la clé API manque)" });
         break;

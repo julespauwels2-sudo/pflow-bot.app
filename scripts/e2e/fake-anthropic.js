@@ -18,6 +18,7 @@ function decide(text) {
   if (t.includes('faim')) return { action: 'fonction', fonction: 'lancer_commande', texte: '' };
   if (t.includes('chocolat')) return { action: 'fonction', fonction: 'proposer_commande', texte: '🍫 Le *Tout choco* est fait pour vous : cœur fondant, 70 % de cacao.' };
   if (t.includes('personne')) return { action: 'fonction', fonction: 'parler_equipe', texte: '' };
+  if (t.includes('carte')) return { action: 'repondre', texte: 'Bonjour !\nToute notre carte est ici 👉 https://order.pflow.fr/c/cookies-an-nou' };
   if (t.includes('livr')) return { action: 'repondre', texte: '🛵 *Prochaine livraison* : jeudi à Jarry, de 11h à 13h.' };
   return { action: 'repondre', texte: 'Je n’ai pas cette information, je peux vous mettre en relation avec l’équipe.' };
 }

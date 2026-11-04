@@ -1,5 +1,6 @@
 export * from "./types";
-export { runEngine, matchOption, replyButtonsOf, resolveDelays, TEXTS, MAX_STEPS_PER_MESSAGE, DEFAULT_MAX_RETRIES } from "./run";
+export { cleanAiText, stripLinks, stripGreeting, type CleanedAiText } from "./ai-text";
+export { PROPOSE_ORDER_FUNCTION, runEngine, matchOption, replyButtonsOf, resolveDelays, TEXTS, MAX_STEPS_PER_MESSAGE, DEFAULT_MAX_RETRIES } from "./run";
 export { smartDelayMs, fixedDelayMs, DELAY_MIN_MS, DELAY_MAX_MS, DELAY_MAX_SECONDS } from "./delay";
 export { normalize, keywordMatches, matchFlowByKeyword, matchKeyword, findTrigger, findDefaultFlow, findEventFlow } from "./match";
 export { renderTemplate, firstName } from "./template";

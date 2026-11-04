@@ -98,6 +98,16 @@ let page;
   await p.screenshot({ path: OUT + '/a6-simulateur.png' });
   step('flux par défaut d\'abord, puis IA sur le texte libre : réponse directe, lancer_commande (l\'IA se tait), coût cumulé');
 
+  // Garde-fou : l'IA écrit un lien malgré les règles → lien retiré, proposer_commande (bouton garanti).
+  await say('salut');
+  await say('je peux voir la carte ?');
+  await lastTurnHas('Garde-fou IA : lien retiré');
+  await lastTurnHas('enchaîne sur proposer_commande');
+  await chat().getByText('Toute notre carte est ici', { exact: true }).waitFor();
+  if (await chat().getByText('https://order.pflow.fr', { exact: false }).count()) throw new Error('le lien ne doit pas apparaître dans le texte');
+  await chat().getByText('Ça vous tente ?', { exact: false }).last().waitFor();
+  step('garde-fou : lien et « Bonjour » retirés de la réponse de l\'IA, bouton via proposer_commande');
+
   await say('salut');
   await say('je veux parler à une personne');
   await lastTurnHas('fonction parler_equipe');
@@ -107,15 +117,15 @@ let page;
   // Journal des appels et coût sur la page client
   await p.getByRole('link', { name: '← Cookies An Nou' }).click();
   const calls = p.getByTestId('ai-calls');
-  await calls.getByText('4 appels', { exact: false }).first().waitFor();
+  await calls.getByText('5 appels', { exact: false }).first().waitFor();
   await calls.getByText('proposer_commande').waitFor();
   await calls.getByText('plutôt du chocolat').waitFor();
   await p.screenshot({ path: OUT + '/a6-client.png', fullPage: true });
-  step('journal des appels IA : 4 appels, décisions, tokens et coût');
+  step('journal des appels IA : 5 appels, décisions, tokens et coût');
 
   // Ce qu'a reçu l'API : cache, sorties structurées, pas de réflexion, clé côté serveur
   const requests = fs.readFileSync(LOG, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
-  if (requests.length !== 4) throw new Error(`4 requêtes attendues, ${requests.length} reçues`);
+  if (requests.length !== 5) throw new Error(`5 requêtes attendues, ${requests.length} reçues`);
   const first = requests[0].params;
   if (first.model !== 'claude-haiku-5-5') throw new Error('modèle');
   if (JSON.stringify(first.thinking) !== '{"type":"disabled"}') throw new Error('thinking');

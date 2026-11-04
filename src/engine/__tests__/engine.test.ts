@@ -378,6 +378,41 @@ describe("IA de secours : garde-fous", () => {
     }
   });
 
+  it("garde-fou : un lien dans la réponse est retiré et la réponse passe par proposer_commande (bouton garanti)", async () => {
+    const ai = fakeAi({ action: "repondre", texte: "Bonjour !\nLe burrito est top 🌯 Commandez ici : https://order.pflow.fr/c/mexico" });
+    const withProposeOrder: AgentConfig = {
+      ...agent,
+      functions: [...agent.functions, { name: "proposer_commande", flowId: "f_propose", description: "Proposer de commander", aiText: "variable" }],
+    };
+    const r = await runEngine(input({ channel: toujours, agent: withProposeOrder, flows: withPropose, message: { kind: "text", text: "un conseil ?" } }), {
+      ai: ai.port,
+    });
+    expect(texts(r)).toEqual(["Le burrito est top 🌯 Commandez ici", "Ça vous tente ?"]);
+    expect(r.events).toContainEqual({
+      type: "ai_text_cleaned",
+      removedLinks: ["https://order.pflow.fr/c/mexico"],
+      removedGreeting: true,
+      fallback: "proposer_commande",
+    });
+    expect(r.events).toContainEqual({ type: "flow_started", flowId: "f_propose", via: "ia" });
+    expect(r.outgoing.some((m) => m.kind === "text" && m.text.includes("http"))).toBe(false);
+  });
+
+  it("garde-fou sans proposer_commande : lien retiré, bouton « Commander » natif ajouté", async () => {
+    const ai = fakeAi({ action: "repondre", texte: "Tout est sur www.order.pflow.fr/c/mexico" });
+    const r = await runEngine(input({ channel: toujours, message: { kind: "text", text: "la carte ?" } }), { ai: ai.port });
+    expect(r.outgoing).toEqual([
+      { kind: "text", text: "Tout est sur" },
+      { kind: "link", text: TEXTS.orderLink, url: "https://order.pflow.fr/c/mexico", buttonLabel: TEXTS.orderButton },
+    ]);
+  });
+
+  it("garde-fou : un lien dans {{ia_reponse}} est aussi retiré", async () => {
+    const ai = fakeAi({ action: "fonction", fonction: "proposer", texte: "Le burrito 🌯 https://order.pflow.fr/c/mexico" });
+    const r = await runEngine(input({ channel: toujours, agent, flows: withPropose, message: { kind: "text", text: "?" } }), { ai: ai.port });
+    expect(texts(r)).toEqual(["Le burrito 🌯", "Ça vous tente ?"]);
+  });
+
   it("le texte d'un transfert demandé par l'IA est envoyé au client", async () => {
     const ai = fakeAi({ action: "transfert_humain", texte: "Je préviens l'équipe 🙏" });
     const r = await runEngine(input({ channel: toujours, message: { kind: "text", text: "?" } }), { ai: ai.port });

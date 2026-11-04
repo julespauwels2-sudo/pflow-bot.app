@@ -1,3 +1,4 @@
+import { cleanAiText } from "./ai-text";
 import { evaluateConditions } from "./conditions";
 import { infoSheetVariables, withUpcomingRounds } from "./info-vars";
 import { fixedDelayMs, smartDelayMs, textOf } from "./delay";
@@ -34,6 +35,11 @@ export const DEFAULT_MAX_RETRIES = 2;
 export const AI_HISTORY_MAX_TURNS = 10;
 /** Appels IA « texte d'entrée » enchaînés au maximum pour un même message. */
 const MAX_CHAINED_AI_INPUTS = 3;
+/**
+ * Fonction qui oriente vers la commande avec la réponse de l'IA et le bouton « Commander ».
+ * Utilisée automatiquement si l'IA écrit un lien malgré les règles.
+ */
+export const PROPOSE_ORDER_FUNCTION = "proposer_commande";
 
 export const TEXTS = {
   handoff: "Je transmets votre message à l'équipe, on vous répond très vite 🙏",
@@ -375,8 +381,31 @@ class EngineRun {
       return;
     }
 
-    const { decision, usage } = result;
-    this.events.push({ type: "ai_called", decision, usage, model: result.model, costUsd: result.costUsd, message: text });
+    const { usage } = result;
+    this.events.push({ type: "ai_called", decision: result.decision, usage, model: result.model, costUsd: result.costUsd, message: text });
+
+    // Garde-fous : jamais de lien dans le texte de l'IA (le client reçoit toujours le bouton),
+    // et pas de nouvelle salutation en cours de conversation.
+    const decision = { ...result.decision };
+    let orderButtonFallback = false;
+    if (decision.texte) {
+      const cleaned = cleanAiText(decision.texte);
+      decision.texte = cleaned.text;
+      let fallback: "proposer_commande" | "bouton_commande" | undefined;
+      if (cleaned.removedLinks.length && decision.action === "repondre") {
+        if (functions.some((f) => f.name === PROPOSE_ORDER_FUNCTION)) {
+          decision.action = "fonction";
+          decision.fonction = PROPOSE_ORDER_FUNCTION;
+          fallback = "proposer_commande";
+        } else {
+          orderButtonFallback = true;
+          fallback = "bouton_commande";
+        }
+      }
+      if (cleaned.removedLinks.length || cleaned.removedGreeting) {
+        this.events.push({ type: "ai_text_cleaned", removedLinks: cleaned.removedLinks, removedGreeting: cleaned.removedGreeting, fallback });
+      }
+    }
     const answer = decision.texte?.trim();
 
     switch (decision.action) {
@@ -402,6 +431,9 @@ class EngineRun {
           return;
         }
         this.send({ kind: "text", text: answer });
+        // Pas de fonction proposer_commande : le bouton « Commander » remplace le lien retiré.
+        const url = orderButtonFallback ? this.orderUrl() : undefined;
+        if (url) this.send({ kind: "link", text: TEXTS.orderLink, url, buttonLabel: TEXTS.orderButton });
         if (repromptNode) {
           this.sendPrompt(repromptNode);
           this.refreshExpiry();

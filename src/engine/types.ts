@@ -416,6 +416,8 @@ export type EngineEvent =
   | { type: "paused"; reason: PauseReason; until: string | null }
   | { type: "handoff"; source: "bloc" | "ia" | "limite_ia" | "erreur_ia"; message?: string }
   | { type: "ai_called"; decision: AiDecision; usage: AiUsage; model?: string; costUsd?: number | null; message: string }
+  /** Garde-fou : lien ou salutation retirés du texte de l'IA (et repli sur le bouton de commande). */
+  | { type: "ai_text_cleaned"; removedLinks: string[]; removedGreeting: boolean; fallback?: "proposer_commande" | "bouton_commande" }
   | { type: "ai_unavailable" }
   | { type: "error"; message: string };
 

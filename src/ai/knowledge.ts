@@ -65,7 +65,15 @@ export function buildKnowledgeBase({ nomResto, infoSheet: sheet, lienCommande }:
   parts.push(section("Carte", sheet.resumeCarte));
   parts.push(section("Questions fréquentes", sheet.faq));
   parts.push(section("Règles spéciales du resto", sheet.reglesSpeciales));
-  parts.push(section("Commander", lienCommande ? `Lien de la page de commande : ${lienCommande}` : "Pas de page de commande en ligne."));
+  // Jamais l'adresse elle-même : l'IA ne doit pas l'écrire, le bouton « Commander » s'en charge.
+  parts.push(
+    section(
+      "Commander",
+      lienCommande
+        ? "Commande en ligne sur la page de commande PFlow Order, ouverte par le bouton « Commander » (fonctions proposer_commande ou lancer_commande). N'écris jamais son adresse."
+        : "Pas de page de commande en ligne pour l'instant.",
+    ),
+  );
 
   return [`# ${nomResto}`, ...parts.filter((p): p is string => Boolean(p))].join("\n\n");
 }

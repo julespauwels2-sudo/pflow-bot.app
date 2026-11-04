@@ -54,7 +54,9 @@ describe("base de connaissances", () => {
     expect(kb).toContain("## Carte\n• Cookies Nutella : 4 €");
     expect(kb).toContain("## Questions fréquentes");
     expect(kb).toContain("quantité limitée");
-    expect(kb).toContain("Lien de la page de commande : https://x");
+    // L'adresse de la page de commande n'est jamais donnée à l'IA : le bouton s'en charge.
+    expect(kb).not.toContain("https://x");
+    expect(kb).toContain("bouton « Commander »");
   });
 
   it("dit clairement quand aucune tournée n'est prévue", () => {
@@ -79,6 +81,13 @@ describe("prompt", () => {
     expect(context).toContain("- lancer_commande : Le client veut commander");
     expect(context).toContain("Recommande 2 produits.");
     expect(prompt.messages).toEqual([{ role: "user", content: "Vous livrez quand ?" }]);
+  });
+
+  it("les règles PFlow interdisent les liens et les nouvelles salutations", () => {
+    const rules = buildPrompt(request).system[0].text;
+    expect(rules).toContain("N'écris JAMAIS de lien");
+    expect(rules).toContain("proposer_commande");
+    expect(rules).toContain("Ne dis jamais « Bonjour »");
   });
 
   it("ajoute l'historique du bloc IA en alternant client et IA", () => {
