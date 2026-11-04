@@ -7,8 +7,8 @@ const steps: { id: string; title: string; detail: string; state: StepState }[] =
   { id: "M1–M3", title: "Modèle maître", detail: "Bulles et boutons, fiche d'infos, dossiers, événements de commande, bots liés", state: "fait" },
   { id: "A5", title: "Simulateur", detail: "Tester le bot dans un chat façon WhatsApp, avec journal et horloge simulée", state: "fait" },
   { id: "A6", title: "Agent IA", detail: "Claude Haiku, consigne, fonctions, base de connaissances, coût suivi", state: "fait" },
-  { id: "B", title: "Supabase", detail: "Connexion, tables bot_, CRM lu en lecture seule, import des données", state: "en_cours" },
-  { id: "C", title: "WhatsApp", detail: "Numéros, webhook, coexistence, boîte de réception", state: "a_venir" },
+  { id: "B", title: "Supabase", detail: "Connexion, tables bot_, CRM lu en lecture seule, import des données, bots créés automatiquement", state: "fait" },
+  { id: "C", title: "WhatsApp et Instagram", detail: "Préparé et testé sans Meta : webhooks, boîte de réception, vocaux, état du système. Reste : compte Meta, migration C", state: "en_cours" },
 ];
 
 const STATE_LABELS: Record<StepState, { label: string; className: string }> = {

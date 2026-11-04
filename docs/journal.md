@@ -280,3 +280,12 @@ Rapport complet : **[docs/securite.md](securite.md)**. En bref :
 
 **Vérifié** : 311 tests, lint, types, build ; en-têtes présents (curl) ; sans mot de passe `/clients`
 et `/api/etat` → 401 ; e2e WhatsApp, Instagram et boîte de réception passent avec les nouveaux en-têtes.
+
+### Tâche 9 — Guide d'onboarding ✅
+
+**[docs/guide-onboarding.md](guide-onboarding.md)** : lancer un resto de A à Z pour quelqu'un qui n'a
+jamais vu la plateforme — vue d'ensemble (CRM = source, bot, Meta), prérequis, CRM (champs à vérifier),
+création automatique du bot, fiche d'infos (tableau champ → question du client), réglages (« Le bot
+répond… » selon le numéro), liste de contrôle, 7 scénarios au simulateur, connexion WhatsApp (étape C,
+marquée « pas encore active »), suivi (boîte de réception, État du système), problèmes fréquents et
+récapitulatif à cocher. La page d'accueil indique maintenant B « fait » et C « en cours ».
