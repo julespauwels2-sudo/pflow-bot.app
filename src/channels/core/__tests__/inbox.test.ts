@@ -5,7 +5,7 @@ import type { Canal } from "../types";
 
 const NOW = new Date("2026-11-05T15:00:00Z");
 const canal: Canal = {
-  id: "c1", restaurantId: "r1", phoneNumberId: "111", wabaId: "w", triggerMode: "toujours", coexistence: false,
+  id: "c1", restaurantId: "r1", plateforme: "whatsapp", accountId: "111", wabaId: "w", triggerMode: "toujours", coexistence: false,
   echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "actif", testNumeros: [],
 };
 const workspace = { clients: [{ id: "r1", nomResto: "Cookies An Nou" }] } as never;
@@ -36,23 +36,23 @@ describe("boîte de réception", () => {
     const { store, contactId, graph } = await setup();
     await store.addTransfert({ canalId: "c1", contactId, source: "bloc" });
     await store.saveSession(contactId, { flowId: "f", nodeId: "n", vars: {}, retries: 0, startedAt: "x", expiresAt: "y" }, null);
-    await applyInboxAction({ store, graph, now: NOW }, contactId, { type: "reprendre" });
+    await applyInboxAction({ store, senders: { whatsapp: graph }, now: NOW }, contactId, { type: "reprendre" });
     expect((await store.getContact(contactId))?.state.pause).toEqual({ reason: "manuel", until: null });
     expect(await store.getSession(contactId)).toBeNull();
-    await applyInboxAction({ store, graph, now: NOW }, contactId, { type: "relancer" });
+    await applyInboxAction({ store, senders: { whatsapp: graph }, now: NOW }, contactId, { type: "relancer" });
     expect((await store.getContact(contactId))?.state.pause).toBeNull();
     expect((await store.listTransferts("c1"))[0].resoluLe).toBeTruthy();
   });
 
   it("répondre : envoyé par Meta, noté « Équipe », bot en pause 12 h ; refusé si la fenêtre de 24 h est fermée", async () => {
     const { store, contactId, sent, graph } = await setup();
-    await applyInboxAction({ store, graph, now: NOW }, contactId, { type: "repondre", texte: "Bonjour, je regarde ça !" });
+    await applyInboxAction({ store, senders: { whatsapp: graph }, now: NOW }, contactId, { type: "repondre", texte: "Bonjour, je regarde ça !" });
     expect(sent).toEqual([{ to: "590690000001", text: "Bonjour, je regarde ça !" }]);
     expect((await store.listMessages(contactId)).at(-1)).toMatchObject({ sens: "sortant", auteur: "humain", statut: "envoye" });
     expect((await store.getContact(contactId))?.state.pause).toEqual({ reason: "manuel", until: "2026-11-06T03:00:00.000Z" });
 
     const closed = await setup("2026-11-03T10:00:00Z");
-    await expect(applyInboxAction({ store: closed.store, graph: closed.graph, now: NOW }, closed.contactId, { type: "repondre", texte: "?" })).rejects.toThrow("Fenêtre de 24 h fermée");
+    await expect(applyInboxAction({ store: closed.store, senders: { whatsapp: closed.graph }, now: NOW }, closed.contactId, { type: "repondre", texte: "?" })).rejects.toThrow("Fenêtre de 24 h fermée");
     expect(closed.sent).toEqual([]);
   });
 

@@ -29,6 +29,8 @@ import { downloadJson } from "@/lib/files";
 import { BlockNode } from "./block-node";
 import { EditorContext, type EditorContextValue } from "./context";
 import { DeletableEdge } from "./deletable-edge";
+
+const INSTAGRAM_CHECK_KEY = "pflow-bots:verifier-instagram";
 import { NodeProperties } from "./properties";
 import { copySelection, editorReducer, initEditor, type EditorState, type RFNode } from "./state";
 
@@ -125,8 +127,17 @@ function EditorInner({ flow: initialFlow, owner, flows, agentFunctions }: Props)
   const { orderSlug, triggerMode, orderUrl } = settings;
   // Dans le bot, une copie personnalisée garde l'id du flux du modèle qu'elle remplace.
   const botFlowId = initialFlow.overridesTemplateFlowId ?? initialFlow.id;
-  const issues = useMemo(() => lintFlow(graph, { flowId: botFlowId, flows, orderSlug, triggerMode }),
-    [graph, botFlowId, flows, orderSlug, triggerMode],
+  // « Vérifier aussi pour Instagram » : préférence de l'éditeur (le flux sert aux deux plateformes).
+  const [checkInstagram, setCheckInstagram] = useState(() => {
+    try {
+      return typeof window !== "undefined" && window.localStorage.getItem(INSTAGRAM_CHECK_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const issues = useMemo(
+    () => lintFlow(graph, { flowId: botFlowId, flows, orderSlug, triggerMode, platforms: checkInstagram ? ["whatsapp", "instagram"] : ["whatsapp"] }),
+    [graph, botFlowId, flows, orderSlug, triggerMode, checkInstagram],
   );
   const byNode = useMemo(() => issuesByNode(issues), [issues]);
   const errorCount = issues.filter((i) => i.level === "error").length;
@@ -356,6 +367,22 @@ function EditorInner({ flow: initialFlow, owner, flows, agentFunctions }: Props)
             >
               ▶ Tester
             </Link>
+            <label className="flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1.5 text-xs font-semibold" title="Vérifier aussi les limites d'Instagram (réponses rapides, textes plus courts)">
+              <input
+                type="checkbox"
+                className="accent-pink"
+                checked={checkInstagram}
+                onChange={(e) => {
+                  setCheckInstagram(e.target.checked);
+                  try {
+                    window.localStorage.setItem(INSTAGRAM_CHECK_KEY, e.target.checked ? "1" : "0");
+                  } catch {
+                    // Préférence non gardée (navigation privée) : sans importance.
+                  }
+                }}
+              />
+              Instagram
+            </label>
             <ToolButton title="Recentrer le flux" onClick={recenter}>
               ⤢ <span className="hidden sm:inline">Recentrer</span>
             </ToolButton>

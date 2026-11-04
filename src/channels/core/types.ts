@@ -1,14 +1,28 @@
 /**
- * Canal WhatsApp (étape C) : types partagés par le webhook, l'envoi et la boîte de réception.
+ * Canaux (WhatsApp, Instagram) : types partagés par les webhooks, l'envoi et la boîte de réception.
  * La logique ne dépend pas de Next.js : elle peut être déplacée (ex. Supabase Edge Functions).
  */
-import type { ContactState, IncomingMessage, Session, TriggerMode } from "@/engine";
+import type { ContactState, IncomingMessage, OutgoingMessage, Session, TriggerMode } from "@/engine";
+
+export type Plateforme = "whatsapp" | "instagram";
+export type EventSource = Plateforme | "pflow_order";
+
+/** Envoi vers une plateforme (API Graph de WhatsApp, API d'Instagram). */
+export interface ChannelSender {
+  /** Envoie un message et renvoie son identifiant sur la plateforme. */
+  send(accountId: string, to: string, message: OutgoingMessage): Promise<string | undefined>;
+  /** Accusé de lecture et « en train d'écrire ». */
+  markRead(accountId: string, messageId: string, typing: boolean, to?: string): Promise<void>;
+}
 
 export interface Canal {
   id: string;
   restaurantId: string;
-  phoneNumberId: string;
-  wabaId: string;
+  plateforme: Plateforme;
+  /** WhatsApp : phone_number_id ; Instagram : id du compte professionnel. */
+  accountId: string;
+  /** WhatsApp uniquement. */
+  wabaId?: string;
   numeroAffiche?: string;
   triggerMode: TriggerMode;
   coexistence: boolean;
@@ -25,6 +39,7 @@ export interface Canal {
 export interface ChannelContact {
   id: string;
   canalId: string;
+  /** Identifiant du client sur la plateforme (WhatsApp : numéro ; Instagram : IGSID). */
   waId: string;
   /** État vu par le moteur (pause, fenêtre de 24 h, compteur IA). */
   state: ContactState;
@@ -63,9 +78,13 @@ export interface Transfert {
 /** Stockage du canal : Supabase (tables de la migration C) ou mémoire (tests, démo locale). */
 export interface ChannelStore {
   /** Note un événement reçu. Faux s'il a déjà été reçu (renvoi de Meta) : il n'est pas retraité. */
-  claimEvent(source: "whatsapp" | "pflow_order", key: string, charge: unknown): Promise<boolean>;
-  finishEvent(source: "whatsapp" | "pflow_order", key: string, error?: string): Promise<void>;
-  canalByPhone(phoneNumberId: string): Promise<Canal | null>;
+  claimEvent(source: EventSource, key: string, charge: unknown): Promise<boolean>;
+  finishEvent(source: EventSource, key: string, error?: string): Promise<void>;
+  canalByAccount(plateforme: Plateforme, accountId: string): Promise<Canal | null>;
+  /** Derniers événements reçus (page « État du système »). */
+  recentEvents(limit?: number): Promise<{ source: EventSource; key: string; at: string; error?: string }[]>;
+  /** Purge des messages plus anciens que la date (préparée, non activée : voir docs/securite.md). */
+  purgeMessagesBefore(before: Date): Promise<number>;
   listCanaux(): Promise<Canal[]>;
   getOrCreateContact(canalId: string, waId: string, profileName?: string): Promise<ChannelContact>;
   getContact(contactId: string): Promise<ChannelContact | null>;
@@ -82,9 +101,10 @@ export interface ChannelStore {
   resolveTransferts(contactId: string): Promise<void>;
 }
 
-/** Un message reçu par le webhook, prêt pour le moteur. */
+/** Un message reçu par un webhook, prêt pour le moteur. */
 export interface InboundEvent {
-  phoneNumberId: string;
+  plateforme: Plateforme;
+  accountId: string;
   /** Numéro du client (pour un écho : le destinataire du message du gérant). */
   waId: string;
   profileName?: string;
@@ -96,10 +116,13 @@ export interface InboundEvent {
   /** Contenu pour la boîte de réception. */
   type: string;
   contenu: unknown;
+  /** Média à télécharger (message vocal) : identifiant WhatsApp ou adresse Instagram. */
+  media?: { id?: string; url?: string; mimeType?: string };
 }
 
 export interface StatusEvent {
-  phoneNumberId: string;
+  plateforme: Plateforme;
+  accountId: string;
   wamid: string;
   statut: "envoye" | "delivre" | "lu" | "echec";
   erreur?: string;

@@ -15,8 +15,9 @@ function rowToCanal(r: Row): Canal {
   return {
     id: String(r.id),
     restaurantId: String(r.restaurant_id),
-    phoneNumberId: String(r.phone_number_id),
-    wabaId: String(r.waba_id),
+    plateforme: r.plateforme === "instagram" ? "instagram" : "whatsapp",
+    accountId: String(r.compte_id),
+    ...(r.waba_id ? { wabaId: String(r.waba_id) } : {}),
     ...(r.numero_affiche ? { numeroAffiche: String(r.numero_affiche) } : {}),
     triggerMode: r.mode_declenchement === "toujours" ? "toujours" : "mots_cles_uniquement",
     coexistence: Boolean(r.coexistence),
@@ -33,9 +34,9 @@ function rowToContact(r: Row): ChannelContact {
   return {
     id: String(r.id),
     canalId: String(r.canal_id),
-    waId: String(r.wa_id),
+    waId: String(r.identifiant),
     state: {
-      id: String(r.wa_id),
+      id: String(r.identifiant),
       ...(r.profil_nom ? { profileName: String(r.profil_nom) } : {}),
       pause: r.pause_raison ? { reason: r.pause_raison as "transfert_humain" | "echo_gerant" | "manuel", until: iso(r.pause_jusqu_a) ?? null } : null,
       ...(r.dernier_entrant_le ? { lastInboundAt: iso(r.dernier_entrant_le) } : {}),
@@ -50,7 +51,7 @@ function contactToRow(c: ChannelContact): Row {
   return {
     id: c.id,
     canal_id: c.canalId,
-    wa_id: c.waId,
+    identifiant: c.waId,
     profil_nom: c.state.profileName ?? null,
     pause_raison: c.state.pause?.reason ?? null,
     pause_jusqu_a: c.state.pause?.until ?? null,
@@ -103,15 +104,32 @@ export function createSupabaseChannelStore(db: Db, newId: () => string = () => c
       const [row] = await db.select("bot_webhook_evenements", "*", eq("cle_unique", `${source}:${key}`));
       if (row) await db.upsert("bot_webhook_evenements", [{ ...row, traite_le: new Date().toISOString(), erreur: error ?? null }], "id");
     },
-    async canalByPhone(phoneNumberId) {
-      const [row] = await db.select("bot_canaux", "*", eq("phone_number_id", phoneNumberId));
+    async canalByAccount(plateforme, accountId) {
+      const rows = await db.select("bot_canaux", "*", eq("compte_id", accountId));
+      const row = rows.find((r) => (r.plateforme ?? "whatsapp") === plateforme);
       return row ? rowToCanal(row) : null;
+    },
+    async recentEvents(limit = 20) {
+      const rows = await db.select("bot_webhook_evenements", "source, cle_unique, recu_le, erreur", { order: { column: "recu_le", ascending: false }, limit });
+      return rows.map((r) => ({
+        source: r.source as "whatsapp",
+        key: String(r.cle_unique),
+        at: iso(r.recu_le)!,
+        ...(r.erreur ? { error: String(r.erreur) } : {}),
+      }));
+    },
+    async purgeMessagesBefore(before) {
+      // Préparé, NON activé : rien n'appelle cette fonction tant que Jules ne l'a pas décidé (docs/securite.md).
+      const old = await db.select("bot_messages", "id, cree_le", { order: { column: "cree_le", ascending: true }, limit: 1000 });
+      const ids = old.filter((r) => Date.parse(String(r.cree_le)) < before.getTime()).map((r) => String(r.id));
+      if (ids.length) await db.remove("bot_messages", "id", ids);
+      return ids.length;
     },
     async listCanaux() {
       return (await db.select("bot_canaux", "*")).map(rowToCanal);
     },
     async getOrCreateContact(canalId, waId, profileName) {
-      const existing = (await db.select("bot_contacts", "*", eq("canal_id", canalId))).find((r) => String(r.wa_id) === waId);
+      const existing = (await db.select("bot_contacts", "*", eq("canal_id", canalId))).find((r) => String(r.identifiant) === waId);
       if (existing) {
         const contact = rowToContact(existing);
         if (profileName && contact.state.profileName !== profileName) {

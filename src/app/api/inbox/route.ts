@@ -1,7 +1,7 @@
 /** Boîte de réception : les conversations de chaque numéro (resto). */
 import { NextResponse } from "next/server";
-import { inboxAccess } from "@/channels/whatsapp/api-helpers";
-import { listInbox } from "@/channels/whatsapp/inbox";
+import { inboxAccess } from "@/channels/core/api-helpers";
+import { listInbox } from "@/channels/core/inbox";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

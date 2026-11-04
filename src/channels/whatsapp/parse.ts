@@ -5,7 +5,7 @@
  * Format de l'écho à revérifier dans la documentation de Meta au moment de C6.
  */
 import type { IncomingMessage } from "@/engine";
-import type { InboundEvent, StatusEvent } from "./types";
+import type { InboundEvent, StatusEvent } from "../core/types";
 
 type Json = Record<string, unknown>;
 const obj = (v: unknown): Json => (v && typeof v === "object" && !Array.isArray(v) ? (v as Json) : {});
@@ -52,8 +52,8 @@ export function parseWebhook(payload: unknown): { inbound: InboundEvent[]; statu
     for (const change of arr(obj(entry).changes)) {
       const c = obj(change);
       const value = obj(c.value);
-      const phoneNumberId = str(obj(value.metadata).phone_number_id);
-      if (!phoneNumberId) continue;
+      const accountId = str(obj(value.metadata).phone_number_id);
+      if (!accountId) continue;
       const names = new Map(arr(value.contacts).map((x) => [str(obj(x).wa_id), str(obj(obj(x).profile).name)]));
 
       if (str(c.field) === "messages") {
@@ -64,7 +64,8 @@ export function parseWebhook(payload: unknown): { inbound: InboundEvent[]; statu
           if (!waId || !wamid) continue;
           const parsed = toIncoming(m);
           inbound.push({
-            phoneNumberId,
+            plateforme: "whatsapp",
+            accountId,
             waId,
             profileName: names.get(waId) || undefined,
             wamid,
@@ -81,7 +82,7 @@ export function parseWebhook(payload: unknown): { inbound: InboundEvent[]; statu
           const statut = map[str(s.status)];
           if (!statut || !str(s.id)) continue;
           const error = obj(arr(s.errors)[0]);
-          statuses.push({ phoneNumberId, wamid: str(s.id), statut, ...(statut === "echec" ? { erreur: str(error.title) || str(error.message) || "Échec d'envoi" } : {}) });
+          statuses.push({ plateforme: "whatsapp", accountId, wamid: str(s.id), statut, ...(statut === "echec" ? { erreur: str(error.title) || str(error.message) || "Échec d'envoi" } : {}) });
         }
       }
 
@@ -94,7 +95,8 @@ export function parseWebhook(payload: unknown): { inbound: InboundEvent[]; statu
           if (!waId || !wamid) continue;
           const text = str(obj(m.text).body);
           inbound.push({
-            phoneNumberId,
+            plateforme: "whatsapp",
+            accountId,
             waId,
             wamid,
             timestamp: str(m.timestamp),

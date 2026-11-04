@@ -5,9 +5,8 @@
 import { runEngine, type AiPort, type AiRequest, type AiResult, type EngineResult } from "@/engine";
 import { createContactToken } from "@/channels/pflow-order/contact-token";
 import type { LoadedBot } from "./bot-loader";
-import type { GraphClient } from "./graph";
-import { parseWebhook } from "./parse";
-import type { ChannelStore, InboundEvent } from "./types";
+import { parseWebhook } from "../whatsapp/parse";
+import type { ChannelSender, ChannelStore, InboundEvent, StatusEvent } from "./types";
 
 /** Plafond d'un « en train d'écrire » côté serveur (le webhook ne doit pas attendre trop longtemps). */
 export const MAX_TYPING_MS = 3000;
@@ -21,7 +20,8 @@ export interface AiCallInfo {
 
 export interface ProcessorDeps {
   store: ChannelStore;
-  graph: Pick<GraphClient, "send" | "markRead">;
+  /** Envoi vers la plateforme de ces événements (WhatsApp ou Instagram). */
+  graph: ChannelSender;
   loadBot(restaurantId: string): Promise<LoadedBot | null>;
   ai?: AiPort;
   /** Journal des appels IA (coût suivi par client). */
@@ -42,9 +42,14 @@ export interface ProcessReport {
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+/** Notification du webhook WhatsApp. */
 export async function processWebhookPayload(payload: unknown, deps: ProcessorDeps): Promise<ProcessReport> {
+  return processEvents(parseWebhook(payload), deps);
+}
+
+/** Événements déjà lus (WhatsApp ou Instagram). */
+export async function processEvents({ inbound, statuses }: { inbound: InboundEvent[]; statuses: StatusEvent[] }, deps: ProcessorDeps): Promise<ProcessReport> {
   const report: ProcessReport = { handled: [], skipped: [], statuses: 0, errors: [] };
-  const { inbound, statuses } = parseWebhook(payload);
   for (const status of statuses) {
     try {
       await deps.store.updateMessageStatus(status.wamid, status.statut, status.erreur);
@@ -58,7 +63,7 @@ export async function processWebhookPayload(payload: unknown, deps: ProcessorDep
       await processInbound(event, deps, report);
     } catch (error) {
       report.errors.push(`Message ${event.wamid} : ${message(error)}`);
-      await deps.store.finishEvent("whatsapp", event.wamid, message(error)).catch(() => undefined);
+      await deps.store.finishEvent(event.plateforme, event.wamid, message(error)).catch(() => undefined);
     }
   }
   return report;
@@ -68,15 +73,15 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   const { store, graph } = deps;
   const skip = async (reason: string) => {
     report.skipped.push({ wamid: event.wamid, reason });
-    await store.finishEvent("whatsapp", event.wamid, reason);
+    await store.finishEvent(event.plateforme, event.wamid, reason);
   };
 
   // Idempotence : un message renvoyé par Meta n'est jamais retraité.
-  if (!(await store.claimEvent("whatsapp", event.wamid, event))) {
+  if (!(await store.claimEvent(event.plateforme, event.wamid, event))) {
     report.skipped.push({ wamid: event.wamid, reason: "déjà reçu" });
     return;
   }
-  const canal = await store.canalByPhone(event.phoneNumberId);
+  const canal = await store.canalByAccount(event.plateforme, event.accountId);
   if (!canal) return skip("numéro inconnu (aucun canal)");
   if (canal.etat === "coupe") return skip("canal coupé");
   if (canal.etat === "test" && !canal.testNumeros.includes(event.waId)) return skip("canal en test : numéro hors liste");
@@ -137,8 +142,9 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     { ai },
   );
 
-  // Accusé de lecture (+ « en train d'écrire » s'il y a une réponse).
-  if (!echo) await graph.markRead(canal.phoneNumberId, event.wamid, result.outgoing.length > 0).catch(() => undefined);
+  // Accusé de lecture + « en train d'écrire », seulement si le bot répond : un message laissé au gérant
+  // (pause, mots-clés uniquement sur son numéro perso) ne doit jamais apparaître « lu » au client.
+  if (!echo && result.outgoing.length > 0) await graph.markRead(canal.accountId, event.wamid, true, event.waId).catch(() => undefined);
 
   let sent = 0;
   const sleep = deps.sleep ?? defaultSleep;
@@ -148,7 +154,7 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
       continue;
     }
     try {
-      const wamid = await graph.send(canal.phoneNumberId, event.waId, out);
+      const wamid = await graph.send(canal.accountId, event.waId, out);
       await store.addMessage({ canalId: canal.id, contactId: contact.id, sens: "sortant", auteur: "bot", wamid, type: out.kind, contenu: out, statut: "envoye" });
       sent += 1;
     } catch (error) {
@@ -168,7 +174,7 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     if (canal.telAlerte) {
       // Le gérant n'est prévenu par WhatsApp que si sa propre fenêtre de 24 h est ouverte (sinon Meta refuse).
       try {
-        await graph.send(canal.phoneNumberId, canal.telAlerte, {
+        await graph.send(canal.accountId, canal.telAlerte, {
           kind: "text",
           text: `🔔 ${bot.client.nomResto} : un client (${event.profileName ?? event.waId}) attend une réponse. Ouvrez la boîte de réception PFlow Bots.`,
         });
@@ -181,10 +187,12 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   }
 
   report.handled.push({ wamid: event.wamid, outgoing: sent });
-  await store.finishEvent("whatsapp", event.wamid);
+  await store.finishEvent(event.plateforme, event.wamid);
 }
 
 function orderLinkQuery(bot: LoadedBot, event: InboundEvent, secret: string | undefined): string {
+  // Instagram : pas de numéro de téléphone à transmettre (l'identifiant Instagram n'en est pas un).
+  if (event.plateforme === "instagram") return "via=ig";
   if (!secret || !bot.client.orderSlug) return "via=wa";
   const prenom = event.profileName?.trim().split(/\s+/)[0];
   const token = createContactToken({ tel: event.waId, ...(prenom ? { prenom } : {}), slug: bot.client.orderSlug }, secret);

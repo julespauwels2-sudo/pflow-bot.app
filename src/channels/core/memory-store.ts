@@ -4,7 +4,7 @@ import type { Canal, ChannelContact, ChannelStore, StoredMessage, Transfert } fr
 
 export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: () => Date; newId?: () => string } = {}): ChannelStore & {
   addCanal(canal: Canal): void;
-  events: Map<string, { charge: unknown; error?: string; done: boolean }>;
+  events: Map<string, { charge: unknown; error?: string; done: boolean; at: string; source: string; key: string }>;
 } {
   const now = () => (options.now ? options.now() : new Date()).toISOString();
   let n = 0;
@@ -14,7 +14,7 @@ export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: 
   const sessions = new Map<string, { session: Session; version: number }>();
   const messages: StoredMessage[] = [];
   const transferts: Transfert[] = [];
-  const events = new Map<string, { charge: unknown; error?: string; done: boolean }>();
+  const events = new Map<string, { charge: unknown; error?: string; done: boolean; at: string; source: string; key: string }>();
   const clone = <T>(v: T): T => structuredClone(v);
 
   return {
@@ -25,15 +25,27 @@ export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: 
     async claimEvent(source, key, charge) {
       const k = `${source}:${key}`;
       if (events.has(k)) return false;
-      events.set(k, { charge, done: false });
+      events.set(k, { charge, done: false, at: now(), source, key });
       return true;
     },
     async finishEvent(source, key, error) {
       const e = events.get(`${source}:${key}`);
       if (e) Object.assign(e, { done: true, error });
     },
-    async canalByPhone(phoneNumberId) {
-      return clone(canalList.find((c) => c.phoneNumberId === phoneNumberId) ?? null);
+    async canalByAccount(plateforme, accountId) {
+      return clone(canalList.find((c) => c.plateforme === plateforme && c.accountId === accountId) ?? null);
+    },
+    async recentEvents(limit = 20) {
+      return [...events.values()]
+        .slice(-limit)
+        .reverse()
+        .map((e) => ({ source: e.source as "whatsapp", key: e.key, at: e.at, ...(e.error ? { error: e.error } : {}) }));
+    },
+    async purgeMessagesBefore(before) {
+      const keep = messages.filter((m) => Date.parse(m.at) >= before.getTime());
+      const removed = messages.length - keep.length;
+      messages.splice(0, messages.length, ...keep);
+      return removed;
     },
     async listCanaux() {
       return clone(canalList);

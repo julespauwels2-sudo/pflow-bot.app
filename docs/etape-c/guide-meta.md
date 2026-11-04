@@ -1,4 +1,4 @@
-# Guide pas à pas — app Meta, numéro de test, utilisateur système, token
+# Guide pas à pas — app Meta, numéro de test, utilisateur système, token (WhatsApp puis Instagram)
 
 À faire par Jules au début de l'étape C (sous-étape C0). Compter 30 à 45 minutes.
 
@@ -122,3 +122,57 @@ Je te préviendrai : il faut que l'adresse réponde avant de la donner à Meta.
 | `WHATSAPP_TOKEN` | Vercel uniquement |
 | `WHATSAPP_APP_SECRET` | Vercel uniquement |
 | `WHATSAPP_VERIFY_TOKEN` | Vercel uniquement |
+
+---
+
+## 9. Instagram (après WhatsApp, quand tu le décides)
+
+Le code est prêt (`/api/webhooks/instagram`, testé contre un faux serveur) et **inactif** tant que les
+variables `INSTAGRAM_*` ne sont pas définies. ⚠️ Tout ce qui suit est à revérifier dans la documentation
+de Meta au moment du branchement (les noms de permissions et d'écrans changent souvent).
+
+### 9.1 Ce qu'il faut côté Instagram
+- Un compte Instagram **professionnel** (Entreprise ou Créateur) : le tien d'abord pour les tests.
+- Dans l'appli Instagram : **Paramètres → Messages et réponses aux stories → Contrôles des messages →
+  Outils connectés → Autoriser l'accès aux messages** (sans ça, Meta n'envoie rien au webhook).
+
+### 9.2 Dans l'app Meta (la même que pour WhatsApp)
+1. **Ajouter un produit → Instagram**, puis choisir **« API Instagram avec connexion Instagram »**
+   (adresse `graph.instagram.com`, pas besoin de page Facebook). C'est l'option prévue par le code
+   (`INSTAGRAM_GRAPH_BASE` par défaut = `https://graph.instagram.com`).
+2. **Permissions** demandées : `instagram_business_basic` et `instagram_business_manage_messages`.
+3. **Générer un token** pour ton compte Instagram (écran « Générer des tokens d'accès ») →
+   `INSTAGRAM_TOKEN` (Vercel uniquement). ⚠️ Ce token dure 60 jours et doit être prolongé : on prévoira
+   un rappel ou un renouvellement automatique avant le premier client.
+4. Noter l'**identifiant du compte Instagram professionnel** (pas secret) : c'est le `compte_id` du canal.
+5. **Clé secrète de l'app Instagram** (Paramètres de l'API Instagram → « Clé secrète de l'app Instagram »,
+   elle peut différer de celle de l'app Meta) → `INSTAGRAM_APP_SECRET`.
+6. Inventer une phrase → `INSTAGRAM_VERIFY_TOKEN`.
+7. **Webhooks** : URL `https://<ton-app>.vercel.app/api/webhooks/instagram`, même phrase, puis abonner les
+   champs `messages`, `messaging_postbacks` et `messaging_seen` (les autres — réactions, référents —
+   ne servent pas pour l'instant).
+
+### 9.3 Validation de l'app (App Review) — nécessaire pour les clients
+- **Accès standard** (sans validation) : le bot ne fonctionne qu'avec les comptes qui ont un rôle dans
+  l'app (toi, comptes de test). Suffisant pour tous nos tests.
+- **Accès avancé** de `instagram_business_manage_messages` : obligatoire pour les comptes des restos.
+  Il faut : la **vérification d'entreprise** (Business Verification, documents de PFlow), une **politique
+  de confidentialité** publique, une **vidéo de démonstration** (connexion du compte, réception d'un
+  message, réponse du bot), et l'app en mode **Live**. Compter plusieurs jours, parfois des refus à
+  corriger.
+- Même règle de **24 h** que WhatsApp : le bot ne peut répondre que dans les 24 h qui suivent le dernier
+  message du client (pas de modèles payants comme sur WhatsApp).
+
+### 9.4 Ce que je te demanderai pour Instagram
+
+| Donnée | Où la mettre |
+|---|---|
+| Identifiant du compte Instagram professionnel | Me la donner (pas secrète) |
+| `INSTAGRAM_TOKEN` | Vercel uniquement |
+| `INSTAGRAM_APP_SECRET` | Vercel uniquement |
+| `INSTAGRAM_VERIFY_TOKEN` | Vercel uniquement |
+
+Sources consultées le 4 novembre 2026 (à relire au moment du branchement) :
+[Messaging API (Instagram Login)](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api),
+[Business Login for Instagram](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/business-login),
+[Instagram Messaging (Messenger Platform)](https://developers.facebook.com/docs/messenger-platform/instagram).

@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Badge, Button, Card, Loading, Notice, Textarea } from "@/components/ui";
-import type { InboxCanal, InboxConversation } from "@/channels/whatsapp/inbox";
-import type { StoredMessage } from "@/channels/whatsapp/types";
+import type { InboxCanal, InboxConversation } from "@/channels/core/inbox";
+import type { StoredMessage } from "@/channels/core/types";
 import { accessToken } from "@/lib/supabase";
 
 type InboxState =
@@ -27,6 +27,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 const REFRESH_MS = 5000;
+const who = (canal: InboxCanal, conv: InboxConversation) => conv.nom || (canal.plateforme === "instagram" ? `Instagram ${conv.waId.slice(-4)}` : `+${conv.waId}`);
 const time = (iso: string) => new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 export default function InboxPage() {
@@ -87,7 +88,7 @@ export default function InboxPage() {
     <AppShell>
       <h1 className="text-3xl font-semibold">Boîte de réception</h1>
       <p className="mt-1 max-w-2xl text-sm text-muted">
-        Les conversations WhatsApp de chaque resto. Reprends la main quand un client a besoin d&apos;une personne : le bot se tait jusqu&apos;à ce
+        Les conversations WhatsApp et Instagram de chaque resto. Reprends la main quand un client a besoin d&apos;une personne : le bot se tait jusqu&apos;à ce
         que tu le relances.
       </p>
       <div className="mt-6 space-y-4">
@@ -100,20 +101,21 @@ export default function InboxPage() {
         {state.status === "error" && <Notice tone="error">{state.error}</Notice>}
         {state.status === "off" && (
           <Notice tone="info">
-            Le canal WhatsApp n&apos;est pas encore branché (étape C). Variables manquantes : {state.missing.join(", ")}. Pour tester sans Meta :
+            Aucun canal (WhatsApp, Instagram) n&apos;est encore branché (étape C). Variables manquantes : {state.missing.join(", ")}. Pour tester sans Meta :
             mode démo (voir <code>docs/journal.md</code>).
           </Notice>
         )}
         {state.status === "ready" && (
           <>
-            {state.mode === "memory" && <SimulateForm onSent={refresh} onError={(text) => setNotice({ tone: "error", text })} />}
+            {state.mode === "memory" && <SimulateForm plateformes={[...new Set(state.canaux.map((c) => c.plateforme))]} onSent={refresh} onError={(text) => setNotice({ tone: "error", text })} />}
             <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
               <Card title="Conversations">
-                {state.canaux.length === 0 && <p className="text-sm text-muted">Aucun numéro WhatsApp relié.</p>}
+                {state.canaux.length === 0 && <p className="text-sm text-muted">Aucun compte WhatsApp ou Instagram relié.</p>}
                 <div className="space-y-4" data-testid="inbox-list">
                   {state.canaux.map((canal) => (
                     <div key={canal.canalId}>
                       <p className="text-xs font-semibold tracking-wide text-muted uppercase">
+                        {canal.plateforme === "instagram" ? "📸 " : "💬 "}
                         {canal.nomResto} {canal.numero && <span className="font-normal normal-case">· {canal.numero}</span>}
                         {canal.etat !== "actif" && <span className="ml-1 normal-case">({canal.etat})</span>}
                       </p>
@@ -130,7 +132,7 @@ export default function InboxPage() {
                               }}
                             >
                               <span className="flex items-center gap-1.5">
-                                <span className="font-semibold">{conv.nom || `+${conv.waId}`}</span>
+                                <span className="font-semibold">{who(canal, conv)}</span>
                                 {conv.transfertOuvert && <Badge tone="warning">🔔 Attend l&apos;équipe</Badge>}
                                 {conv.pause && <Badge>{pauseLabel(conv)}</Badge>}
                               </span>
@@ -148,7 +150,7 @@ export default function InboxPage() {
                   ))}
                 </div>
               </Card>
-              <Card title={current ? current.conv.nom || `+${current.conv.waId}` : "Conversation"} className="min-w-0">
+              <Card title={current ? who(current.canal, current.conv) : "Conversation"} className="min-w-0">
                 {!current || !thread ? (
                   <p className="text-sm text-muted">Choisis une conversation.</p>
                 ) : (
@@ -251,7 +253,8 @@ function ConversationView({
 }
 
 /** Mode démo : simuler un message client (aucun numéro WhatsApp nécessaire). */
-function SimulateForm({ onSent, onError }: { onSent: () => void; onError: (text: string) => void }) {
+function SimulateForm({ plateformes, onSent, onError }: { plateformes: InboxCanal["plateforme"][]; onSent: () => void; onError: (text: string) => void }) {
+  const [plateforme, setPlateforme] = useState<InboxCanal["plateforme"]>(plateformes[0] ?? "whatsapp");
   const [texte, setTexte] = useState("bonjour");
   const [nom, setNom] = useState("Léa");
   return (
@@ -260,7 +263,7 @@ function SimulateForm({ onSent, onError }: { onSent: () => void; onError: (text:
       onSubmit={async (e) => {
         e.preventDefault();
         try {
-          await api("/api/inbox/simuler", { method: "POST", body: JSON.stringify({ texte, nom }) });
+          await api("/api/inbox/simuler", { method: "POST", body: JSON.stringify({ texte, nom, plateforme }) });
           onSent();
         } catch (error) {
           onError(error instanceof Error ? error.message : String(error));
@@ -268,6 +271,15 @@ function SimulateForm({ onSent, onError }: { onSent: () => void; onError: (text:
       }}
     >
       <span className="font-semibold">Mode démo :</span>
+      {plateformes.length > 1 && (
+        <select aria-label="Plateforme simulée" className="rounded-lg border border-line px-2 py-1" value={plateforme} onChange={(e) => setPlateforme(e.target.value as InboxCanal["plateforme"])}>
+          {plateformes.map((p) => (
+            <option key={p} value={p}>
+              {p === "instagram" ? "Instagram" : "WhatsApp"}
+            </option>
+          ))}
+        </select>
+      )}
       <input aria-label="Nom du client simulé" className="w-28 rounded-lg border border-line px-2 py-1" value={nom} onChange={(e) => setNom(e.target.value)} />
       <input aria-label="Message du client simulé" className="min-w-48 flex-1 rounded-lg border border-line px-2 py-1" value={texte} onChange={(e) => setTexte(e.target.value)} />
       <Button type="submit" variant="secondary">

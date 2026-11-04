@@ -1,8 +1,8 @@
 /** Une conversation : ses messages (GET) et les actions de la personne (POST). */
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { inboxAccess } from "@/channels/whatsapp/api-helpers";
-import { applyInboxAction, InboxError, messageText } from "@/channels/whatsapp/inbox";
+import { inboxAccess } from "@/channels/core/api-helpers";
+import { applyInboxAction, InboxError, messageText } from "@/channels/core/inbox";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,7 +33,7 @@ export async function POST(request: Request, { params }: Params) {
   const parsed = actionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Action invalide" }, { status: 400 });
   try {
-    await applyInboxAction({ store: access.runtime.store, graph: access.runtime.deps.graph, now: new Date() }, contactId, parsed.data);
+    await applyInboxAction({ store: access.runtime.store, senders: access.runtime.senders, now: new Date() }, contactId, parsed.data);
     return NextResponse.json({ ok: true });
   } catch (error) {
     const status = error instanceof InboxError ? 400 : 502;

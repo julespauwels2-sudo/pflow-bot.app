@@ -1,4 +1,6 @@
--- PFlow Bots — étape C : WhatsApp (numéros, contacts, sessions, messages).
+-- PFlow Bots — étape C : WhatsApp et Instagram (comptes, contacts, sessions, messages).
+-- Révisée le 5 novembre 2026 (Instagram) : compte_id + plateforme au lieu de phone_number_id,
+-- identifiant au lieu de wa_id.
 -- PROPOSITION, NON APPLIQUÉE. Rangée dans docs/ (et non dans supabase/migrations/) pour ne jamais être
 -- jouée par erreur. Elle y sera déplacée après validation de Jules.
 --
@@ -9,14 +11,15 @@
 -- * le webhook (serveur) utilise la clé service_role : l'app n'y écrit que dans les tables bot_.
 -- Données personnelles (numéros, messages) : accès admin uniquement, purge prévue (plan.md, décision 6).
 
--- Un numéro WhatsApp relié à un resto (plus tard : Instagram, Messenger).
+-- Un compte (numéro WhatsApp ou compte Instagram professionnel) relié à un resto.
 create table public.bot_canaux (
   id uuid primary key default gen_random_uuid(),
   restaurant_id uuid not null,
-  plateforme text not null default 'whatsapp' check (plateforme in ('whatsapp')),
-  -- Identifiants Meta : le webhook retrouve le canal par phone_number_id.
-  phone_number_id text not null unique,
-  waba_id text not null,
+  plateforme text not null default 'whatsapp' check (plateforme in ('whatsapp', 'instagram')),
+  -- Identifiant Meta du compte : WhatsApp = phone_number_id ; Instagram = id du compte professionnel.
+  compte_id text not null,
+  -- WhatsApp uniquement.
+  waba_id text,
   numero_affiche text,
   -- Réglages du canal (remplacent ceux de la fiche client, provisoires depuis A3).
   mode_declenchement text not null default 'mots_cles_uniquement'
@@ -31,15 +34,17 @@ create table public.bot_canaux (
   etat text not null default 'test' check (etat in ('test', 'actif', 'coupe')),
   test_numeros text[] not null default '{}',
   cree_le timestamptz not null default now(),
-  maj_le timestamptz not null default now()
+  maj_le timestamptz not null default now(),
+  unique (plateforme, compte_id)
 );
 create index bot_canaux_resto on public.bot_canaux (restaurant_id);
 
--- Un contact WhatsApp d'un canal (client du resto).
+-- Un contact d'un canal (client du resto).
 create table public.bot_contacts (
   id uuid primary key default gen_random_uuid(),
   canal_id uuid not null references public.bot_canaux (id) on delete cascade,
-  wa_id text not null,
+  -- WhatsApp : numéro (wa_id) ; Instagram : identifiant du client (IGSID).
+  identifiant text not null,
   profil_nom text,
   -- Pause du bot pour ce contact (transfert, gérant qui a répondu, manuelle). jusqu_a null = sans fin.
   pause_raison text check (pause_raison in ('transfert_humain', 'echo_gerant', 'manuel')),
@@ -53,7 +58,7 @@ create table public.bot_contacts (
   stop_options boolean not null default false,
   cree_le timestamptz not null default now(),
   maj_le timestamptz not null default now(),
-  unique (canal_id, wa_id)
+  unique (canal_id, identifiant)
 );
 
 -- La conversation en cours (une par contact au plus).
@@ -106,7 +111,7 @@ create index bot_transferts_ouverts on public.bot_transferts (canal_id, cree_le 
 -- Événements reçus (Meta, PFlow Order) : traités une seule fois, gardés 30 jours pour le diagnostic.
 create table public.bot_webhook_evenements (
   id uuid primary key default gen_random_uuid(),
-  source text not null check (source in ('whatsapp', 'pflow_order')),
+  source text not null check (source in ('whatsapp', 'instagram', 'pflow_order')),
   -- wamid du message, id du statut, ou « commande:<id>:<événement> » : un renvoi n'est jamais retraité.
   cle_unique text not null unique,
   charge jsonb not null,

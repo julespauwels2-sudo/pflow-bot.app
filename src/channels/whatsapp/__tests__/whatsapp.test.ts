@@ -4,13 +4,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createLocalRepositories } from "@/data/local/repositories";
 import { createMemoryStore } from "@/data/local/store";
 import { createMasterTemplate } from "@/data/template-seed";
-import { loadBotFromWorkspace } from "../bot-loader";
+import { loadBotFromWorkspace } from "../../core/bot-loader";
 import { createGraphClient, toGraphPayload } from "../graph";
-import { createMemoryChannelStore } from "../memory-store";
+import { createMemoryChannelStore } from "../../core/memory-store";
 import { parseWebhook } from "../parse";
-import { processWebhookPayload } from "../processor";
-import { signBody, verifyChallenge, verifySignature } from "../signature";
-import type { Canal } from "../types";
+import { processWebhookPayload } from "../../core/processor";
+import { signBody, verifyChallenge, verifySignature } from "../../core/signature";
+import type { Canal } from "../../core/types";
 
 const PHONE_ID = "1000000001";
 const CLIENT_WA = "590690000001";
@@ -82,8 +82,8 @@ describe("lecture des notifications de Meta", () => {
     expect(inbound[0].profileName).toBe("Léa Martin");
     expect(inbound[4].ignored).toBe(true);
     expect(statuses).toEqual([
-      { phoneNumberId: PHONE_ID, wamid: "wamid.out1", statut: "lu" },
-      { phoneNumberId: PHONE_ID, wamid: "wamid.out2", statut: "echec", erreur: "Fenêtre fermée" },
+      { plateforme: "whatsapp", accountId: PHONE_ID, wamid: "wamid.out1", statut: "lu" },
+      { plateforme: "whatsapp", accountId: PHONE_ID, wamid: "wamid.out2", statut: "echec", erreur: "Fenêtre fermée" },
     ]);
     const echo = parseWebhook(payload([{ from: "590690999999", to: CLIENT_WA, id: "wamid.e", type: "text", text: { body: "Je m'en occupe" } }], "smb_message_echoes"));
     expect(echo.inbound[0]).toMatchObject({ waId: CLIENT_WA, message: { kind: "echo", text: "Je m'en occupe" } });
@@ -142,7 +142,8 @@ describe("de bout en bout contre un faux serveur Meta", () => {
     const canal: Canal = {
       id: "canal1",
       restaurantId: client.id,
-      phoneNumberId: PHONE_ID,
+      plateforme: "whatsapp",
+      accountId: PHONE_ID,
       wabaId: "WABA",
       triggerMode: "mots_cles_uniquement",
       coexistence: true,

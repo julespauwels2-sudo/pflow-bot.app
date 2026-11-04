@@ -321,7 +321,13 @@ describe("bloc Message avec boutons et bloc Délai (lint)", () => {
       edges: [{ id: "1", source: "t", target: "l" }, { id: "2", source: "l", sourceHandle: "i", target: "f" }],
     };
     expect(errors(lintFlow(list, ctx))).toEqual([]);
-    expect(errors(lintFlow(list, { ...ctx, platforms: ["whatsapp", "instagram"] }))[0].message).toContain("Les listes n'existent pas sur Instagram");
+    // Instagram : la liste part en réponses rapides (avertissement) ; titres de plus de 20 caractères refusés.
+    const both = lintFlow(list, { ...ctx, platforms: ["whatsapp", "instagram"] });
+    expect(errors(both).map((i) => i.message)).toEqual([]);
+    expect(both.some((i) => i.level === "warning" && i.message.includes("réponses rapides"))).toBe(true);
+    const longTitle: FlowGraph = { ...list, nodes: list.nodes.map((x) => (x.type === "list" ? { ...x, data: { ...x.data, items: [{ id: "i", title: "Tacos poulet fromage XL" }] } } : x)) };
+    expect(errors(lintFlow(longTitle, { ...ctx, platforms: ["whatsapp", "instagram"] }))[0].message).toContain("Sur Instagram, choix « Tacos poulet fromage XL » trop long (23 / 20)");
+    expect(errors(lintFlow(longTitle, ctx))).toEqual([]);
   });
 
   it("délai fixe entre 0,5 et 10 s", () => {

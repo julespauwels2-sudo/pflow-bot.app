@@ -70,13 +70,13 @@ export function toGraphPayload(to: string, message: OutgoingMessage): Record<str
 
 export function createGraphClient(config: GraphConfig) {
   const doFetch = config.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
-  const url = (phoneNumberId: string) => `${config.base.replace(/\/$/, "")}/${config.version}/${encodeURIComponent(phoneNumberId)}/messages`;
+  const url = (accountId: string) => `${config.base.replace(/\/$/, "")}/${config.version}/${encodeURIComponent(accountId)}/messages`;
 
-  async function post(phoneNumberId: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async function post(accountId: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), config.timeoutMs ?? 10_000);
     try {
-      const response = await doFetch(url(phoneNumberId), {
+      const response = await doFetch(url(accountId), {
         method: "POST",
         headers: { authorization: `Bearer ${config.token}`, "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -98,16 +98,16 @@ export function createGraphClient(config: GraphConfig) {
 
   return {
     /** Envoie un message et renvoie son identifiant WhatsApp (wamid). */
-    async send(phoneNumberId: string, to: string, message: OutgoingMessage): Promise<string | undefined> {
+    async send(accountId: string, to: string, message: OutgoingMessage): Promise<string | undefined> {
       const payload = toGraphPayload(to, message);
       if (!payload) return undefined;
-      const json = await post(phoneNumberId, payload);
+      const json = await post(accountId, payload);
       const first = (json.messages as { id?: string }[] | undefined)?.[0];
       return first?.id;
     },
     /** Accusé de lecture du message reçu, avec l'indicateur « en train d'écrire ». */
-    async markRead(phoneNumberId: string, wamid: string, typing: boolean): Promise<void> {
-      await post(phoneNumberId, {
+    async markRead(accountId: string, wamid: string, typing: boolean): Promise<void> {
+      await post(accountId, {
         messaging_product: "whatsapp",
         status: "read",
         message_id: wamid,

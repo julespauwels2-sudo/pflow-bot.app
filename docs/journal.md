@@ -155,3 +155,53 @@ Ce qui reste bloqué volontairement : C0 (compte Meta, par Jules), la migration 
 - Bot désactivé → **jamais recréé automatiquement** (comportement actuel, confirmé).
 - Hébergement → **Vercel gratuit pendant les tests** sur le numéro Meta ; décision avant la bascule du
   premier client.
+
+## 5 novembre 2026 — deuxième session autonome (tâches 5 à 9)
+
+Mêmes règles : aucune écriture dans le CRM ni dans les tables `bot_` réelles, aucune migration, rien dans
+`Pflow-Crm`, rien chez Meta.
+
+### Tâche 5 — Instagram ✅
+
+**Fait**
+- Le code des canaux est regroupé dans `src/channels/core/` (commun) ; `whatsapp/` et `instagram/` ne
+  contiennent plus que la lecture des notifications et l'envoi. Le moteur est le même pour les deux.
+- `POST/GET /api/webhooks/instagram` : vérification de la phrase, signature `X-Hub-Signature-256`
+  obligatoire, traitement en arrière-plan, un renvoi de Meta n'est jamais traité deux fois.
+- Lecture : texte, réponse rapide, bouton (postback), vocal (gardé pour la tâche 6), « vu » du client,
+  écho du gérant (il répond depuis l'appli Instagram → le bot se met en pause, comme sur WhatsApp).
+- Envoi adapté : boutons et listes → **réponses rapides** (13 max, 20 caractères) ; bouton « Commander »
+  → modèle à bouton lien ; texte coupé à 1 000 caractères ; la mise en forme WhatsApp (`*gras*`…) est
+  retirée car Instagram l'afficherait telle quelle.
+- Éditeur : case **« Instagram »** (à côté de « Recentrer ») qui ajoute les limites d'Instagram à la
+  vérification du flux : liste affichée en réponses rapides (avertissement), erreur au-delà de 13 choix
+  ou de 20 caractères par choix, texte de bouton lien limité à 640.
+- Boîte de réception : conversations Instagram sous le resto (📸), WhatsApp (💬) ; en mode démo, choix de
+  la plateforme pour simuler un message.
+- **Inactif** tant que `INSTAGRAM_APP_SECRET`, `INSTAGRAM_VERIFY_TOKEN` et `INSTAGRAM_TOKEN` ne sont pas
+  définis (la route répond « non configuré », aucun envoi).
+- `docs/etape-c/guide-meta.md` : nouvelle section 9 (compte pro, « Autoriser l'accès aux messages »,
+  permissions, webhook, validation de l'app avec accès avancé et vérification d'entreprise).
+- `docs/etape-c/migration-c.sql` révisée (toujours **non appliquée**) : `bot_canaux` a une colonne
+  `plateforme` et un `compte_id` (au lieu de `phone_number_id`), `bot_contacts.identifiant` (au lieu de
+  `wa_id`), `source` des événements accepte `instagram`.
+
+**Vérifié** : 296 tests (dont 4 Instagram contre un faux serveur), lint, types, build ; bout en bout
+`scripts/e2e/instagram.js`, `whatsapp.js` et `inbox.js` (vrai navigateur) contre le faux Meta : tout passe.
+
+**Choix faits sans toi (les plus prudents)**
+- Sur Instagram, le lien « Commander » porte `?via=ig` **sans jeton de contact** : l'identifiant
+  Instagram n'est pas un numéro de téléphone, il ne doit pas remplacer le téléphone du client dans
+  PFlow Order (patch 4).
+- Le nom du client Instagram n'est pas demandé à Meta (appel en plus, permission en plus) : la boîte de
+  réception affiche « Instagram » + 4 derniers chiffres de l'identifiant tant qu'on n'a pas de nom.
+- Nos propres envois reviennent en écho avec l'`app_id` de l'app : ignorés (sinon le bot se mettrait en
+  pause tout seul). Un écho sans `app_id` = le gérant a répondu.
+- Le « vu » et « en train d'écrire » ne partent que si le bot répond (si le bot est en pause, le client
+  ne voit pas « vu » alors que personne n'a lu).
+
+**Questions pour toi (non bloquantes)**
+- PFlow Order, patch 3 : quand `via=ig`, faut-il un bouton « Retour sur Instagram »
+  (`https://ig.me/m/<compte>`) au lieu de « Retour sur WhatsApp » ? Je n'ai rien modifié.
+- Le token Instagram expire après 60 jours : renouvellement automatique à prévoir avant le premier
+  client Instagram (noté dans le guide).

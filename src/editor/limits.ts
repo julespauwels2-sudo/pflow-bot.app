@@ -37,12 +37,13 @@ export const PLATFORM_LIMITS: Record<Platform, PlatformLimits> = {
     listButtonLabel: 20,
     ctaButtonLabel: 20,
   },
-  // Phase 2 — valeurs provisoires à vérifier dans la doc Meta au moment de brancher Instagram
-  // (réponses rapides : 13 max, 20 car. ; texte : 1 000 car. ; pas de liste déroulante).
+  // Messagerie Instagram (à revérifier dans la doc Meta au branchement) : texte 1 000 car. ; boutons de
+  // réponse → réponses rapides (13 max, 20 car.) ; bouton lien → modèle « button » (texte 640 car.,
+  // titre 20 car.) ; pas de liste déroulante (convertie en réponses rapides à l'envoi).
   instagram: {
     name: "Instagram",
     textBody: 1000,
-    interactiveBody: 1000,
+    interactiveBody: 640,
     replyButtonsMax: 13,
     replyButtonTitle: 20,
     supportsList: false,

@@ -173,23 +173,30 @@ export function lintFlow(graph: FlowGraph, ctx: LintContext): Issue[] {
         break;
 
       case "list": {
+        // Instagram n'a pas de liste déroulante : la liste y part en réponses rapides.
         const unsupported = platforms.filter((p) => !PLATFORM_LIMITS[p].supportsList);
         if (unsupported.length) {
-          error(`Les listes n'existent pas sur ${unsupported.map((p) => PLATFORM_LIMITS[p].name).join(", ")} : utilisez des boutons.`, id);
-          break;
+          const ig = PLATFORM_LIMITS.instagram;
+          warning(`Sur ${unsupported.map((p) => PLATFORM_LIMITS[p].name).join(", ")}, la liste part en réponses rapides (${ig.replyButtonsMax} choix au plus, titres de ${ig.replyButtonTitle} caractères, sans description).`, id);
+          if (node.data.items.length > ig.replyButtonsMax) error(`${ig.name} limite à ${ig.replyButtonsMax} choix.`, id);
+          for (const item of node.data.items) {
+            if (len(item.title.trim()) > ig.replyButtonTitle) error(`Sur ${ig.name}, choix « ${item.title.trim()} » trop long (${len(item.title.trim())} / ${ig.replyButtonTitle}).`, id);
+          }
         }
+        const listPlatforms = platforms.filter((p) => PLATFORM_LIMITS[p].supportsList);
+        const listLimit = (key: Parameters<typeof strictest>[1]) => strictest(listPlatforms.length ? listPlatforms : ["whatsapp"], key);
         const body = limit("interactiveBody");
         if (!node.data.text.trim()) error("Le texte de la liste est obligatoire.", id);
         if (len(node.data.text) > body.value) error(`Texte trop long (${len(node.data.text)} / ${body.value}).`, id);
-        const labelMax = limit("listButtonLabel");
+        const labelMax = listLimit("listButtonLabel");
         const label = node.data.buttonLabel.trim();
         if (!label) error("Le libellé du bouton de la liste est obligatoire.", id);
         else if (len(label) > labelMax.value) error(`Libellé « ${label} » trop long (${len(label)} / ${labelMax.value}).`, id);
-        const rows = limit("listRowsMax");
+        const rows = listLimit("listRowsMax");
         if (node.data.items.length === 0) error("Ajoutez au moins un choix.", id);
         if (node.data.items.length > rows.value) error(`${rows.name} limite à ${rows.value} choix.`, id);
-        const titleMax = limit("listRowTitle");
-        const descMax = limit("listRowDescription");
+        const titleMax = listLimit("listRowTitle");
+        const descMax = listLimit("listRowDescription");
         const titles = new Set<string>();
         for (const item of node.data.items) {
           const title = item.title.trim();

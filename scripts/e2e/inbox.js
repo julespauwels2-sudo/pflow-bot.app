@@ -1,7 +1,7 @@
 /**
  * Boîte de réception dans un vrai navigateur, en mode démo (stockage en mémoire) et faux serveur Meta.
  *   node scripts/e2e/fake-meta.js /tmp/envois-meta.jsonl
- *   WHATSAPP_STORE=memory WHATSAPP_APP_SECRET=secret-test WHATSAPP_VERIFY_TOKEN=phrase-test WHATSAPP_TOKEN=jeton-test \
+*   CHANNELS_STORE=memory WHATSAPP_APP_SECRET=secret-test WHATSAPP_VERIFY_TOKEN=phrase-test WHATSAPP_TOKEN=jeton-test \
  *     WHATSAPP_GRAPH_BASE=http://127.0.0.1:4556 BASIC_AUTH_PASSWORD=test123 PORT=3123 npm start
  *   node scripts/e2e/inbox.js /tmp /tmp/envois-meta.jsonl
  */
@@ -26,7 +26,7 @@ const sent = () => fs.readFileSync(LOG, 'utf8').trim().split('\n').filter(Boolea
   await p.getByRole('button', { name: 'Simuler un message client' }).click();
   const list = p.getByTestId('inbox-list');
   await list.getByText('Léa', { exact: true }).waitFor();
-  await list.getByText('Cookies An Nou (démo)', { exact: false }).waitFor();
+  await list.getByText('Cookies An Nou (démo) · +590', { exact: false }).waitFor();
   step('message simulé : la conversation apparaît sous le resto');
 
   await list.getByText('Léa', { exact: true }).click();
