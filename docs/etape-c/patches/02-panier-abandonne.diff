@@ -1,0 +1,78 @@
+diff --git a/repo/api/_options.js b/repo/api/_options.js
+index ebd4463..e7c3afc 100644
+--- a/repo/api/_options.js
++++ b/repo/api/_options.js
+@@ -119,6 +119,25 @@ async function envoyerUn(e, base, test) {
+   var cle = e.cle_bot || E.UCHAT_CLE;
+   var ns = e.reglage && (e.reglage.sousflux ? e.reglage.sousflux.ns : e.reglage.ns);
+   function fin(etat, raison, userNs) { return { id: e.id, etat: etat, raison: String(raison || "").slice(0, 280), user_ns: userNs || "" }; }
++  /* Etape C : relance de panier par PFlow Bots si le resto y est (sinon : UChat, inchange).
++     PFlow Bots verifie lui-meme la fenetre de 24 h et l'option « Relance panier abandonne ». */
++  if (e.type === "relance") {
++    var slugResto = e.resto && e.resto.slug;
++    var pb = await BOT.appelerPflowBots({
++      type: "option",
++      option: "relance",
++      test: !!test,
++      restaurant_id: e.resto && e.resto.id || null,
++      slug: slugResto || "",
++      client_tel: BOT.numeroInternational(e.tel),
++      client_nom: String(e.nom || "").slice(0, 80),
++      panier: { recap: resume(e.articles), total: eur(e.total || 0), lien: base + "/c/" + slugResto + "?reprise=" + e.jeton + "&via=wa" }
++    });
++    if (pb.pris) {
++      var x = pb.envois.relance || {};
++      return fin(x.etat === "ok" ? "envoye" : (x.etat === "ignore" ? "ignore" : "echec"), "PFlow Bots : " + (x.detail || "sans détail"));
++    }
++  }
+   if (!cle) return fin("echec", "Aucune clé UChat (UCHAT_API_KEY vide et pas de clé du bot)");
+   if (!ns) return fin("echec", "Aucun sous-flux choisi pour cette option");
+   var U = BOT.clientUchat(cle);
+diff --git a/repo/tests/pflow-bots-relance.test.js b/repo/tests/pflow-bots-relance.test.js
+new file mode 100644
+index 0000000..604f65d
+--- /dev/null
++++ b/repo/tests/pflow-bots-relance.test.js
+@@ -0,0 +1,42 @@
++/* Etape C : la relance de panier passe par PFlow Bots quand le resto y est (api/_options.js). */
++var test = require("node:test");
++var assert = require("node:assert/strict");
++var http = require("node:http");
++
++test("relance : PFlow Bots reçoit le panier et son lien de reprise ; sinon chemin UChat", async function () {
++  var recus = [];
++  var reponse = { pris: true, envois: { relance: { etat: "ok", detail: "flux Panier abandonné" } } };
++  var s = http.createServer(function (req, res) {
++    var corps = "";
++    req.on("data", function (c) { corps += c; });
++    req.on("end", function () { recus.push(JSON.parse(corps)); res.setHeader("Content-Type", "application/json"); res.end(JSON.stringify(reponse)); });
++  });
++  await new Promise(function (ok) { s.listen(0, "127.0.0.1", ok); });
++  process.env.PFLOW_BOTS_URL = "http://127.0.0.1:" + s.address().port;
++  process.env.PFLOW_BOTS_SECRET = "secret-test";
++  delete require.cache[require.resolve("../api/_bot.js")];
++  delete require.cache[require.resolve("../api/_options.js")];
++  var OPT = require("../api/_options.js");
++  var e = { id: 7, type: "relance", tel: "0690 12 34 56", nom: "Léa", total: 8, jeton: "11111111-1111-1111-1111-111111111111",
++    articles: [{ nom: "Tout choco", qte: 2 }], resto: { id: "r1", slug: "cookies-an-nou" }, reglage: { sousflux: { ns: "x" } } };
++  try {
++    var r = await OPT._interne.envoyerUn(e, "https://order.pflow.fr", false);
++    assert.equal(r.etat, "envoye");
++    assert.equal(recus[0].option, "relance");
++    assert.equal(recus[0].client_tel, "590690123456");
++    assert.equal(recus[0].panier.lien, "https://order.pflow.fr/c/cookies-an-nou?reprise=11111111-1111-1111-1111-111111111111&via=wa");
++    assert.match(recus[0].panier.recap, /2 x Tout choco/);
++
++    reponse = { pris: true, envois: { relance: { etat: "ignore", detail: "fenêtre de 24 h fermée" } } };
++    assert.equal((await OPT._interne.envoyerUn(e, "https://order.pflow.fr", false)).etat, "ignore");
++
++    /* Resto pas sur PFlow Bots : on retombe sur UChat (ici sans clé UChat : l'échec habituel). */
++    reponse = { pris: false };
++    var r3 = await OPT._interne.envoyerUn(e, "https://order.pflow.fr", false);
++    assert.equal(r3.etat, "echec");
++    assert.match(r3.raison, /clé UChat/);
++  } finally {
++    await new Promise(function (ok) { s.close(ok); });
++    delete process.env.PFLOW_BOTS_URL; delete process.env.PFLOW_BOTS_SECRET;
++  }
++});

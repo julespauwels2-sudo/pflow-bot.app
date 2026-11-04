@@ -170,7 +170,7 @@ describe("de bout en bout contre un faux serveur Meta", () => {
     const [first, second] = sentMessages();
     expect(first.path).toBe(`/v24.0/${PHONE_ID}/messages`);
     expect(first.auth).toBe("Bearer jeton-test");
-    expect(first.body).toMatchObject({ to: CLIENT_WA, interactive: { type: "cta_url", action: { parameters: { url: "https://order.pflow.fr/c/cookies-an-nou" } } } });
+    expect(first.body).toMatchObject({ to: CLIENT_WA, interactive: { type: "cta_url", action: { parameters: { url: "https://order.pflow.fr/c/cookies-an-nou?via=wa" } } } });
     expect(second.body).toMatchObject({ interactive: { type: "button" } });
     expect(received.find((r) => r.body.status === "read")?.body).toMatchObject({ typing_indicator: { type: "text" } });
 

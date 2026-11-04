@@ -9,6 +9,7 @@ des examens de Jules (fin novembre). Tout ici est à relire et à valider avant 
 | [migration-c.sql](migration-c.sql) | Deuxième migration SQL proposée (numéros, contacts, sessions, messages…), **non appliquée** |
 | [pflow-order.md](pflow-order.md) | Liste exacte des modifications à faire dans PFlow Order (dépôt `Pflow-Crm`), fichier par fichier |
 | [guide-meta.md](guide-meta.md) | Guide pas à pas : app Meta, numéro de test, utilisateur système, token, webhook |
+| [patches/](patches/README.md) | Les 4 modifications de PFlow Order en fichiers diff, testées sur une copie |
 
 Règles qui restent en vigueur :
 - uniquement des tables `bot_` dans la base du CRM, SQL montré avant toute migration, RLS partout ;

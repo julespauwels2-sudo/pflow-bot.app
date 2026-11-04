@@ -114,3 +114,35 @@ Règles respectées : aucune écriture dans les tables du CRM, aucune migration 
 **Questions en attente**
 - Faut-il que le gérant de chaque resto ait accès à SA boîte de réception (compte du dashboard, droit
   limité à son resto) ? Aujourd'hui, seuls les administrateurs du bot y ont accès.
+
+### Tâche 4 — Patches PFlow Order ✅
+
+**Fait** (`docs/etape-c/patches/`, un fichier par modification, détails dans son README)
+- `01` événements de commande (aiguillage dans `api/_bot.js`), `02` panier abandonné (`api/_options.js`),
+  `03` bouton « Retour sur WhatsApp » (`js/commande.js`), `04` pré-remplissage (nouveau
+  `api/bot-contact.js` + `js/commande.js`), chacun avec ses tests au format de PFlow Order (`node:test`).
+- Côté PFlow Bots : le message « ✅ Commande n° 42 passée » est reconnu (ni accueil ni IA), le bouton
+  « Commander » sur WhatsApp porte `?via=wa` et le jeton chiffré de pré-remplissage.
+
+**Comment vérifier**
+- Lire les 4 diffs ; `git apply --check` depuis la racine de `Pflow-Crm` (commande dans le README).
+- Le dépôt `Pflow-Crm` n'a reçu aucune modification ni commit (travail sur une copie dans le scratchpad).
+
+**Choix faits sans Jules**
+- Texte prérempli « ✅ Commande n° 42 passée » (proposition du plan, non encore validée).
+- Le numéro WhatsApp du jeton **remplace** le téléphone déjà mémorisé sur la page (c'est lui qui relie la
+  commande à la conversation) ; le prénom mémorisé est gardé s'il existe.
+- Jeton valable 2 h, chiffré AES-256-GCM avec `PFLOW_BOTS_SECRET`.
+- Pas de nouvelle colonne dans le CRM (rattachement par le numéro).
+
+**Questions en attente**
+- Valider le texte prérempli du bouton « Retour sur WhatsApp ».
+- `api/notifier.js` exige `UCHAT_API_KEY` dans Vercel : à garder tant qu'un resto reste sur UChat
+  (sinon à assouplir au moment de la bascule complète, C7).
+
+### Résumé de la session
+
+Tout ce qui pouvait être fait **sans Meta et sans migration** est fait et testé : création automatique
+des bots, canal WhatsApp complet (testé contre un faux Meta), boîte de réception, patches PFlow Order.
+Ce qui reste bloqué volontairement : C0 (compte Meta, par Jules), la migration C (à valider), la route
+`/api/webhooks/pflow-order` (dépend de la migration C), l'application des patches (à valider).

@@ -408,6 +408,11 @@ export interface EngineInput {
   message: IncomingMessage;
   /** Agent IA (absent = l'IA répond seulement avec la fiche d'infos, sans fonctions). */
   agent?: AgentConfig;
+  /**
+   * Paramètres ajoutés aux boutons « Commander » (canal WhatsApp) : « via=wa » pour que la page sache
+   * que le client vient du bot, et le jeton de pré-remplissage. Absent dans le simulateur.
+   */
+  orderLinkQuery?: string;
 }
 
 export interface EngineDeps {
@@ -418,7 +423,7 @@ export interface EngineDeps {
 export type EngineEvent =
   | {
       type: "ignored";
-      reason: "pause" | "aucun_declencheur" | "media_non_gere" | "echo" | "fenetre_fermee" | "aucun_flux_evenement";
+      reason: "pause" | "aucun_declencheur" | "media_non_gere" | "echo" | "fenetre_fermee" | "aucun_flux_evenement" | "retour_commande";
     }
   | { type: "pause_expired" }
   | { type: "session_expired"; flowId: string }

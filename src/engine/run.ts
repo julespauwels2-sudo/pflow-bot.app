@@ -40,6 +40,11 @@ const MAX_CHAINED_AI_INPUTS = 3;
  * Utilisée automatiquement si l'IA écrit un lien malgré les règles.
  */
 export const PROPOSE_ORDER_FUNCTION = "proposer_commande";
+/**
+ * Texte prérempli du bouton « Retour sur WhatsApp » de PFlow Order (« ✅ Commande n° 42 passée ») :
+ * le bot ne relance ni l'accueil ni l'IA, la confirmation part déjà par l'événement de commande.
+ */
+export const ORDER_RETURN_PATTERN = /^✅?\s*commande\s+n°?\s*\d+\s+pass[ée]e\s*[.!]?$/iu;
 
 export const TEXTS = {
   handoff: "Je transmets votre message à l'équipe, on vous répond très vite 🙏",
@@ -180,6 +185,12 @@ class EngineRun {
     }
 
     const text = message.kind === "text" ? message.text : message.title;
+
+    // Retour depuis la page de commande : rien à répondre.
+    if (message.kind === "text" && ORDER_RETURN_PATTERN.test(text.trim())) {
+      this.events.push({ type: "ignored", reason: "retour_commande" });
+      return;
+    }
 
     // 2. Session en cours qui attend une réponse : on continue le flux.
     const waiting = this.currentWaitingNode();
@@ -432,7 +443,7 @@ class EngineRun {
         }
         this.send({ kind: "text", text: answer });
         // Pas de fonction proposer_commande : le bouton « Commander » remplace le lien retiré.
-        const url = orderButtonFallback ? this.orderUrl() : undefined;
+        const url = orderButtonFallback ? this.orderButtonUrl() : undefined;
         if (url) this.send({ kind: "link", text: TEXTS.orderLink, url, buttonLabel: TEXTS.orderButton });
         if (repromptNode) {
           this.sendPrompt(repromptNode);
@@ -599,7 +610,7 @@ class EngineRun {
       return;
     }
     if (link) {
-      const url = link.orderLink ? this.orderUrl() : this.render(link.url ?? "");
+      const url = link.orderLink ? this.orderButtonUrl() : this.render(link.url ?? "");
       if (url && /^https?:\/\//.test(url)) {
         this.send({ kind: "link", text: text || TEXTS.orderLink, url, buttonLabel: this.render(link.title) || TEXTS.orderButton });
         return;
@@ -708,6 +719,13 @@ class EngineRun {
 
   private nextNodeId(flow: Flow, nodeId: string, handle: string): string | undefined {
     return flow.edges.find((e) => e.source === nodeId && (e.sourceHandle ?? "next") === handle)?.target;
+  }
+
+  /** Lien des boutons « Commander » : avec les paramètres du canal (via=wa, jeton), s'il y en a. */
+  private orderButtonUrl(): string | undefined {
+    const url = this.orderUrl();
+    const query = this.input.orderLinkQuery?.replace(/^[?&]/, "");
+    return url && query ? `${url}${url.includes("?") ? "&" : "?"}${query}` : url;
   }
 
   private orderUrl(): string | undefined {

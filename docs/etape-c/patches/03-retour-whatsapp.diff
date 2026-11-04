@@ -1,0 +1,46 @@
+diff --git a/repo/js/commande.js b/repo/js/commande.js
+index 93747d9..61663ae 100644
+--- a/repo/js/commande.js
++++ b/repo/js/commande.js
+@@ -1343,12 +1343,26 @@
+   function propulse() { return "<div class=\"propulse\">Commande sans commission, propulsée par <b>PFlow</b>" +
+     "<a href=\"/confidentialite/" + encodeURIComponent(slug) + "\" class=\"conf-lien\">Confidentialité</a></div>"; }
+ 
++  /* Etape C : bouton WhatsApp des pages de confirmation. Venu du bot : « Retour sur WhatsApp », avec un
++     texte que le bot reconnait (sans « Bonjour », qui relancerait son accueil ; la confirmation part deja
++     par l'evenement de commande). Sinon : le bouton d'avant, inchange. */
++  function boutonWhatsapp(numero, nomClient, total, modeCommande) {
++    var telResto = String(resto.numero_whatsapp || resto.telephone || "").replace(/\D/g, "");
++    if (!telResto) return "";
++    if (telResto.charAt(0) === "0") telResto = "590" + telResto.slice(1);
++    if (viaBot()) {
++      return "<a class=\"gros\" href=\"https://wa.me/" + telResto + "?text=" + encodeURIComponent("✅ Commande n° " + numero + " passée") + "\">Retour sur WhatsApp</a>";
++    }
++    var recap = "Bonjour, je viens de passer la commande n° " + numero + (nomClient ? " au nom de " + nomClient : "") + ". Total " + eur(total) + ", " + (modeCommande === "livraison" ? "en livraison" : "à emporter") + ".";
++    return "<a class=\"gros\" href=\"https://wa.me/" + telResto + "?text=" + encodeURIComponent(recap) + "\">Écrire au restaurant sur WhatsApp</a>";
++  }
++
+   function confirmationPayee(j) {
+     panier = []; cleEnvoi = null; garderPanier(); majBarre(false);
+     etape("commande", { numero: String(j.numero), retour: "stripe" });
+     var h = "<div class=\"confirm\"><div class=\"rond\">" + COCHE + "</div><h1 class=\"t\">" + esc(L("confirme_payee", "Commande payée")) + "</h1><div class=\"num\">Numéro<b>" + esc(j.numero) + "</b></div>" +
+       "<p>" + esc(resto.nom) + " a bien reçu " + esc(L("recu", "votre commande")) + (reglage("rdv") ? "" : (j.mode === "livraison" ? " en livraison" : " à emporter")) + ", " + esc(String(j.creneau || "dès que possible").toLowerCase()) +
+-      ". " + eur(j.total) + " réglés par carte, rien à payer sur place.</p><button class=\"discret\" id=\"re-commander\">" + esc(L("recommencer", "Passer une autre commande")) + "</button></div>" + propulse();
++      ". " + eur(j.total) + " réglés par carte, rien à payer sur place.</p>" + boutonWhatsapp(j.numero, "", j.total, j.mode) + "<button class=\"discret\" id=\"re-commander\">" + esc(L("recommencer", "Passer une autre commande")) + "</button></div>" + propulse();
+     ecran(h); window.scrollTo(0, 0);
+     $("re-commander").addEventListener("click", retourCarte);
+   }
+@@ -1363,12 +1377,7 @@
+     var h = "<div class=\"confirm\"><div class=\"rond\">" + COCHE + "</div><h1 class=\"t\">" + esc(L("confirme", "Commande envoyée")) + "</h1><div class=\"num\">Numéro<b>" + esc(numero) + "</b></div>" +
+       "<p>" + esc(resto.nom) + " a bien reçu " + esc(L("recu", "votre commande")) + (reglage("rdv") ? "" : (ligne.mode === "livraison" ? " en livraison" : " à emporter")) + ", " + esc(quandTexte(ligne)) + ". Paiement sur place.</p>" +
+       "<p style=\"font-size:.86rem\">Vous êtes prévenu sur WhatsApp à chaque étape.</p>";
+-    var telResto = String(resto.numero_whatsapp || resto.telephone || "").replace(/\D/g, "");
+-    if (telResto) {
+-      if (telResto.charAt(0) === "0") telResto = "590" + telResto.slice(1);
+-      var recap = "Bonjour, je viens de passer la commande n° " + numero + (ligne.client_nom ? " au nom de " + ligne.client_nom : "") + ". Total " + eur(ligne.total) + ", " + (ligne.mode === "livraison" ? "en livraison" : "à emporter") + ".";
+-      h += "<a class=\"gros\" href=\"https://wa.me/" + telResto + "?text=" + encodeURIComponent(recap) + "\">Écrire au restaurant sur WhatsApp</a>";
+-    }
++    h += boutonWhatsapp(numero, ligne.client_nom, ligne.total, ligne.mode);
+     h += "<button class=\"discret\" id=\"re-commander\">Passer une autre commande</button></div>" + propulse();
+     ecran(h); window.scrollTo(0, 0);
+     $("re-commander").addEventListener("click", retourCarte);

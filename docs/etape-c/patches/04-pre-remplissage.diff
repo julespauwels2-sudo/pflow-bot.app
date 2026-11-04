@@ -1,0 +1,138 @@
+diff --git a/repo/api/bot-contact.js b/repo/api/bot-contact.js
+new file mode 100644
+index 0000000..9101501
+--- /dev/null
++++ b/repo/api/bot-contact.js
+@@ -0,0 +1,52 @@
++/* PFlow, fonction serveur (etape C) : pre-remplissage de la page de commande quand le client vient du
++   bot PFlow Bots. Le bouton « Commander » du bot porte un jeton ?wa=... CHIFFRE par PFlow Bots (numero
++   WhatsApp, prenom, resto, expiration 2 h) ; cette adresse le dechiffre et renvoie { tel, prenom }.
++   Ne lit et n'ecrit rien en base. Sans PFLOW_BOTS_SECRET : 503 (la page continue sans pre-remplissage).
++
++   Format (identique a src/channels/pflow-order/contact-token.ts de PFlow Bots) :
++     jeton = base64url( iv (12 octets) | texte chiffre | tag (16 octets) ), AES-256-GCM,
++     cle = SHA-256("pflow-bots-contact|" + PFLOW_BOTS_SECRET),
++     contenu = JSON { t: numero, p: prenom, s: slug du resto, e: expiration (secondes) }. */
++
++var crypto = require("crypto");
++
++function lire(jeton, secret, slug, maintenant) {
++  try {
++    var brut = Buffer.from(String(jeton || ""), "base64url");
++    if (brut.length < 12 + 16 + 2) return null;
++    var cle = crypto.createHash("sha256").update("pflow-bots-contact|" + secret, "utf8").digest();
++    var d = crypto.createDecipheriv("aes-256-gcm", cle, brut.subarray(0, 12));
++    d.setAuthTag(brut.subarray(brut.length - 16));
++    var j = JSON.parse(Buffer.concat([d.update(brut.subarray(12, brut.length - 16)), d.final()]).toString("utf8"));
++    if (j.s !== slug || typeof j.e !== "number" || j.e < maintenant || typeof j.t !== "string" || !/^\d{6,15}$/.test(j.t)) return null;
++    return { tel: j.t, prenom: String(j.p || "").slice(0, 60) };
++  } catch (e) {
++    return null;
++  }
++}
++
++async function lireCorps(req) {
++  return await new Promise(function (ok) {
++    var b = "";
++    req.on("data", function (c) { b += c; if (b.length > 4000) req.destroy(); });
++    req.on("end", function () { ok(b); });
++    req.on("error", function () { ok(""); });
++  });
++}
++
++module.exports = async function (req, res) {
++  res.setHeader("Content-Type", "application/json; charset=utf-8");
++  res.setHeader("Cache-Control", "no-store");
++  function json(http, obj) { res.statusCode = http; res.end(JSON.stringify(obj)); }
++  if (req.method !== "POST") return json(405, { ok: false });
++  var secret = String(process.env.PFLOW_BOTS_SECRET || "").trim();
++  if (!secret) return json(503, { ok: false });
++  var corps = req.body;
++  if (!corps || typeof corps !== "object") { try { corps = JSON.parse(await lireCorps(req)); } catch (e) { corps = {}; } }
++  var slug = String(corps.slug || "").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 60);
++  var r = lire(corps.jeton, secret, slug, Math.floor(Date.now() / 1000));
++  if (!r) return json(200, { ok: false });
++  return json(200, { ok: true, tel: r.tel, prenom: r.prenom });
++};
++
++module.exports._interne = { lire: lire };
+diff --git a/repo/js/commande.js b/repo/js/commande.js
+index 61663ae..0e09614 100644
+--- a/repo/js/commande.js
++++ b/repo/js/commande.js
+@@ -238,11 +238,31 @@
+       try { sessionStorage.setItem("pflow-via-" + slug, "wa"); } catch (e) { }
+       rpc("install_signal", { p_slug: slug, p_quoi: "lien_bot" }, true).catch(function () { });
+       q.delete("via");
++      /* Etape C : jeton de PFlow Bots (?wa=) : prenom et telephone WhatsApp pre-remplis (toujours modifiables). */
++      var wa = q.get("wa");
++      q.delete("wa");
++      if (wa) preRemplirDepuisBot(wa);
+       var reste = q.toString();
+       history.replaceState(null, "", location.pathname + (reste ? "?" + reste : "") + location.hash);
+     } catch (e) { }
+   }
+ 
++  function preRemplirDepuisBot(jeton) {
++    try {
++      fetch("/api/bot-contact", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ slug: slug, jeton: jeton }) })
++        .then(function (r) { return r.ok ? r.json() : null; })
++        .then(function (d) {
++          if (!d || !d.ok || !d.tel) return;
++          var tel = "+" + d.tel;
++          /* Le numero WhatsApp prime : c'est lui qui relie la commande a la conversation du bot. */
++          garderClient(Object.assign({}, client, { tel: tel, nom: client.nom || d.prenom || "" }));
++          var champTel = $("c-tel"), champNom = $("c-nom");
++          if (champTel) champTel.value = tel;
++          if (champNom && !champNom.value && d.prenom) champNom.value = d.prenom;
++        }).catch(function () { });
++    } catch (e) { }
++  }
++
+   function nettoyerLien(cles) {
+     try {
+       var q = new URLSearchParams(location.search), change = false;
+diff --git a/repo/tests/pflow-bots-contact.test.js b/repo/tests/pflow-bots-contact.test.js
+new file mode 100644
+index 0000000..945732a
+--- /dev/null
++++ b/repo/tests/pflow-bots-contact.test.js
+@@ -0,0 +1,38 @@
++/* Etape C : pre-remplissage depuis le bot (api/bot-contact.js). Le jeton est fabrique ici comme le fait
++   PFlow Bots (src/channels/pflow-order/contact-token.ts). */
++var test = require("node:test");
++var assert = require("node:assert/strict");
++var crypto = require("node:crypto");
++var handler = require("../api/bot-contact.js");
++
++function jeton(contenu, secret) {
++  var iv = crypto.randomBytes(12);
++  var cle = crypto.createHash("sha256").update("pflow-bots-contact|" + secret, "utf8").digest();
++  var c = crypto.createCipheriv("aes-256-gcm", cle, iv);
++  var chiffre = Buffer.concat([c.update(JSON.stringify(contenu), "utf8"), c.final()]);
++  return Buffer.concat([iv, chiffre, c.getAuthTag()]).toString("base64url");
++}
++async function appeler(corps) {
++  var res = { statusCode: 0, headers: {}, setHeader: function (k, v) { this.headers[k] = v; }, end: function (b) { this.corps = JSON.parse(b); } };
++  await handler({ method: "POST", body: corps, headers: {} }, res);
++  return res;
++}
++var maintenant = Math.floor(Date.now() / 1000);
++
++test("jeton valide : téléphone et prénom renvoyés", async function () {
++  process.env.PFLOW_BOTS_SECRET = "secret-test";
++  var r = await appeler({ slug: "cookies-an-nou", jeton: jeton({ t: "590690123456", p: "Léa", s: "cookies-an-nou", e: maintenant + 3600 }, "secret-test") });
++  assert.deepEqual(r.corps, { ok: true, tel: "590690123456", prenom: "Léa" });
++});
++
++test("refusé : autre resto, expiré, mauvais secret, altéré ; sans secret : 503", async function () {
++  process.env.PFLOW_BOTS_SECRET = "secret-test";
++  var bon = { t: "590690123456", p: "Léa", s: "cookies-an-nou", e: maintenant + 3600 };
++  assert.equal((await appeler({ slug: "mexico", jeton: jeton(bon, "secret-test") })).corps.ok, false);
++  assert.equal((await appeler({ slug: "cookies-an-nou", jeton: jeton(Object.assign({}, bon, { e: maintenant - 1 }), "secret-test") })).corps.ok, false);
++  assert.equal((await appeler({ slug: "cookies-an-nou", jeton: jeton(bon, "autre") })).corps.ok, false);
++  var j = jeton(bon, "secret-test");
++  assert.equal((await appeler({ slug: "cookies-an-nou", jeton: j.slice(0, -2) + "AA" })).corps.ok, false);
++  delete process.env.PFLOW_BOTS_SECRET;
++  assert.equal((await appeler({ slug: "cookies-an-nou", jeton: j })).statusCode, 503);
++});

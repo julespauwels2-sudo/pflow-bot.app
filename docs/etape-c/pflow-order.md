@@ -1,6 +1,7 @@
 # Étape C — modifications prévues dans PFlow Order (dépôt `Pflow-Crm`)
 
-**À montrer et faire valider par Jules avant toute modification.** Rien n'a été modifié : le code a été lu
+**À montrer et faire valider par Jules avant toute modification.** Les patches prêts à appliquer sont
+dans [`patches/`](patches/README.md). Rien n'a été modifié : le code a été lu
 en lecture seule (commit `5ac768c` du 3 novembre 2026). Aucune table du CRM n'est modifiée par ces
 changements : tout passe par du code et deux variables d'environnement.
 

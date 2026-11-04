@@ -3,6 +3,7 @@
  * réponses partent par l'API Graph. Aucune dépendance à Next.js (testable seul, déplaçable).
  */
 import { runEngine, type AiPort, type AiRequest, type AiResult, type EngineResult } from "@/engine";
+import { createContactToken } from "@/channels/pflow-order/contact-token";
 import type { LoadedBot } from "./bot-loader";
 import type { GraphClient } from "./graph";
 import { parseWebhook } from "./parse";
@@ -28,6 +29,8 @@ export interface ProcessorDeps {
   now?(): Date;
   sleep?(ms: number): Promise<void>;
   maxTypingMs?: number;
+  /** Secret partagé avec PFlow Order : jeton de pré-remplissage dans le lien « Commander ». */
+  pflowBotsSecret?: string;
 }
 
 export interface ProcessReport {
@@ -128,6 +131,8 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
       session: stored?.session ?? null,
       message: event.message,
       agent: bot.agent,
+      // La page de commande sait que le client vient du bot, et pré-remplit prénom et téléphone.
+      orderLinkQuery: orderLinkQuery(bot, event, deps.pflowBotsSecret),
     },
     { ai },
   );
@@ -177,6 +182,13 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
 
   report.handled.push({ wamid: event.wamid, outgoing: sent });
   await store.finishEvent("whatsapp", event.wamid);
+}
+
+function orderLinkQuery(bot: LoadedBot, event: InboundEvent, secret: string | undefined): string {
+  if (!secret || !bot.client.orderSlug) return "via=wa";
+  const prenom = event.profileName?.trim().split(/\s+/)[0];
+  const token = createContactToken({ tel: event.waId, ...(prenom ? { prenom } : {}), slug: bot.client.orderSlug }, secret);
+  return `via=wa&wa=${token}`;
 }
 
 function message(error: unknown): string {

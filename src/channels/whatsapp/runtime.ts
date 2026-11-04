@@ -124,6 +124,7 @@ async function buildRuntime(config: Extract<WhatsAppConfig, { ready: true }>): P
         ai,
         loadBot: async (id) => loadBotFromWorkspace(await repos.workspace.exportAll(), id),
         onAiCall: async (info) => void (await logAiCall(repos, info)),
+        pflowBotsSecret: env("PFLOW_BOTS_SECRET") || undefined,
       },
     };
   }
@@ -143,6 +144,7 @@ async function buildRuntime(config: Extract<WhatsAppConfig, { ready: true }>): P
       ai,
       loadBot: async (id) => loadBotFromWorkspace(await workspaceStore.read(), id),
       onAiCall: async (info) => void (await logAiCall(repos, info)),
+      pflowBotsSecret: env("PFLOW_BOTS_SECRET") || undefined,
     },
   };
 }

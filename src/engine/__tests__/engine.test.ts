@@ -491,6 +491,28 @@ describe("IA de secours : garde-fous", () => {
   });
 });
 
+describe("canal WhatsApp : retour de commande et lien « Commander »", () => {
+  it("« ✅ Commande n° 42 passée » : ni accueil, ni IA", async () => {
+    const ai = fakeAi({ action: "repondre", texte: "?" });
+    for (const text of ["✅ Commande n° 42 passée", "Commande n°7 passée", "commande n° 1234 passée !"]) {
+      const r = await runEngine(input({ channel: { ...channel, triggerMode: "toujours" }, message: { kind: "text", text } }), { ai: ai.port });
+      expect(r.outgoing).toEqual([]);
+      expect(r.events).toEqual([{ type: "ignored", reason: "retour_commande" }]);
+    }
+    expect(ai.calls).toHaveLength(0);
+  });
+
+  it("le bouton « Commander » porte les paramètres du canal (via=wa, jeton) ; le simulateur non", async () => {
+    const link = async (orderLinkQuery?: string) => {
+      const r1 = await runEngine(input({ orderLinkQuery, message: { kind: "text", text: "commander" } }));
+      const r2 = await runEngine(next(r1, { orderLinkQuery, message: { kind: "text", text: "1" } }));
+      return r2.outgoing.find((m) => m.kind === "link");
+    };
+    expect(await link("via=wa&wa=JETON")).toMatchObject({ url: "https://order.pflow.fr/c/mexico?via=wa&wa=JETON" });
+    expect(await link()).toMatchObject({ url: "https://order.pflow.fr/c/mexico" });
+  });
+});
+
 describe("bloc IA (agent)", () => {
   const toujours = { ...channel, triggerMode: "toujours" as const };
   const agent: AgentConfig = {

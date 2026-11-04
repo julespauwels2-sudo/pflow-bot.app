@@ -1,0 +1,205 @@
+diff --git a/repo/api/_bot.js b/repo/api/_bot.js
+index d5042cf..145ba2d 100644
+--- a/repo/api/_bot.js
++++ b/repo/api/_bot.js
+@@ -16,6 +16,7 @@
+    UCHAT_API_KEY de Vercel. Tout passe par la cle, jamais par un parametre "bot". */
+ 
+ var OptionsProduit = require("../js/options-produit.js");   /* qg57 : les options sous chaque plat */
++var crypto = require("crypto");
+ 
+ var UCHAT_BASE_DEFAUT = "https://www.uchat.com.au/api";
+ 
+@@ -48,10 +49,73 @@ function env() {
+     SB_URL: (process.env.SUPABASE_URL || "").replace(/\/$/, ""),
+     SB_ANON: process.env.SUPABASE_ANON_KEY,
+     UCHAT_CLE: (process.env.UCHAT_API_KEY || "").trim(),
+-    UCHAT_BASE: (process.env.UCHAT_API_BASE || UCHAT_BASE_DEFAUT).replace(/\/$/, "")
++    UCHAT_BASE: (process.env.UCHAT_API_BASE || UCHAT_BASE_DEFAUT).replace(/\/$/, ""),
++    /* Etape C : PFlow Bots. Sans ces deux variables, rien ne change (UChat comme avant). */
++    BOTS_URL: (process.env.PFLOW_BOTS_URL || "").trim().replace(/\/$/, ""),
++    BOTS_SECRET: (process.env.PFLOW_BOTS_SECRET || "").trim()
+   };
+ }
+ 
++/* ------------------------------------------------------------------ */
++/* Etape C : PFlow Bots (le nouveau bot WhatsApp de PFlow)              */
++/* Question posee AVANT UChat : « ce resto est-il sur PFlow Bots ? ».    */
++/* C'est PFlow Bots qui repond (il connait ses numeros) :                */
++/*   pris: true  -> il a traite (envoye, ou ignore : fenetre fermee)     */
++/*   pris: false -> resto pas sur PFlow Bots : chemin UChat inchange     */
++/* Injoignable, delai depasse, erreur : pris: false (UChat, comme avant). */
++/* Le CRM ne cree toujours aucun message : ce sont les flux du bot.      */
++/* ------------------------------------------------------------------ */
++var EVENEMENTS_PFLOW_BOTS = {
++  commande: "commande_validee",
++  paiement: "commande_validee",
++  en_preparation: "commande_en_preparation",
++  prete: "commande_prete",
++  annulee: "commande_annulee",
++  remboursee: "commande_remboursee",
++  annulation_refusee: "annulation_refusee",
++  rappel: "rappel_commande_prete"
++};
++
++/* Signature : HMAC-SHA256(secret, horodatage + "." + corps). PFlow Bots refuse au-dela de 5 minutes. */
++function signerPflowBots(corps, secret, horodatage) {
++  return "sha256=" + crypto.createHmac("sha256", secret).update(String(horodatage) + "." + corps, "utf8").digest("hex");
++}
++
++async function appelerPflowBots(objet) {
++  var E = env();
++  if (!E.BOTS_URL || !E.BOTS_SECRET) return { pris: false, raison: "non_configure" };
++  var corps = JSON.stringify(objet);
++  var horodatage = String(Math.floor(Date.now() / 1000));
++  try {
++    return await avecDelai(8000, async function (signal) {
++      var r = await fetch(E.BOTS_URL + "/api/webhooks/pflow-order", {
++        method: "POST", signal: signal,
++        headers: { "Content-Type": "application/json", "X-PFlow-Horodatage": horodatage, "X-PFlow-Signature": signerPflowBots(corps, E.BOTS_SECRET, horodatage) },
++        body: corps
++      });
++      var j = null;
++      try { j = await r.json(); } catch (e) { j = null; }
++      if (!r.ok || !j || j.pris !== true) return { pris: false, raison: r.ok ? "pas_sur_pflow_bots" : "http_" + r.status };
++      return { pris: true, envois: (j.envois && typeof j.envois === "object") ? j.envois : {} };
++    });
++  } catch (e) {
++    return { pris: false, raison: "injoignable" };
++  }
++}
++
++/* Etats de PFlow Bots -> etats notes par le CRM (bot_noter) */
++function etatPflowBots(x) {
++  if (x && x.etat === "ok") return "ok";
++  if (x && x.etat === "ignore") return "sans";
++  return "echec";
++}
++
++function champsEnObjet(liste) {
++  var o = {};
++  liste.forEach(function (x) { o[x.name] = x.value; });
++  return o;
++}
++
+ async function avecDelai(ms, fn) {
+   var ctrl = new AbortController();
+   var minuteur = setTimeout(function () { ctrl.abort(); }, ms);
+@@ -348,6 +412,26 @@ async function synchroniser(cible, source) {
+ 
+   function noter(evt, etat, detail) { envois[evt] = { etat: etat, detail: String(detail || "").slice(0, 200) }; }
+ 
++  /* Etape C : le resto est-il sur PFlow Bots ? Si oui, UChat n'est pas appele. */
++  if (evts.length) {
++    var pb = await appelerPflowBots({
++      type: "commande",
++      restaurant_id: resto.id || null,
++      slug: resto.slug || "",
++      client_tel: numeroInternational(c.client_tel),
++      commande_id: c.id,
++      evenements: evts.map(function (e) { return { pflow_order: e, pflow_bots: EVENEMENTS_PFLOW_BOTS[e] || e }; }),
++      champs: champsEnObjet(champsDe(c, reg && reg.valeurs, resto))
++    });
++    trace.pflow_bots = pb.pris ? "pris" : pb.raison;
++    if (pb.pris) {
++      evts.forEach(function (e) { var x = pb.envois[e] || {}; noter(e, etatPflowBots(x), "PFlow Bots : " + (x.detail || "sans détail")); });
++      var echec = evts.some(function (e) { return envois[e].etat === "echec"; });
++      await fin(echec ? "PFLOW_BOTS_ECHEC" : "PFLOW_BOTS_OK", !echec);
++      return { ok: !echec, resultat: echec ? "PFLOW_BOTS_ECHEC" : "PFLOW_BOTS_OK", envois: envois };
++    }
++  }
++
+   if (!cle) {
+     evts.forEach(function (e) { noter(e, "echec", "Aucune clé UChat (UCHAT_API_KEY vide et pas de clé du bot)"); });
+     await fin("CLE_ABSENTE", false);
+@@ -535,8 +619,10 @@ module.exports = {
+   journal: journal,
+   clientUchat: clientUchat,              /* S8 : la supervision sonde les bots et previent Jules */
+   numeroInternational: numeroInternational,
++  appelerPflowBots: appelerPflowBots,     /* etape C : aussi utilise par api/_options.js (relance) */
+   EVENEMENTS: EVENEMENTS,
+   LIBELLES: LIBELLES,
+   _interne: { champsDe: champsDe, texteRepli: texteRepli, numeroInternational: numeroInternational, libelleStatut: libelleStatut,
+-    creneauAffiche: creneauAffiche, delaiAffiche: delaiAffiche, remplirChamps: remplirChamps }
++    creneauAffiche: creneauAffiche, delaiAffiche: delaiAffiche, remplirChamps: remplirChamps,
++    signerPflowBots: signerPflowBots, etatPflowBots: etatPflowBots, EVENEMENTS_PFLOW_BOTS: EVENEMENTS_PFLOW_BOTS }
+ };
+diff --git a/repo/tests/pflow-bots.test.js b/repo/tests/pflow-bots.test.js
+new file mode 100644
+index 0000000..ee962fc
+--- /dev/null
++++ b/repo/tests/pflow-bots.test.js
+@@ -0,0 +1,73 @@
++/* Etape C : aiguillage vers PFlow Bots (api/_bot.js). Sans PFLOW_BOTS_URL, rien ne change. */
++var test = require("node:test");
++var assert = require("node:assert/strict");
++var http = require("node:http");
++var crypto = require("node:crypto");
++
++function charger() {
++  delete require.cache[require.resolve("../api/_bot.js")];
++  return require("../api/_bot.js");
++}
++
++async function serveur(repondre) {
++  var recus = [];
++  var s = http.createServer(function (req, res) {
++    var corps = "";
++    req.on("data", function (c) { corps += c; });
++    req.on("end", function () {
++      recus.push({ url: req.url, headers: req.headers, corps: corps });
++      var r = repondre(JSON.parse(corps || "{}"));
++      res.statusCode = r.statut || 200;
++      res.setHeader("Content-Type", "application/json");
++      res.end(JSON.stringify(r.json || {}));
++    });
++  });
++  await new Promise(function (ok) { s.listen(0, "127.0.0.1", ok); });
++  return { url: "http://127.0.0.1:" + s.address().port, recus: recus, fermer: function () { return new Promise(function (ok) { s.close(ok); }); } };
++}
++
++test("sans PFLOW_BOTS_URL : aucun appel, chemin UChat", async function () {
++  delete process.env.PFLOW_BOTS_URL; delete process.env.PFLOW_BOTS_SECRET;
++  var BOT = charger();
++  assert.deepEqual(await BOT.appelerPflowBots({ type: "commande" }), { pris: false, raison: "non_configure" });
++});
++
++test("PFlow Bots prend l'événement : appel signé, réponse lue", async function () {
++  var srv = await serveur(function () { return { json: { pris: true, envois: { prete: { etat: "ok", detail: "flux Statut - Prête" } } } }; });
++  process.env.PFLOW_BOTS_URL = srv.url; process.env.PFLOW_BOTS_SECRET = "secret-test";
++  try {
++    var BOT = charger();
++    var r = await BOT.appelerPflowBots({ type: "commande", evenements: [{ pflow_order: "prete", pflow_bots: "commande_prete" }] });
++    assert.equal(r.pris, true);
++    assert.equal(r.envois.prete.etat, "ok");
++    var recu = srv.recus[0];
++    assert.equal(recu.url, "/api/webhooks/pflow-order");
++    var attendu = "sha256=" + crypto.createHmac("sha256", "secret-test").update(recu.headers["x-pflow-horodatage"] + "." + recu.corps).digest("hex");
++    assert.equal(recu.headers["x-pflow-signature"], attendu);
++    assert.ok(Math.abs(Number(recu.headers["x-pflow-horodatage"]) - Date.now() / 1000) < 10);
++  } finally { await srv.fermer(); delete process.env.PFLOW_BOTS_URL; delete process.env.PFLOW_BOTS_SECRET; }
++});
++
++test("resto pas sur PFlow Bots, erreur ou serveur injoignable : pris false (UChat comme avant)", async function () {
++  var srv = await serveur(function (j) { return j.type === "erreur" ? { statut: 500, json: { erreur: "x" } } : { json: { pris: false } }; });
++  process.env.PFLOW_BOTS_URL = srv.url; process.env.PFLOW_BOTS_SECRET = "secret-test";
++  try {
++    var BOT = charger();
++    assert.deepEqual(await BOT.appelerPflowBots({ type: "commande" }), { pris: false, raison: "pas_sur_pflow_bots" });
++    assert.deepEqual(await BOT.appelerPflowBots({ type: "erreur" }), { pris: false, raison: "http_500" });
++  } finally { await srv.fermer(); }
++  process.env.PFLOW_BOTS_URL = "http://127.0.0.1:9";
++  try {
++    var BOT2 = charger();
++    assert.deepEqual(await BOT2.appelerPflowBots({ type: "commande" }), { pris: false, raison: "injoignable" });
++  } finally { delete process.env.PFLOW_BOTS_URL; delete process.env.PFLOW_BOTS_SECRET; }
++});
++
++test("correspondance des événements et des états", function () {
++  var I = charger()._interne;
++  assert.equal(I.EVENEMENTS_PFLOW_BOTS.paiement, "commande_validee");
++  assert.equal(I.EVENEMENTS_PFLOW_BOTS.prete, "commande_prete");
++  assert.equal(I.etatPflowBots({ etat: "ok" }), "ok");
++  assert.equal(I.etatPflowBots({ etat: "ignore" }), "sans");
++  assert.equal(I.etatPflowBots(undefined), "echec");
++});
