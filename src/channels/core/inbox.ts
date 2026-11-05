@@ -16,6 +16,8 @@ export interface InboxConversation {
   dernierMessage?: { texte: string; sens: StoredMessage["sens"]; at: string };
   transfertOuvert: boolean;
   updatedAt: string;
+  /** Numéro PFlow : nom de la démo en cours (absent = bot PFlow de base). */
+  demoEnCours?: string;
 }
 
 export interface InboxCanal {
@@ -60,6 +62,7 @@ export async function listInbox(store: ChannelStore, workspace: WorkspaceData, n
         ...(last ? { dernierMessage: { texte: messageText(last), sens: last.sens, at: last.at } } : {}),
         transfertOuvert: open.has(contact.id),
         updatedAt: last?.at ?? contact.updatedAt,
+        ...(contact.demo?.clientId ? { demoEnCours: names.get(contact.demo.clientId) ?? "démo supprimée" } : {}),
       });
     }
     conversations.sort((a, b) => Number(b.transfertOuvert) - Number(a.transfertOuvert) || b.updatedAt.localeCompare(a.updatedAt));
@@ -67,7 +70,7 @@ export async function listInbox(store: ChannelStore, workspace: WorkspaceData, n
       canalId: canal.id,
       restaurantId: canal.restaurantId,
       plateforme: canal.plateforme,
-      nomResto: names.get(canal.restaurantId) ?? "Resto inconnu",
+      nomResto: canal.role === "pflow" ? "Numéro PFlow (démos)" : (names.get(canal.restaurantId) ?? "Resto inconnu"),
       ...(canal.numeroAffiche ? { numero: canal.numeroAffiche } : {}),
       etat: canal.etat,
       conversations,

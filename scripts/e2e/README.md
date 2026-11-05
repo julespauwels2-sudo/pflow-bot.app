@@ -60,3 +60,17 @@ cliente « Léa », que `whatsapp.js` crée aussi) :
 ```bash
 node scripts/e2e/inbox.js /tmp /tmp/envois-meta.jsonl
 ```
+
+## Démos sur le numéro PFlow
+
+Page Démos et simulateur du numéro PFlow (mode local, serveur fraîchement démarré, sans `.env.local`) :
+
+```bash
+node scripts/e2e/demos.js /tmp
+```
+
+Numéro PFlow par le webhook (même serveur que `whatsapp.js`, mode mémoire + faux Meta) :
+
+```bash
+node scripts/e2e/numero-pflow.js /tmp/envois-meta.jsonl
+```

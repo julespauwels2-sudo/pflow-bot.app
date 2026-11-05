@@ -18,6 +18,12 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 
 ## Points notés pour plus tard
 
+### Démos sur le numéro PFlow (fait, actif après la migration C)
+- Le futur webhook PFlow Order (événements de commande) ne doit **jamais** viser le numéro PFlow ni une
+  démo : les commandes de démo passent par la page de démonstration du CRM, qui n'écrit rien.
+- Suppression des démos expirées : aujourd'hui au chargement de l'app ; à passer en tâche planifiée
+  (Vercel Cron) avec l'étape C.
+
 ### Étape B
 - **Options payantes** (ex. relance panier abandonné) : lues dans le CRM (modules du resto). **Les
   seules options payantes côté bot sont celles du CRM.** Le **paiement en ligne n'en est pas une** : il

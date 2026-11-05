@@ -135,6 +135,7 @@ export default function InboxPage() {
                                 <span className="font-semibold">{who(canal, conv)}</span>
                                 {conv.transfertOuvert && <Badge tone="warning">🔔 Attend l&apos;équipe</Badge>}
                                 {conv.pause && <Badge>{pauseLabel(conv)}</Badge>}
+                                {conv.demoEnCours && <Badge tone="info">Démo {conv.demoEnCours}</Badge>}
                               </span>
                               {conv.dernierMessage && (
                                 <span className="block truncate text-xs text-muted">

@@ -397,3 +397,66 @@ locale vérifiée intacte), rien chez Meta. **Je m'arrête ici** : on reprend en
   - ⚠️ **Côté CRM (pas touché)** : la fonction `paiement_mode_public` vérifie encore `module`
     (l'ancienne « option vendue »). Un resto avec `module = false` reste « sur place » même avec un
     prestataire prêt (cas de Cookies An Nou). À corriger dans PFlow Order si l'option n'existe plus.
+
+## Démos sur le numéro PFlow ✅
+
+**Le besoin** : toutes les démos sur le numéro WhatsApp PFlow ; le prospect écrit le mot-clé de sa démo
+(le nom du resto, modifiable) ; sans mot-clé, un bot PFlow de base figé ; 5 jours (Prolonger), puis
+suppression du bot (données `bot_` seulement) ; un resto passé signé ou actif garde son bot.
+
+**Fait**
+- **Lien « Commander »** (lu en lecture seule dans le CRM) : PFlow Order a déjà une page de commande de
+  DÉMONSTRATION, `order.pflow.fr/demo/commande?d=<code>` (table `qg_demo_liens`, bouton « Préparer la
+  démo » du CRM). Elle sert la vraie page de commande **en mémoire** : rien n'est écrit en base, aucun
+  message ne part. Le bot d'une démo l'utilise **toujours**, jamais le vrai slug ; pas de jeton de
+  contact. Sans code de démo dans le CRM : pas de bouton, et la page Démos le signale (« Préparer la
+  démo dans le CRM »). Le bot ne crée jamais ce code lui-même (ce serait une écriture dans le CRM).
+- **Commandes de démo sans effet** : la page de démo n'écrit rien ; le numéro PFlow n'a pas de resto,
+  donc aucun événement de commande ne peut y être relié (règle notée pour le futur webhook PFlow Order).
+- **Mots-clés** normalisés (casse, accents, ponctuation), uniques parmi les démos en cours, **prioritaires**
+  sur les mots-clés du modèle : l'aiguillage les regarde avant le moteur.
+- **Aiguillage** (`src/demos/router.ts`, partagé par le webhook et le simulateur) : mot-clé de démo →
+  la démo démarre (conversation remise à zéro) ; sinon la démo en cours tant que la session vit
+  (30 min sans message, réglage du canal) ; sinon le bot PFlow de base (`src/demos/pflow-bot.ts`, figé,
+  sans IA : présentation, « Découvrir PFlow », « Obtenir ma démo » → transfert à toi). Mot-clé d'une
+  démo terminée → « La démo de X est terminée… ».
+- **Création / expiration** : la création automatique démarre la démo des restos en statut démo ;
+  à l'expiration, au chargement suivant de l'app, les données `bot_` sont supprimées (jamais le CRM) et
+  le bot n'est pas recréé tant que le resto reste en démo ; s'il est passé signé ou actif, la démo
+  s'efface et le bot reste.
+- **Page « Démos »** (menu) : mot-clé modifiable, expiration, nombre de conversations (contacts qui ont
+  ouvert la démo), Prolonger de 5 jours, Supprimer ; démos terminées listées à part.
+- **Simulateur** : « 📱 Numéro PFlow (démos) » (`/simulateur?numero=pflow`) : mêmes règles que le webhook,
+  liste des mots-clés cliquable, avance du temps (+31 min, +1 jour, +6 jours), journal de l'aiguillage.
+- **Boîte de réception** : le numéro PFlow apparaît comme « Numéro PFlow (démos) », avec la démo en cours
+  de chaque prospect.
+
+**Migration** : ⚠️ nécessaire, **ajoutée à `docs/etape-c/migration-c.sql`** (toujours non appliquée) :
+nouvelle table `bot_demos` (mot-clé, mot-clé normalisé unique parmi les démos en cours, durée,
+expiration, suppression), `bot_canaux.role` (« resto » / « pflow ») avec `restaurant_id` facultatif pour
+le numéro PFlow, `bot_contacts.demo` (démo en cours). **Avant la migration** : les démos sont en lecture
+seule dans la page Démos, rien n'est créé ni supprimé, et les bots des démos sont créés comme avant.
+
+**Vérifié** : 336 tests (dont aiguillage, mots-clés, cycle de vie avec le CRM simulé, numéro PFlow
+contre un faux Meta) ; dans un vrai navigateur (`scripts/e2e/demos.js`) : page Démos (démarrer, mot-clé
+« BYRÔN » refusé car déjà pris par Byron, Prolonger, Supprimer) et simulateur (bonjour → PFlow, BYRON →
+démo, bouton dans la démo, autre mot-clé, fin de session, démo expirée) ; sur le vrai serveur avec le
+faux Meta (`scripts/e2e/numero-pflow.js`) ; WhatsApp et boîte de réception toujours verts.
+
+**Choix faits sans toi (les plus prudents)**
+- Les démos qui existent déjà (Gwada food, Gwada Smash Burger) **démarrent à la création de leur
+  démo**, pas à la date de leur bot : sinon elles seraient supprimées dès le premier chargement.
+- Mot-clé reconnu si le message **est** le mot-clé (ou « démo X ») ; hors d'une démo, aussi dans un
+  court message (« Bonjour Byron »). Dans une démo, un nom au milieu d'une phrase ne fait pas changer de
+  démo (ex. « je viens de chez Mexico »).
+- Une démo expirée mais pas encore nettoyée est déjà traitée comme terminée (message poli).
+- La suppression automatique se fait **au chargement de l'app** (pas encore de tâche planifiée) : à
+  passer en Vercel Cron avec l'étape C.
+- Un resto passé signé ou actif reste joignable par son mot-clé jusqu'à l'expiration de la démo, puis la
+  démo s'efface ; son bot n'est jamais supprimé.
+- Les textes du bot PFlow ne promettent rien qui ne soit sûr (ni prix, ni commission) : à relire.
+
+**Questions pour toi (non bloquantes)**
+- Textes du bot PFlow de base (`src/demos/pflow-bot.ts`) : à relire et ajuster (c'est du code, donc figé
+  pour les prospects, comme demandé).
+- Le numéro PFlow : quel numéro exactement (le tien en coexistence, ou une puce dédiée) ? À voir en C0.

@@ -8,6 +8,8 @@ import type { LoadedBot } from "./bot-loader";
 import { parseWebhook } from "../whatsapp/parse";
 import type { ChannelSender, ChannelStore, InboundEvent, StatusEvent } from "./types";
 import type { Transcriber } from "../voice/transcriber";
+import { pflowBaseBot, PFLOW_BOT_ID, PFLOW_TEXTS } from "@/demos/pflow-bot";
+import { nextContactDemo, routePflowMessage, type DemoDirectoryEntry } from "@/demos/router";
 
 /** Plafond d'un « en train d'écrire » côté serveur (le webhook ne doit pas attendre trop longtemps). */
 export const MAX_TYPING_MS = 3000;
@@ -23,7 +25,7 @@ export interface ProcessorDeps {
   store: ChannelStore;
   /** Envoi vers la plateforme de ces événements (WhatsApp ou Instagram). */
   graph: ChannelSender;
-  loadBot(restaurantId: string): Promise<LoadedBot | null>;
+  loadBot(restaurantId: string, options?: { demo?: boolean }): Promise<LoadedBot | null>;
   ai?: AiPort;
   /** Journal des appels IA (coût suivi par client). */
   onAiCall?(info: AiCallInfo): Promise<void>;
@@ -32,6 +34,8 @@ export interface ProcessorDeps {
   maxTypingMs?: number;
   /** Secret partagé avec PFlow Order : jeton de pré-remplissage dans le lien « Commander ». */
   pflowBotsSecret?: string;
+  /** Numéro PFlow : démos (mot-clé, expiration) avec le nom du resto. */
+  loadDemos?(): Promise<DemoDirectoryEntry[]>;
   /** Transcription des messages vocaux (absente : le bot demande d'écrire, comme avant). */
   transcriber?: Transcriber | null;
 }
@@ -104,18 +108,51 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   });
   if (event.ignored) return skip(`message ${event.type} : pas de réponse`);
 
-  const bot = await deps.loadBot(canal.restaurantId);
+  const now = deps.now ? deps.now() : new Date();
+  let bot: LoadedBot | null;
+  let resetSession = false;
+  if (canal.role === "pflow") {
+    // Numéro PFlow : un mot-clé de démo d'abord, puis la démo en cours, sinon le bot PFlow de base.
+    const demos = deps.loadDemos ? await deps.loadDemos() : [];
+    const route = routePflowMessage({ message: event.message, demos, current: contact.demo, now, sessionMinutes: canal.sessionMinutes });
+    const previousBot = contact.demo?.clientId || PFLOW_BOT_ID;
+    contact.demo = nextContactDemo(contact.demo, route, now);
+    if (route.kind === "ended") {
+      const text = PFLOW_TEXTS.demoEnded(route.nomResto);
+      try {
+        const wamid = await graph.send(canal.accountId, event.waId, { kind: "text", text });
+        await store.addMessage({ canalId: canal.id, contactId: contact.id, sens: "sortant", auteur: "bot", wamid, type: "text", contenu: { kind: "text", text }, statut: "envoye" });
+      } catch (error) {
+        report.errors.push(`Envoi à ${event.waId} : ${message(error)}`);
+      }
+      await store.saveContact(contact);
+      report.handled.push({ wamid: event.wamid, outgoing: 1 });
+      await store.finishEvent(event.plateforme, event.wamid);
+      return;
+    }
+    bot = route.kind === "demo" ? await deps.loadBot(route.clientId, { demo: true }) : pflowBaseBot();
+    if (!bot) {
+      // Démo sans bot (supprimé, aucun flux publié) : bot PFlow de base.
+      contact.demo = nextContactDemo(contact.demo, { kind: "pflow" }, now);
+      bot = pflowBaseBot();
+    }
+    // Autre bot que pour le message précédent (ou démo rouverte par son mot-clé) : on repart de zéro.
+    resetSession = (route.kind === "demo" && route.entered) || previousBot !== bot.client.id;
+  } else {
+    bot = await deps.loadBot(canal.restaurantId);
+  }
   if (!bot) return skip("pas de bot actif pour ce resto");
 
-  const stored = await store.getSession(contact.id);
+  const stored = resetSession ? null : await store.getSession(contact.id);
+  const storedVersion = resetSession ? ((await store.getSession(contact.id))?.version ?? null) : (stored?.version ?? null);
   const ai: AiPort | undefined = deps.ai
     ? async (request) => {
         try {
           const result = await deps.ai!(request);
-          await deps.onAiCall?.({ restaurantId: canal.restaurantId, request, result }).catch(() => undefined);
+          await deps.onAiCall?.({ restaurantId: bot.client.id, request, result }).catch(() => undefined);
           return result;
         } catch (error) {
-          await deps.onAiCall?.({ restaurantId: canal.restaurantId, request, error: message(error) }).catch(() => undefined);
+          await deps.onAiCall?.({ restaurantId: bot.client.id, request, error: message(error) }).catch(() => undefined);
           throw error;
         }
       }
@@ -123,12 +160,13 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
 
   const result: EngineResult = await runEngine(
     {
-      now: deps.now ? deps.now() : new Date(),
+      now,
       client: bot.client,
       channel: {
         id: canal.id,
-        clientId: canal.restaurantId,
-        triggerMode: canal.triggerMode,
+        clientId: bot.client.id,
+        // Numéro PFlow : le bot répond toujours (démo ou bot PFlow de base).
+        triggerMode: canal.role === "pflow" ? "toujours" : canal.triggerMode,
         echoPauseHours: canal.echoPauseHours,
         handoffPauseHours: canal.handoffPauseHours,
         sessionTimeoutMinutes: canal.sessionMinutes,
@@ -141,7 +179,8 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
       message: event.message,
       agent: bot.agent,
       // La page de commande sait que le client vient du bot, et pré-remplit prénom et téléphone.
-      orderLinkQuery: orderLinkQuery(bot, event, deps.pflowBotsSecret),
+      // Jamais pour une démo ni le numéro PFlow : page de démonstration, aucune commande réelle.
+      ...(canal.role === "pflow" ? {} : { orderLinkQuery: orderLinkQuery(bot, event, deps.pflowBotsSecret) }),
     },
     { ai },
   );
@@ -168,7 +207,7 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   }
 
   await store.saveContact({ ...contact, state: result.contact });
-  if (!(await store.saveSession(contact.id, result.session, stored?.version ?? null))) {
+  if (!(await store.saveSession(contact.id, result.session, storedVersion))) {
     report.errors.push(`Conversation de ${event.waId} modifiée en parallèle : état gardé tel quel`);
   }
 

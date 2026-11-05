@@ -25,6 +25,8 @@ export interface BotClient {
   hasBotRecord?: boolean;
   /** Bot désactivé (date) : aucun flux actif, jamais recréé automatiquement. */
   botDisabledAt?: string;
+  /** Code de la démo dans le CRM (qg_demo_liens) : page de commande de démonstration. */
+  demoCode?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -182,6 +184,22 @@ export function hasUnpublishedChanges(flow: StoredFlow): boolean {
 export const EMPTY_INFO_SHEET: InfoSheet = { horaires: [] };
 
 /** Contenu complet du stockage local (et format de la sauvegarde complète). */
+/**
+ * Démo sur le numéro WhatsApp PFlow (partagé par toutes les démos). Le prospect écrit le mot-clé et
+ * la démo démarre. À l'expiration, les données bot_ du resto sont supprimées (jamais le CRM), sauf
+ * s'il est passé signé ou actif : son bot devient alors son bot client.
+ */
+export interface DemoRecord {
+  clientId: string;
+  /** Mot-clé affiché (ex. « Byron ») ; comparé sans casse, accents ni ponctuation. */
+  keyword: string;
+  days: number;
+  startedAt: string;
+  expiresAt: string;
+  /** Démo expirée et bot supprimé (le resto, toujours en démo, n'est pas recréé). */
+  deletedAt?: string;
+}
+
 export interface WorkspaceData {
   clients: BotClient[];
   flows: StoredFlow[];
@@ -190,4 +208,6 @@ export interface WorkspaceData {
   infoSheets: Record<string, InfoSheet>;
   /** Journal des appels IA (les plus récents à la fin). */
   aiCalls: AiCallLog[];
+  /** Démos sur le numéro PFlow. */
+  demos: DemoRecord[];
 }

@@ -17,6 +17,7 @@ import type { WorkspaceData } from "@/data/types";
 import { createInstagramSender } from "../instagram/send";
 import { createGraphClient } from "../whatsapp/graph";
 import { transcriberFromEnv } from "../voice/transcriber";
+import { demoDirectory } from "@/demos/lifecycle";
 import { loadBotFromWorkspace } from "./bot-loader";
 import { createMemoryChannelStore } from "./memory-store";
 import type { ProcessorDeps } from "./processor";
@@ -70,7 +71,13 @@ export interface ChannelsRuntime {
   workspace(): Promise<WorkspaceData>;
 }
 
-/** Données de démonstration (mode mémoire) : le modèle maître et un resto lié, comme Cookies An Nou. */
+/** Code de démo fictif (mode mémoire) : la page de démonstration du CRM l'attend sur 20 caractères. */
+export const MEMORY_DEMO_CODE = "0123456789abcdef0123";
+
+/**
+ * Données de démonstration (mode mémoire) : le modèle maître et un resto lié, comme Cookies An Nou ;
+ * plus, pour le numéro PFlow, une démo en cours (« Byron ») et une démo expirée (« Gwada Food »).
+ */
 async function demoWorkspace(): Promise<WorkspaceData> {
   const repos = createLocalRepositories(createMemoryStore());
   const template = await createMasterTemplate(repos);
@@ -84,7 +91,18 @@ async function demoWorkspace(): Promise<WorkspaceData> {
     pointsDeVente: "• Station Vito, Le Gosier",
     modesPaiement: "Espèces, carte",
   });
-  return repos.workspace.exportAll();
+  const byron = await repos.clients.create({ nomResto: "Byron", orderSlug: "byron-vrai-slug" });
+  await repos.bots.link(byron.id, template.id);
+  await repos.infoSheets.save(byron.id, { horaires: [1, 2, 3, 4, 5, 6, 7].map((jour) => ({ jour: jour as 1, plages: [{ de: "00:00", a: "23:59" }] })), retrait: true });
+  await repos.demos.start(byron.id);
+  const gwada = await repos.clients.create({ nomResto: "Gwada Food", orderSlug: "gwada-food" });
+  await repos.bots.link(gwada.id, template.id);
+  await repos.demos.start(gwada.id);
+  const data = await repos.workspace.exportAll();
+  data.clients.find((c) => c.id === byron.id)!.demoCode = MEMORY_DEMO_CODE;
+  const expired = data.demos.find((d) => d.clientId === gwada.id)!;
+  expired.expiresAt = new Date(Date.now() - 86_400_000).toISOString();
+  return data;
 }
 
 const globalRuntime = globalThis as unknown as { __pflowChannels?: Promise<ChannelsRuntime> };
@@ -118,7 +136,7 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
   if (storeMode() === "memory") {
     const data = await demoWorkspace();
     repos = createLocalRepositories(createMemoryStore(data));
-    const client = data.clients.find((c) => c.template) ?? data.clients[0];
+    const client = data.clients.find((c) => c.template && !data.demos.some((d) => d.clientId === c.id)) ?? data.clients[0];
     const base = {
       restaurantId: client?.id ?? "",
       triggerMode: client?.triggerMode ?? ("mots_cles_uniquement" as const),
@@ -131,6 +149,8 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
     const canaux: Canal[] = [
       { ...base, id: "canal-demo", plateforme: "whatsapp", accountId: env("WHATSAPP_DEMO_PHONE_ID") || "1000000000", wabaId: "waba-demo", numeroAffiche: "+590 690 00 00 00", coexistence: true },
       { ...base, id: "canal-demo-instagram", plateforme: "instagram", accountId: env("INSTAGRAM_DEMO_ACCOUNT_ID") || "17841400000000000", numeroAffiche: "@cookies.an.nou (démo)", coexistence: true },
+      // Numéro PFlow (démos) : partagé par toutes les démos.
+      { ...base, id: "canal-pflow", role: "pflow", restaurantId: "", triggerMode: "toujours", plateforme: "whatsapp", accountId: env("WHATSAPP_PFLOW_PHONE_ID") || "1000000099", numeroAffiche: "Numéro PFlow (démos)", coexistence: false },
     ];
     store = createMemoryChannelStore(canaux);
     workspace = () => repos.workspace.exportAll();
@@ -155,7 +175,8 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
         store,
         graph,
         ai,
-        loadBot: async (id) => loadBotFromWorkspace(await workspace(), id),
+        loadBot: async (id, options) => loadBotFromWorkspace(await workspace(), id, options),
+        loadDemos: async () => demoDirectory(await workspace()),
         onAiCall: async (info) => void (await logAiCall(repos, info)),
         pflowBotsSecret: secret,
         transcriber,

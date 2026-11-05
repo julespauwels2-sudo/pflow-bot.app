@@ -10,6 +10,7 @@ import type {
   BotFolder,
   BotTemplate,
   ClientPatch,
+  DemoRecord,
   TemplateAgent,
   FlowPatch,
   NewClient,
@@ -105,6 +106,30 @@ export interface WorkspaceRepository {
   importAll(data: WorkspaceData): Promise<void>;
 }
 
+/** Démos sur le numéro PFlow (table bot_demos, migration C). */
+export interface DemoRepository {
+  /** Faux tant que la table bot_demos n'existe pas : les démos sont alors en lecture seule. */
+  available(): Promise<boolean>;
+  list(): Promise<DemoRecord[]>;
+  /**
+   * Démarre la démo d'un resto (mot-clé = son nom, rendu unique ; durée par défaut). En mode CRM, la
+   * création automatique s'en charge pour les restos en statut démo.
+   */
+  start(clientId: string, options?: { days?: number }): Promise<DemoRecord>;
+  setKeyword(clientId: string, keyword: string): Promise<DemoRecord>;
+  /** Change la durée totale (jours depuis le début). */
+  setDays(clientId: string, days: number): Promise<DemoRecord>;
+  /** Ajoute des jours (à partir de l'expiration, ou d'aujourd'hui si elle est passée). */
+  extend(clientId: string, days?: number): Promise<DemoRecord>;
+  /**
+   * Supprime le bot de la démo : uniquement les données bot_ (flux, dossiers, fiche, tournées, appels
+   * IA, lien au modèle) ; jamais le CRM. Refusé si le resto est passé signé ou actif.
+   */
+  remove(clientId: string): Promise<DemoRecord>;
+  /** Démos arrivées à expiration : bot supprimé si toujours en démo, sinon la démo s'efface et le bot reste. */
+  purgeExpired(): Promise<{ deleted: string[]; converted: string[] }>;
+}
+
 export interface Repositories {
   clients: ClientRepository;
   flows: FlowRepository;
@@ -114,6 +139,7 @@ export interface Repositories {
   infoSheets: InfoSheetRepository;
   aiCalls: AiCallRepository;
   workspace: WorkspaceRepository;
+  demos: DemoRepository;
 }
 
 export class DataError extends Error {

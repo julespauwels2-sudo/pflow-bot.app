@@ -7,7 +7,8 @@
  */
 import { DEFAULT_TIMEZONE, type DeliveryRound, type InfoSheet } from "@/engine";
 import type { WorkspaceStore } from "../local/store";
-import type { AiCallLog, BotClient, BotFolder, BotTemplate, StoredFlow, WorkspaceData } from "../types";
+import type { AiCallLog, BotClient, BotFolder, BotTemplate, DemoRecord, StoredFlow, WorkspaceData } from "../types";
+import { normalizeKeyword } from "@/demos/keyword";
 import { stableStringify } from "../types";
 import { crmInfoSheet, crmTimezone, readCrm, type CrmSheetField } from "./crm";
 import type { Db, Row } from "./db";
@@ -26,6 +27,7 @@ interface Snapshot {
   /** Lignes bot_ telles que lues (clé : table → id → ligne), pour n'écrire que les différences. */
   rows: Record<string, Map<string, Row>>;
   locked: Map<string, CrmSheetField[]>;
+  demosAvailable: boolean;
 }
 
 export interface SupabaseStore extends WorkspaceStore {
@@ -47,6 +49,28 @@ function rowToTemplate(r: Row): BotTemplate {
     ...(r.agent ? { agent: r.agent as BotTemplate["agent"] } : {}),
     createdAt: toIso(r.cree_le)!,
     updatedAt: toIso(r.maj_le)!,
+  };
+}
+
+function demoToRow(d: DemoRecord): Row {
+  return {
+    restaurant_id: d.clientId,
+    mot_cle: d.keyword,
+    mot_cle_normalise: normalizeKeyword(d.keyword),
+    duree_jours: d.days,
+    debut_le: d.startedAt,
+    expire_le: d.expiresAt,
+    supprime_le: d.deletedAt ?? null,
+  };
+}
+function rowToDemo(r: Row): DemoRecord {
+  return {
+    clientId: String(r.restaurant_id),
+    keyword: String(r.mot_cle),
+    days: Number(r.duree_jours),
+    startedAt: toIso(r.debut_le)!,
+    expiresAt: toIso(r.expire_le)!,
+    ...(r.supprime_le ? { deletedAt: toIso(r.supprime_le)! } : {}),
   };
 }
 
@@ -156,11 +180,19 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
       db.select("bot_appels_ia", "*", { order: { column: "cree_le", ascending: false }, limit: AI_CALLS_LIMIT }),
     ]);
     const crm = await readCrm(db, clients.map((c) => String(c.restaurant_id)));
+    // bot_demos arrive avec la migration C : tant qu'elle n'existe pas, les démos sont en lecture seule.
+    let demos: Row[] = [];
+    let demosAvailable = true;
+    try {
+      demos = await db.select("bot_demos", "*");
+    } catch {
+      demosAvailable = false;
+    }
 
     const botClients = new Map(clients.map((c) => [String(c.restaurant_id), c]));
     const fichesById = new Map(fiches.map((f) => [String(f.restaurant_id), f]));
     const locked = new Map<string, CrmSheetField[]>();
-    const data: WorkspaceData = { clients: [], flows: [], folders: [], templates: [], infoSheets: {}, aiCalls: [] };
+    const data: WorkspaceData = { clients: [], flows: [], folders: [], templates: [], infoSheets: {}, aiCalls: [], demos: [] };
 
     for (const r of crm.restaurants) {
       const bc = botClients.get(r.id);
@@ -176,6 +208,7 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
         ...(bc ? { hasBotRecord: true } : {}),
         options: { panier_abandonne: crm.relance.has(r.id) },
         crmStatut: r.statut,
+        ...(crm.demoCodes.get(r.id) ? { demoCode: crm.demoCodes.get(r.id) } : {}),
         createdAt: toIso(bc?.cree_le) ?? toIso(r.created_at)!,
         updatedAt: toIso(bc?.maj_le) ?? toIso(r.created_at)!,
       };
@@ -201,6 +234,7 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
     data.folders = dossiers.map(rowToFolder).filter((f) => owners.has(f.ownerId));
     data.flows = flux.map(rowToFlow).filter((f) => owners.has(f.ownerId));
     data.aiCalls = appels.map(rowToAiCall).filter((c) => visible.has(c.clientId)).reverse();
+    data.demos = demos.map(rowToDemo).filter((d) => visible.has(d.clientId));
 
     // Lignes de référence pour le calcul des différences (seulement ce qui est visible).
     const index = (rows: Row[], key = "id") => new Map(rows.map((r) => [String(r[key]), r]));
@@ -215,8 +249,9 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
       ),
       bot_tournees: index(tournees.filter((t) => visible.has(String(t.restaurant_id))).map(tourneeRowOf)),
       bot_appels_ia: index(data.aiCalls.map(aiCallToRow)),
+      bot_demos: index(data.demos.map(demoToRow), "restaurant_id"),
     };
-    return { data, rows, locked };
+    return { data, rows, locked, demosAvailable };
   }
 
   function clientRowOf(c: Row): Row {
@@ -280,6 +315,7 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
       bot_fiches: index(ficheRows, "restaurant_id"),
       bot_tournees: index(tourneeRows),
       bot_appels_ia: index(data.aiCalls.map(aiCallToRow)),
+      bot_demos: index(data.demos.map(demoToRow), "restaurant_id"),
     };
   }
 
@@ -303,6 +339,7 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
     { table: "bot_fiches", key: "restaurant_id" },
     { table: "bot_tournees", key: "id" },
     { table: "bot_appels_ia", key: "id" },
+    { table: "bot_demos", key: "restaurant_id" },
   ];
 
   return {
@@ -314,6 +351,9 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
       const base = await fresh();
       const before = base.rows;
       const after = rowsOf(data, base.locked);
+      // Sans la table bot_demos (migration C pas encore appliquée) : rien n'y est écrit. Les actions
+      // sur les démos sont refusées plus haut (demos.available()), la création automatique n'en crée pas.
+      if (!base.demosAvailable) after.bot_demos = before.bot_demos;
 
       for (const { table, key } of ORDER) {
         const changed = [...after[table].values()].filter((row) => {
@@ -336,12 +376,16 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
           sheet.tournees = sheet.tournees.map((t, i) => ({ ...t, id: ids[i] ?? t.id }));
         }
       }
-      snapshot = { data: next, rows: after, locked: base.locked };
+      snapshot = { data: next, rows: after, locked: base.locked, demosAvailable: base.demosAvailable };
       cachedAt = clock();
     },
 
     async lockedFields(clientId) {
       return (await fresh()).locked.get(clientId) ?? [];
+    },
+
+    async demosAvailable() {
+      return (await fresh()).demosAvailable;
     },
   };
 }

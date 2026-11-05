@@ -24,6 +24,11 @@ export interface ClientContext {
   /** Fuseau IANA du resto (ex. America/Guadeloupe, America/Martinique). */
   timezone: string;
   orderBaseUrl?: string;
+  /**
+   * Adresse complète de la page de commande, à la place de celle du slug. Démos : la page de
+   * démonstration du CRM (aucune commande réelle). Absente avec un slug vide : pas de bouton.
+   */
+  orderUrl?: string;
 }
 
 export interface ChannelConfig {

@@ -167,6 +167,7 @@ export const clientSchema = z.object({
   crmStatut: z.string().optional(),
   hasBotRecord: z.boolean().optional(),
   botDisabledAt: z.string().optional(),
+  demoCode: z.string().optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
 });
@@ -254,6 +255,15 @@ export const aiCallSchema = z.object({
   error: z.string().optional(),
 });
 
+export const demoSchema = z.object({
+  clientId: z.string().min(1),
+  keyword: z.string().min(1).max(40),
+  days: z.number().int().min(1).max(60),
+  startedAt: z.string(),
+  expiresAt: z.string(),
+  deletedAt: z.string().optional(),
+});
+
 export const workspaceSchema = z.object({
   clients: z.array(clientSchema),
   flows: z.array(storedFlowSchema),
@@ -264,6 +274,8 @@ export const workspaceSchema = z.object({
   infoSheets: z.record(z.string(), infoSheetSchema),
   /** Absent dans les sauvegardes d'avant l'agent IA. */
   aiCalls: z.array(aiCallSchema).default([]),
+  /** Absent dans les sauvegardes d'avant les démos. */
+  demos: z.array(demoSchema).default([]),
 });
 
 /** Fichier d'export d'un flux. */

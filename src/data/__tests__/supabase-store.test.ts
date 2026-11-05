@@ -12,6 +12,7 @@ const R1 = "00000000-0000-4000-8000-000000000001"; // signé, avec carte et zone
 const R2 = "00000000-0000-4000-8000-000000000002"; // démo
 const R3 = "00000000-0000-4000-8000-000000000003"; // prospect (caché)
 const R4 = "00000000-0000-4000-8000-000000000004"; // perdu, mais a déjà un bot
+const R5 = "00000000-0000-4000-8000-000000000005"; // deuxième démo (ajoutée par certains tests)
 
 /** Base en mémoire : CRM + tables bot_, avec les mêmes garde-fous que l'adaptateur Supabase. */
 function fakeDb() {
@@ -54,6 +55,7 @@ function fakeDb() {
     bot_fiches: [],
     bot_tournees: [],
     bot_appels_ia: [],
+    bot_demos: [],
   };
   const writes: string[] = [];
   const functionCalls: string[] = [];
@@ -93,14 +95,14 @@ function fakeDb() {
 
 const CRM_TABLES = ["restaurants", "resto_modules", "qg_zones_livraison", "produits", "groupes_options", "options", "produits_groupes", "bot_reglages", "paiement_restos"];
 
-function setup(fake = fakeDb()) {
+function setup(fake = fakeDb(), clock = { now: new Date("2026-11-05T10:00:00Z") }) {
   let n = 0;
   const store = createSupabaseStore(fake.db, { newId: () => `00000000-0000-4000-9000-${String(++n).padStart(12, "0")}`, now: () => 0 });
   const repos = createLocalRepositories(store, {
     crmClients: true,
     lockedFields: (id) => store.lockedFields(id),
     newId: () => `00000000-0000-4000-a000-${String(++n).padStart(12, "0")}`,
-    now: () => new Date("2026-11-05T10:00:00Z"),
+    now: () => clock.now,
   });
   return { ...fake, store, repos };
 }
@@ -295,5 +297,93 @@ describe("création automatique des bots", () => {
     expect(r1.template).toBeUndefined();
     expect(r1.botDisabledAt).toBeUndefined();
     expect((await other.flows.listByOwner(R1)).length).toBe(11);
+  });
+});
+
+describe("démos sur le numéro PFlow", () => {
+  it("création automatique : la démo démarre (mot-clé = nom, 5 jours) ; rien dans le CRM", async () => {
+    const fake = fakeDb();
+    fake.tables.restaurants.push({ ...fake.tables.restaurants[1], id: R5, nom: "Démo Burger" });
+    const crmBefore = structuredClone(CRM_TABLES.map((t) => fake.tables[t]));
+    const { repos, tables } = setup(fake);
+    await createMasterTemplate(repos);
+    const result = await autoLinkBots(repos);
+    expect(result.demosStarted?.sort()).toEqual([R2, R5].sort());
+    const demos = await repos.demos.list();
+    expect(demos.map((d) => d.keyword).sort()).toEqual(["Démo Burger", "Démo Burger 2"]);
+    expect(demos[0]).toMatchObject({ days: 5, startedAt: "2026-11-05T10:00:00.000Z", expiresAt: "2026-11-10T10:00:00.000Z" });
+    expect(tables.bot_demos.map((r) => r.mot_cle_normalise).sort()).toEqual(["demo burger", "demo burger 2"]);
+    expect(CRM_TABLES.map((t) => fake.tables[t])).toEqual(crmBefore);
+    // Relancer ne crée rien de plus.
+    expect((await autoLinkBots(repos)).demosStarted).toBeUndefined();
+  });
+
+  it("mot-clé unique (casse et accents ignorés), prolongation, durée réglable", async () => {
+    const fake = fakeDb();
+    fake.tables.restaurants.push({ ...fake.tables.restaurants[1], id: R5, nom: "Byron" });
+    const { repos } = setup(fake);
+    await createMasterTemplate(repos);
+    await autoLinkBots(repos);
+    await expect(repos.demos.setKeyword(R2, "BYRÔN")).rejects.toThrow("déjà pris par Byron");
+    expect((await repos.demos.setKeyword(R2, "Smash")).keyword).toBe("Smash");
+    expect((await repos.demos.extend(R2, 5)).expiresAt).toBe("2026-11-15T10:00:00.000Z");
+    expect((await repos.demos.setDays(R2, 7)).expiresAt).toBe("2026-11-12T10:00:00.000Z");
+    await expect(repos.demos.setDays(R2, 0)).rejects.toThrow("Durée invalide");
+  });
+
+  it("expiration : bot supprimé (données bot_ seulement), jamais recréé tant que le resto reste en démo", async () => {
+    const fake = fakeDb();
+    const clock = { now: new Date("2026-11-05T10:00:00Z") };
+    const crmBefore = structuredClone(CRM_TABLES.map((t) => fake.tables[t]));
+    const { repos, tables } = setup(fake, clock);
+    await createMasterTemplate(repos);
+    await autoLinkBots(repos);
+    await repos.infoSheets.save(R2, { ...(await repos.infoSheets.get(R2)), faq: "Oui" });
+    expect(tables.bot_fiches.some((f) => f.restaurant_id === R2)).toBe(true);
+
+    clock.now = new Date("2026-11-10T10:00:01Z");
+    const result = await autoLinkBots(repos);
+    expect(result.demosDeleted).toEqual([R2]);
+    expect(result.linked).toEqual([]);
+    expect(tables.bot_clients.some((c) => c.restaurant_id === R2)).toBe(false);
+    expect(tables.bot_fiches.some((f) => f.restaurant_id === R2)).toBe(false);
+    expect(tables.bot_demos.find((d) => d.restaurant_id === R2)?.supprime_le).toBeTruthy();
+    expect((await repos.clients.list()).some((c) => c.id === R2)).toBe(true);
+    expect(CRM_TABLES.map((t) => fake.tables[t])).toEqual(crmBefore);
+    // Toujours en démo : pas recréé.
+    expect((await autoLinkBots(repos)).linked).toEqual([]);
+  });
+
+  it("le resto passe signé pendant la démo : à l'expiration, le bot reste (c'est son bot client)", async () => {
+    const fake = fakeDb();
+    const clock = { now: new Date("2026-11-05T10:00:00Z") };
+    const { repos, tables } = setup(fake, clock);
+    await createMasterTemplate(repos);
+    await autoLinkBots(repos);
+    fake.tables.restaurants.find((r) => r.id === R2)!.statut = "signe";
+    clock.now = new Date("2026-11-11T10:00:00Z");
+    const fresh = setup(fake, clock).repos;
+    const result = await autoLinkBots(fresh);
+    expect(result.demosDeleted).toBeUndefined();
+    expect(tables.bot_clients.find((c) => c.restaurant_id === R2)?.modele_id).toBeTruthy();
+    expect(tables.bot_demos.some((d) => d.restaurant_id === R2)).toBe(false);
+    await expect(fresh.demos.remove(R2)).rejects.toThrow();
+  });
+
+  it("sans la table bot_demos (avant la migration C) : rien n'est écrit, les actions sont refusées clairement", async () => {
+    const fake = fakeDb();
+    delete (fake.tables as Record<string, unknown>).bot_demos;
+    const original = fake.db.select.bind(fake.db);
+    fake.db.select = (async (table: string, columns: string, options?: SelectOptions) => {
+      if (table === "bot_demos") throw new Error('relation "public.bot_demos" does not exist');
+      return original(table, columns, options);
+    }) as typeof fake.db.select;
+    const { repos } = setup(fake);
+    await createMasterTemplate(repos);
+    const result = await autoLinkBots(repos);
+    expect(result.linked.length).toBe(2);
+    expect(result.demosStarted).toBeUndefined();
+    expect(await repos.demos.available()).toBe(false);
+    await expect(repos.demos.start(R2)).rejects.toThrow("migration C");
   });
 });

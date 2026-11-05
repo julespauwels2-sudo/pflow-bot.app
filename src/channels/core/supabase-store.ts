@@ -14,7 +14,8 @@ const eq = (column: string, value: string) => ({ in: { column, values: [value] }
 function rowToCanal(r: Row): Canal {
   return {
     id: String(r.id),
-    restaurantId: String(r.restaurant_id),
+    restaurantId: r.restaurant_id ? String(r.restaurant_id) : "",
+    role: r.role === "pflow" ? "pflow" : "resto",
     plateforme: r.plateforme === "instagram" ? "instagram" : "whatsapp",
     accountId: String(r.compte_id),
     ...(r.waba_id ? { wabaId: String(r.waba_id) } : {}),
@@ -44,6 +45,7 @@ function rowToContact(r: Row): ChannelContact {
     },
     stopOptions: Boolean(r.stop_options),
     updatedAt: iso(r.maj_le) ?? new Date().toISOString(),
+    ...(r.demo ? { demo: r.demo as ChannelContact["demo"] } : {}),
   };
 }
 
@@ -59,6 +61,7 @@ function contactToRow(c: ChannelContact): Row {
     ia_jour: c.state.aiUsage.day || null,
     ia_appels: c.state.aiUsage.calls,
     stop_options: c.stopOptions,
+    demo: c.demo ?? null,
     maj_le: new Date().toISOString(),
   };
 }

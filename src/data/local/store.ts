@@ -12,12 +12,14 @@ export interface JsonStore {
 export interface WorkspaceStore {
   read(): Promise<WorkspaceData>;
   write(data: WorkspaceData): Promise<void>;
+  /** Faux tant que la table bot_demos n'existe pas (Supabase avant la migration C). */
+  demosAvailable?(): Promise<boolean>;
 }
 
 export const STORAGE_KEY = "pflow-bots:v1";
 
 export function emptyWorkspace(): WorkspaceData {
-  return { clients: [], flows: [], folders: [], templates: [], infoSheets: {}, aiCalls: [] };
+  return { clients: [], flows: [], folders: [], templates: [], infoSheets: {}, aiCalls: [], demos: [] };
 }
 
 /** Pour les tests : tout en mémoire. */

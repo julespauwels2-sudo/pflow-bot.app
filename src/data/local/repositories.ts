@@ -9,10 +9,13 @@ import {
   type BotTemplate,
   type FlowGraph,
   type OwnerKind,
+  type DemoRecord,
   type StoredFlow,
   type WorkspaceData,
 } from "../types";
 import { workspaceSchema } from "../schemas";
+import { addDays, checkDemoKeyword, DEFAULT_DEMO_DAYS, MAX_DEMO_DAYS, normalizeKeyword, uniqueKeyword } from "@/demos/keyword";
+import { isDemoClient } from "@/demos/lifecycle";
 import type { JsonStore, WorkspaceStore } from "./store";
 
 export const MAX_LOCAL_AI_CALLS = 1000;
@@ -51,6 +54,8 @@ function checkTimezone(timezone: string): string {
 /** Implémentation des repositories sur un document JSON (localStorage ou mémoire). */
 export function createLocalRepositories(store: JsonStore | WorkspaceStore, options: LocalRepoOptions = {}): Repositories {
   const now = () => (options.now ? options.now() : new Date()).toISOString();
+  // Faux seulement pour Supabase avant la migration C (table bot_demos absente).
+  const demosAvailable = async () => ("demosAvailable" in store && store.demosAvailable ? store.demosAvailable() : true);
   const newId = options.newId ?? (() => crypto.randomUUID());
 
   // Stockage synchrone (navigateur, mémoire) ou asynchrone (Supabase) : même logique.
@@ -150,6 +155,36 @@ export function createLocalRepositories(store: JsonStore | WorkspaceStore, optio
       createdAt: now(),
       updatedAt: now(),
     };
+  }
+
+  function findDemo(data: WorkspaceData, clientId: string): DemoRecord {
+    const demo = data.demos.find((d) => d.clientId === clientId);
+    if (!demo) throw new DataError("Démo introuvable");
+    return demo;
+  }
+
+  function checkDays(days: number): number {
+    if (!Number.isInteger(days) || days < 1 || days > MAX_DEMO_DAYS) throw new DataError(`Durée invalide (1 à ${MAX_DEMO_DAYS} jours)`);
+    return days;
+  }
+
+  async function checkDemosWritable() {
+    if (!(await demosAvailable())) {
+      throw new DataError("Démos en lecture seule : la table bot_demos arrive avec la migration C (à appliquer).");
+    }
+  }
+
+  /** Vide le bot d'un resto (données bot_ seulement) ; le resto reste dans la liste (CRM). */
+  function clearBotData(data: WorkspaceData, client: BotClient) {
+    delete client.template;
+    delete client.botDisabledAt;
+    client.hasBotRecord = false;
+    client.triggerMode = "mots_cles_uniquement";
+    client.updatedAt = now();
+    data.flows = data.flows.filter((f) => f.ownerId !== client.id);
+    data.folders = data.folders.filter((f) => f.ownerId !== client.id);
+    delete data.infoSheets[client.id];
+    data.aiCalls = data.aiCalls.filter((c) => c.clientId !== client.id);
   }
 
   function ensureUniqueSlug(data: WorkspaceData, slug: string, exceptId?: string) {
@@ -543,6 +578,106 @@ export function createLocalRepositories(store: JsonStore | WorkspaceStore, optio
           findClient(data, clientId);
           data.infoSheets[clientId] = parsed.data;
           return parsed.data;
+        });
+      },
+    },
+
+    demos: {
+      async available() {
+        return demosAvailable();
+      },
+
+      async list() {
+        return (await read()).demos;
+      },
+
+      async start(clientId, startOptions = {}) {
+        await checkDemosWritable();
+        const days = checkDays(startOptions.days ?? DEFAULT_DEMO_DAYS);
+        return mutate((data) => {
+          const client = findClient(data, clientId);
+          const taken = data.demos.filter((d) => !d.deletedAt && d.clientId !== clientId).map((d) => d.keyword);
+          const startedAt = now();
+          const demo: DemoRecord = { clientId, keyword: uniqueKeyword(client.nomResto, taken), days, startedAt, expiresAt: addDays(startedAt, days) };
+          data.demos = [...data.demos.filter((d) => d.clientId !== clientId), demo];
+          return demo;
+        });
+      },
+
+      async setKeyword(clientId, keyword) {
+        await checkDemosWritable();
+        const checked = checkDemoKeyword(keyword);
+        if (!checked.ok) throw new DataError(checked.error);
+        return mutate((data) => {
+          const demo = findDemo(data, clientId);
+          const wanted = normalizeKeyword(checked.keyword);
+          const other = data.demos.find((d) => d.clientId !== clientId && !d.deletedAt && normalizeKeyword(d.keyword) === wanted);
+          if (other) {
+            const name = data.clients.find((c) => c.id === other.clientId)?.nomResto ?? "une autre démo";
+            throw new DataError(`Le mot-clé « ${checked.keyword} » est déjà pris par ${name}.`);
+          }
+          demo.keyword = checked.keyword;
+          return demo;
+        });
+      },
+
+      async setDays(clientId, days) {
+        await checkDemosWritable();
+        checkDays(days);
+        return mutate((data) => {
+          const demo = findDemo(data, clientId);
+          if (demo.deletedAt) throw new DataError("Cette démo est terminée : son bot a été supprimé.");
+          demo.days = days;
+          demo.expiresAt = addDays(demo.startedAt, days);
+          return demo;
+        });
+      },
+
+      async extend(clientId, days = DEFAULT_DEMO_DAYS) {
+        await checkDemosWritable();
+        checkDays(days);
+        return mutate((data) => {
+          const demo = findDemo(data, clientId);
+          if (demo.deletedAt) throw new DataError("Cette démo est terminée : son bot a été supprimé.");
+          const from = Math.max(Date.parse(demo.expiresAt), Date.parse(now()));
+          demo.expiresAt = addDays(new Date(from).toISOString(), days);
+          demo.days = Math.round((Date.parse(demo.expiresAt) - Date.parse(demo.startedAt)) / 86_400_000);
+          return demo;
+        });
+      },
+
+      async remove(clientId) {
+        await checkDemosWritable();
+        return mutate((data) => {
+          const demo = findDemo(data, clientId);
+          const client = findClient(data, clientId);
+          if (!isDemoClient(client)) throw new DataError("Ce resto n'est plus en démo (signé ou actif) : son bot est devenu son bot client.");
+          clearBotData(data, client);
+          demo.deletedAt = now();
+          return demo;
+        });
+      },
+
+      async purgeExpired() {
+        if (!(await demosAvailable())) return { deleted: [], converted: [] };
+        return mutate((data) => {
+          const deleted: string[] = [];
+          const converted: string[] = [];
+          const at = Date.parse(now());
+          for (const demo of data.demos) {
+            if (demo.deletedAt || Date.parse(demo.expiresAt) > at) continue;
+            const client = data.clients.find((c) => c.id === demo.clientId);
+            if (client && !isDemoClient(client)) {
+              converted.push(demo.clientId);
+              continue;
+            }
+            if (client) clearBotData(data, client);
+            demo.deletedAt = now();
+            deleted.push(demo.clientId);
+          }
+          // Resto passé signé ou actif : la démo s'efface, le bot reste (c'est son bot client).
+          data.demos = data.demos.filter((d) => !converted.includes(d.clientId));
+          return { deleted, converted };
         });
       },
     },

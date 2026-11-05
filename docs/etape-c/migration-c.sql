@@ -1,6 +1,8 @@
 -- PFlow Bots — étape C : WhatsApp et Instagram (comptes, contacts, sessions, messages).
 -- Révisée le 5 novembre 2026 (Instagram) : compte_id + plateforme au lieu de phone_number_id,
 -- identifiant au lieu de wa_id.
+-- Révisée en novembre 2026 (démos sur le numéro PFlow) : bot_canaux.role (+ restaurant_id facultatif
+-- pour le numéro PFlow), bot_contacts.demo, nouvelle table bot_demos.
 -- PROPOSITION, NON APPLIQUÉE. Rangée dans docs/ (et non dans supabase/migrations/) pour ne jamais être
 -- jouée par erreur. Elle y sera déplacée après validation de Jules.
 --
@@ -15,7 +17,10 @@
 -- Un compte (numéro WhatsApp ou compte Instagram professionnel) relié à un resto.
 create table public.bot_canaux (
   id uuid primary key default gen_random_uuid(),
-  restaurant_id uuid not null,
+  -- Vide uniquement pour le numéro PFlow (partagé par toutes les démos).
+  restaurant_id uuid,
+  -- « resto » : le numéro d'un resto ; « pflow » : le numéro PFlow des démos (aiguillage par mot-clé).
+  role text not null default 'resto' check (role in ('resto', 'pflow')),
   plateforme text not null default 'whatsapp' check (plateforme in ('whatsapp', 'instagram')),
   -- Identifiant Meta du compte : WhatsApp = phone_number_id ; Instagram = id du compte professionnel.
   compte_id text not null,
@@ -36,7 +41,8 @@ create table public.bot_canaux (
   test_numeros text[] not null default '{}',
   cree_le timestamptz not null default now(),
   maj_le timestamptz not null default now(),
-  unique (plateforme, compte_id)
+  unique (plateforme, compte_id),
+  check ((role = 'resto' and restaurant_id is not null) or (role = 'pflow' and restaurant_id is null))
 );
 create index bot_canaux_resto on public.bot_canaux (restaurant_id);
 
@@ -57,6 +63,8 @@ create table public.bot_contacts (
   ia_appels integer not null default 0,
   -- Le contact ne veut plus de messages d'options (relance, avis). Le service reste possible s'il écrit.
   stop_options boolean not null default false,
+  -- Numéro PFlow : démo en cours ({ clientId, lastAt, visited[] }), null ailleurs.
+  demo jsonb,
   cree_le timestamptz not null default now(),
   maj_le timestamptz not null default now(),
   unique (canal_id, identifiant)
@@ -127,6 +135,22 @@ create index bot_webhook_evenements_date on public.bot_webhook_evenements (recu_
 alter table public.bot_appels_ia drop constraint bot_appels_ia_source_check;
 alter table public.bot_appels_ia add constraint bot_appels_ia_source_check check (source in ('simulateur', 'whatsapp', 'instagram'));
 
+-- Démos sur le numéro PFlow : mot-clé, durée, expiration. À l'expiration, l'app supprime les données
+-- bot_ du resto (jamais le CRM) et garde cette ligne (supprime_le) pour ne pas recréer le bot.
+create table public.bot_demos (
+  restaurant_id uuid primary key,
+  mot_cle text not null,
+  -- Mot-clé sans casse, accents ni ponctuation : unique parmi les démos en cours.
+  mot_cle_normalise text not null,
+  duree_jours integer not null default 5 check (duree_jours between 1 and 60),
+  debut_le timestamptz not null default now(),
+  expire_le timestamptz not null,
+  supprime_le timestamptz,
+  cree_le timestamptz not null default now(),
+  maj_le timestamptz not null default now()
+);
+create unique index bot_demos_mot_cle_en_cours on public.bot_demos (mot_cle_normalise) where supprime_le is null;
+
 -- Sécurité : RLS partout, accès réservé aux administrateurs du bot.
 alter table public.bot_canaux enable row level security;
 alter table public.bot_contacts enable row level security;
@@ -134,6 +158,7 @@ alter table public.bot_sessions enable row level security;
 alter table public.bot_messages enable row level security;
 alter table public.bot_transferts enable row level security;
 alter table public.bot_webhook_evenements enable row level security;
+alter table public.bot_demos enable row level security;
 
 create policy "bot_canaux : admins du bot" on public.bot_canaux
   for all to authenticated
@@ -155,6 +180,10 @@ create policy "bot_transferts : admins du bot" on public.bot_transferts
   for all to authenticated
   using (exists (select 1 from public.bot_admins where user_id = auth.uid()))
   with check (exists (select 1 from public.bot_admins where user_id = auth.uid()));
+create policy "bot_demos : admins du bot" on public.bot_demos
+  for all to authenticated
+  using (exists (select 1 from public.bot_admins where user_id = auth.uid()))
+  with check (exists (select 1 from public.bot_admins where user_id = auth.uid()));
 -- Les événements bruts : lecture seule pour les admins (diagnostic), écriture par le serveur uniquement.
 create policy "bot_webhook_evenements : lecture admins" on public.bot_webhook_evenements
   for select to authenticated
@@ -162,5 +191,5 @@ create policy "bot_webhook_evenements : lecture admins" on public.bot_webhook_ev
 
 revoke all on table
   public.bot_canaux, public.bot_contacts, public.bot_sessions, public.bot_messages,
-  public.bot_transferts, public.bot_webhook_evenements
+  public.bot_transferts, public.bot_webhook_evenements, public.bot_demos
 from anon;

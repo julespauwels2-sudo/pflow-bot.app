@@ -1,0 +1,119 @@
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createLocalRepositories } from "@/data/local/repositories";
+import { createMemoryStore } from "@/data/local/store";
+import { createMasterTemplate } from "@/data/template-seed";
+import { loadBotFromWorkspace } from "@/channels/core/bot-loader";
+import { createMemoryChannelStore } from "@/channels/core/memory-store";
+import { processWebhookPayload } from "@/channels/core/processor";
+import { demoDirectory } from "../lifecycle";
+import type { Canal } from "@/channels/core/types";
+import { createGraphClient } from "@/channels/whatsapp/graph";
+import { PFLOW_TEXTS } from "../pflow-bot";
+
+const PFLOW_PHONE = "1000000099";
+const PROSPECT = "590690111111";
+const CODE = "0123456789abcdef0123";
+
+let server: Server;
+let base = "";
+const sent: Record<string, unknown>[] = [];
+beforeAll(async () => {
+  server = createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      const json = JSON.parse(body || "{}");
+      if (json.type) sent.push(json);
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ messages: [{ id: `wamid.out${sent.length}` }] }));
+    });
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+});
+afterAll(() => new Promise<void>((r) => server.close(() => r())));
+
+let n = 0;
+const notif = (message: Record<string, unknown>) => ({
+  object: "whatsapp_business_account",
+  entry: [{ id: "waba", changes: [{ field: "messages", value: { metadata: { phone_number_id: PFLOW_PHONE }, contacts: [{ wa_id: PROSPECT, profile: { name: "Marc" } }], messages: [{ from: PROSPECT, id: `wamid.in${++n}`, ...message }] } }] }],
+});
+const text = (t: string) => notif({ type: "text", text: { body: t } });
+const click = (id: string, title: string) => notif({ type: "interactive", interactive: { type: "button_reply", button_reply: { id, title } } });
+const texts = (from: number) => sent.slice(from).map((m) => JSON.stringify(m));
+
+describe("numéro PFlow partagé par les démos (faux Meta)", () => {
+  it("bot PFlow, mot-clé de démo, session, autre démo, démo expirée ; jamais le vrai slug ni de jeton", async () => {
+    const clock = { now: new Date("2026-11-10T15:00:00Z") };
+    const repos = createLocalRepositories(createMemoryStore(), { now: () => clock.now });
+    const template = await createMasterTemplate(repos);
+    const byron = await repos.clients.create({ nomResto: "Byron", orderSlug: "byron-vrai-slug" });
+    const mexico = await repos.clients.create({ nomResto: "Mexico", orderSlug: "mexico" });
+    const gwada = await repos.clients.create({ nomResto: "Gwada Food", orderSlug: "gwada" });
+    for (const c of [byron, mexico, gwada]) {
+      await repos.bots.link(c.id, template.id);
+      await repos.demos.start(c.id, { days: 5 });
+    }
+    await repos.demos.setDays(gwada.id, 1);
+    const data = await repos.workspace.exportAll();
+    data.clients.find((c) => c.id === byron.id)!.demoCode = CODE;
+
+    const canal: Canal = {
+      id: "pflow", role: "pflow", restaurantId: "", plateforme: "whatsapp", accountId: PFLOW_PHONE, triggerMode: "mots_cles_uniquement",
+      coexistence: false, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "actif", testNumeros: [],
+    };
+    const store = createMemoryChannelStore([canal]);
+    clock.now = new Date("2026-11-12T15:00:00Z"); // Gwada Food a expiré (1 jour).
+    const deps = {
+      store,
+      graph: createGraphClient({ token: "t", base, version: "v24.0" }),
+      loadBot: async (id: string, options?: { demo?: boolean }) => loadBotFromWorkspace(data, id, options),
+      loadDemos: async () => demoDirectory(data),
+      now: () => clock.now,
+      sleep: async () => {},
+      pflowBotsSecret: "secret-pflow-bots",
+    };
+
+    // 1. Sans mot-clé : bot PFlow de base.
+    let from = sent.length;
+    expect((await processWebhookPayload(text("Bonjour"), deps)).errors).toEqual([]);
+    expect(texts(from).join()).toContain("Ici *PFlow*");
+
+    // 2. « BYRON » : la démo de Byron démarre (son Accueil), bouton vers la page de DÉMO du CRM.
+    from = sent.length;
+    await processWebhookPayload(text("BYRON"), deps);
+    const byronMsgs = texts(from).join();
+    expect(byronMsgs).toContain("Bienvenue chez Byron");
+    expect(byronMsgs).toContain(`https://order.pflow.fr/demo/commande?d=${CODE}`);
+    expect(byronMsgs).not.toContain("byron-vrai-slug");
+    expect(byronMsgs).not.toContain("via=wa");
+    const contact = (await store.listContacts("pflow"))[0];
+    expect(contact.demo).toMatchObject({ clientId: byron.id, visited: [byron.id] });
+
+    // 3. Un bouton de la démo : on reste dans Byron.
+    from = sent.length;
+    await processWebhookPayload(click("infos", "ℹ️ Infos pratiques"), deps);
+    expect(texts(from).join()).toContain("Infos pratiques");
+
+    // 4. Un autre mot-clé : Mexico (pas de code de démo dans le CRM → pas de bouton Commander).
+    from = sent.length;
+    await processWebhookPayload(text("mexico"), deps);
+    expect(texts(from).join()).toContain("Bienvenue chez Mexico");
+    expect(sent.slice(from).some((m) => m.type === "interactive" && (m.interactive as { type: string }).type === "cta_url")).toBe(false);
+    expect(texts(from).join()).not.toContain("/c/mexico");
+
+    // 5. Démo expirée : message poli.
+    from = sent.length;
+    await processWebhookPayload(text("Gwada Food"), deps);
+    expect(texts(from).join()).toContain(JSON.stringify(PFLOW_TEXTS.demoEnded("Gwada Food")).slice(1, -1));
+
+    // 6. Après la session (30 min sans message) : retour au bot PFlow.
+    clock.now = new Date("2026-11-12T15:45:00Z");
+    from = sent.length;
+    await processWebhookPayload(text("Bonjour"), deps);
+    expect(texts(from).join()).toContain("Ici *PFlow*");
+    expect((await store.listContacts("pflow"))[0].demo?.visited).toEqual([byron.id, mexico.id]);
+  });
+});

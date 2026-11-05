@@ -3,7 +3,8 @@
  * et un test vérifie qu'il ne contient aucun appel d'écriture.
  *
  * Tables lues : restaurants, resto_modules, qg_zones_livraison, produits, groupes_options,
- * options, produits_groupes, paiement_restos (réglage « coupé » seulement).
+ * options, produits_groupes, paiement_restos (réglage « coupé » seulement), qg_demo_liens (code de
+ * la page de commande de démonstration).
  * Fonction lue : paiement_mode_public (mode de paiement en ligne en vigueur, lecture seule).
  */
 import { DEFAULT_TIMEZONE, type InfoSheet, type IsoWeekday, type OnlinePayment, type OpeningDay } from "@/engine";
@@ -78,6 +79,8 @@ export interface CrmData {
   produitsGroupes: CrmProduitGroupe[];
   /** Paiement en ligne en vigueur, par resto (absent si le CRM n'a pas pu le dire). */
   paiements: Map<string, OnlinePayment>;
+  /** Code de démo (qg_demo_liens) des restos en démo : page de commande de démonstration. */
+  demoCodes: Map<string, string>;
 }
 
 /** Lit dans le CRM tout ce dont le bot a besoin, pour les restos visibles. */
@@ -102,7 +105,10 @@ export async function readCrm(db: DbReader, botRestaurantIds: string[]): Promise
       in: { column: "restaurant_id", values: ids },
     }),
   ]);
-  const paiements = await readOnlinePayments(db, ids);
+  const [paiements, demoCodes] = await Promise.all([
+    readOnlinePayments(db, ids),
+    readDemoCodes(db, restaurants.filter((r) => r.statut === "demo").map((r) => r.id)),
+  ]);
   const groupIds = groupes.map((g) => g.id);
   const [options, produitsGroupes] = await Promise.all([
     db.select<CrmOption & Record<string, unknown>>("options", "id, groupe_id, nom, prix_supplement, actif, ordre", { in: { column: "groupe_id", values: groupIds } }),
@@ -118,7 +124,21 @@ export async function readCrm(db: DbReader, botRestaurantIds: string[]): Promise
     options,
     produitsGroupes,
     paiements,
+    demoCodes,
   };
+}
+
+/** Codes de démo déjà créés dans le CRM (« Préparer la démo ») ; le bot n'en crée jamais. */
+async function readDemoCodes(db: DbReader, ids: string[]): Promise<Map<string, string>> {
+  if (!ids.length) return new Map();
+  try {
+    const rows = await db.select<{ restaurant_id: string; code: string } & Record<string, unknown>>("qg_demo_liens", "restaurant_id, code", {
+      in: { column: "restaurant_id", values: ids },
+    });
+    return new Map(rows.map((r) => [r.restaurant_id, r.code]));
+  } catch {
+    return new Map();
+  }
 }
 
 /**

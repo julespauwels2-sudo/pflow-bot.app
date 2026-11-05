@@ -2,6 +2,7 @@
  * Canaux (WhatsApp, Instagram) : types partagés par les webhooks, l'envoi et la boîte de réception.
  * La logique ne dépend pas de Next.js : elle peut être déplacée (ex. Supabase Edge Functions).
  */
+import type { ContactDemo } from "@/demos/router";
 import type { ContactState, IncomingMessage, OutgoingMessage, Session, TriggerMode } from "@/engine";
 
 export type Plateforme = "whatsapp" | "instagram";
@@ -26,7 +27,13 @@ export interface MediaRef {
 
 export interface Canal {
   id: string;
+  /** Resto du canal ; vide pour le numéro PFlow (démos). */
   restaurantId: string;
+  /**
+   * « resto » (défaut) : le numéro d'un resto. « pflow » : le numéro PFlow partagé par toutes les
+   * démos (aiguillage par mot-clé, bot PFlow de base sinon).
+   */
+  role?: "resto" | "pflow";
   plateforme: Plateforme;
   /** WhatsApp : phone_number_id ; Instagram : id du compte professionnel. */
   accountId: string;
@@ -54,6 +61,8 @@ export interface ChannelContact {
   state: ContactState;
   stopOptions: boolean;
   updatedAt: string;
+  /** Numéro PFlow : démo en cours de ce contact et démos déjà ouvertes. */
+  demo?: ContactDemo;
 }
 
 export type MessageDirection = "entrant" | "sortant" | "echo";

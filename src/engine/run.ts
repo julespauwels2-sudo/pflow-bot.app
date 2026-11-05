@@ -729,7 +729,8 @@ class EngineRun {
   }
 
   private orderUrl(): string | undefined {
-    const { orderSlug, orderBaseUrl } = this.input.client;
+    const { orderSlug, orderBaseUrl, orderUrl } = this.input.client;
+    if (orderUrl) return orderUrl;
     if (!orderSlug) return undefined;
     return `${orderBaseUrl ?? DEFAULT_ORDER_BASE_URL}${encodeURIComponent(orderSlug)}`;
   }
