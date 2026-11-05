@@ -289,3 +289,33 @@ création automatique du bot, fiche d'infos (tableau champ → question du clien
 répond… » selon le numéro), liste de contrôle, 7 scénarios au simulateur, connexion WhatsApp (étape C,
 marquée « pas encore active »), suivi (boîte de réception, État du système), problèmes fréquents et
 récapitulatif à cocher. La page d'accueil indique maintenant B « fait » et C « en cours ».
+
+### Résumé de la deuxième session
+
+Tâches 5 à 9 faites, testées et poussées (un commit par tâche). Rien d'écrit dans le CRM ni dans les
+tables `bot_` réelles, aucune migration, rien dans `Pflow-Crm`, rien chez Meta (seules des lectures du
+catalogue Supabase pour l'audit). 311 tests, lint, types et build passent ; bouts en bout WhatsApp,
+Instagram et boîte de réception passent contre le faux Meta.
+
+Décisions qui t'attendent (aucune n'est bloquante) :
+1. Migration C (révisée pour Instagram + contrainte `bot_appels_ia`) : à relire et valider.
+2. Service de transcription des vocaux : à choisir après un essai sur de vrais vocaux (tâche 6).
+3. PFlow Order : bouton « Retour sur Instagram » quand `via=ig` ? (tâche 5).
+4. Sécurité : activer la purge, politique de confidentialité, clause RGPD (docs/securite.md § 7).
+
+## À tester par Jules (classé par priorité, chaque point < 5 min)
+
+Sur le site déployé de la branche, connecté avec ton compte.
+
+| # | Où | Quoi faire | Résultat attendu | Durée |
+|---|---|---|---|---|
+| 1 | Menu du compte → **État** | Ouvrir la page | Clés Supabase et IA « présente », WhatsApp / Instagram « inactif » (normal), tes bots actifs comptés, aucune valeur de clé visible | 2 min |
+| 2 | **Simulateur** | « bonjour » puis une question libre (« vous livrez à Jarry ? ») | Accueil + bouton Commander ; réponse de l'IA **sans lien** | 3 min |
+| 3 | **Clients** | Regarder la liste de contrôle de 2 restos | Pas d'erreur rouge inattendue | 2 min |
+| 4 | **Éditeur** d'un flux avec une liste (ex. Infos pratiques) | Cocher la case **« Instagram »** à côté de « Recentrer » | Avertissement « affichée en réponses rapides » ; erreur si un choix dépasse 20 caractères | 2 min |
+| 5 | **Boîte de réception** | Ouvrir la page | Message « Aucun canal (WhatsApp, Instagram) n'est encore branché », liste des variables manquantes | 1 min |
+| 6 | `docs/guide-onboarding.md` | Le lire en entier | Clair pour quelqu'un qui découvre ? Note ce qui manque | 5 min |
+| 7 | `docs/securite.md` § 7 | Lire le tableau « Reste à faire » | Me dire quels points tu veux traiter et quand | 4 min |
+| 8 | `docs/etape-c/migration-c.sql` | Relire les changements Instagram (en tête de fichier et avant le RLS) | OK ou corrections, avant de l'appliquer à l'étape C | 5 min |
+| 9 | `docs/etape-c/guide-meta.md` § 9 | Lire la partie Instagram | Rien à faire maintenant ; savoir ce qui attend pour Instagram | 3 min |
+| 10 | Le tableau de la tâche 6 (ci-dessus) | Lire la comparaison des services vocaux | Choisir plus tard, après un essai avec 10 vrais vocaux | 2 min |
