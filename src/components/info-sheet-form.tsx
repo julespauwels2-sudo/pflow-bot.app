@@ -36,8 +36,11 @@ export function InfoSheetForm({
   initial,
   onSaved,
   locked = [],
+  isDemo = false,
 }: {
   clientId: string;
+  /** Resto en démo : le paiement en ligne non configuré n'est qu'une info. */
+  isDemo?: boolean;
   timezone: string;
   initial: InfoSheet;
   /** Champs lus dans le CRM : affichés, non modifiables ici. */
@@ -175,7 +178,9 @@ export function InfoSheetForm({
                   <CrmTag />
                 </p>
                 <p className="mt-1 rounded-xl bg-page px-3 py-2 text-sm text-muted">{paymentSentence(sheet)}</p>
-                {sheet.paiementEnLigne.aConfigurer && <p className="mt-1 text-xs text-coral">Paiement en ligne pas encore configuré (SumUp ou Stripe).</p>}
+                {sheet.paiementEnLigne.aConfigurer && (
+                  <p className={`mt-1 text-xs ${isDemo ? "text-muted" : "text-coral"}`}>Paiement en ligne pas encore configuré (SumUp ou Stripe).</p>
+                )}
               </div>
             )}
             <Field

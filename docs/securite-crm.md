@@ -23,8 +23,9 @@ sur une branche Supabase ou à un moment calme.**
 - **Fonctions d'admin** (`lier_acces`, `retirer_acces`, `acces_du_resto`, facturation `fa_*`…) :
   toutes vérifient `est_admin()` ou `fa_admin()` en première ligne.
 - **72 fonctions du « pont »** vérifient la clé `PONT_CLE` (empreinte SHA-256 stockée, 16 caractères
-  minimum). La clé n'est utilisée que côté serveur (fonctions Vercel `api/*.js`), jamais dans le
-  navigateur.
+  minimum). Elle n'est jamais dans le navigateur, mais elle est recopiée à trois endroits : Vercel
+  (`PONT_CLE`), **chaque bot UChat** (Bot Field `pflow_cle`) et GitHub (secret du rendu des vidéos).
+  *(Corrigé le 5 novembre : la première version disait « seulement côté serveur ».)*
 - **Liens publics** (contrat, facture, désinscription, reprise de panier, paiement sur place) : jetons
   aléatoires (UUID ou 64 caractères hexadécimaux), durées de validité, textes bornés. Bon travail.
 - **Personne ne peut créer d'objet** dans le schéma `public` (anon et authenticated n'en ont pas le
@@ -100,7 +101,9 @@ droit d'insertion.
 
 **Ce qui se passe.** Les fonctions du pont (bot UChat, paiements Stripe et SumUp, factures,
 abonnements, agent Instagram, supervision…) sont ouvertes à `anon` et protégées **uniquement** par
-`PONT_CLE`. La vérification est correcte (empreinte, 16 caractères minimum) et la clé reste sur Vercel.
+`PONT_CLE`. La vérification est correcte (empreinte, 16 caractères minimum). La clé est dans Vercel,
+dans le Bot Field `pflow_cle` de **chaque bot UChat** (donc chez UChat, et visible par toute personne
+qui a accès à tes bots UChat) et dans les secrets GitHub du dépôt (rendu des vidéos Instagram).
 
 **Risque concret si la clé fuit** (capture d'écran, copie dans un message, ancien fichier `.env`,
 prestataire) : n'importe qui peut, depuis chez lui, avec la clé anon publique :
@@ -178,6 +181,18 @@ revoke execute on function public.qg_onboarding_lancer(uuid) from public, anon, 
 Sans effet sur le fonctionnement : le déclencheur `qg_onboarding_apres_signature` s'exécute avec les
 droits du propriétaire. Aucun appel depuis le code du CRM (vérifié).
 
+> ✅ **Appliqué le 5 novembre 2026** (avec l'accord de Jules, seule exception à « rien dans le CRM »).
+> - **Avant** : aucun appel depuis le code du CRM (version `58c5b5a`, la plus récente) ; seuls appelants :
+>   le déclencheur de signature `trg_qg_onboarding` (fonction `qg_onboarding_apres_signature`) et deux
+>   scripts SQL joués à la main (`qg15`, `qg36`), qui tournent en `postgres`. Droits avant :
+>   `PUBLIC, postgres, anon, authenticated, service_role`.
+> - **Après** (vérifié dans la base) : droits `postgres, service_role` seulement ; `anon` et `authenticated`
+>   refusés ; le déclencheur est actif et sa fonction s'exécute en `postgres` (*security definer*), qui garde
+>   le droit. ⚠️ Ce déclencheur avale les erreurs (pour ne jamais bloquer une signature) : à la prochaine
+>   signature de contrat, vérifier que l'onboarding apparaît bien dans l'Atelier (lien d'abonnement,
+>   message de bienvenue).
+> - **Retour arrière** : `grant execute on function public.qg_onboarding_lancer(uuid) to public, anon, authenticated;`
+
 ---
 
 ### 5. 🟡 `pg_net` autorisé à anon et authenticated
@@ -197,6 +212,17 @@ revoke execute on all functions in schema net from anon, authenticated;
 
 (L'extension installée dans `public` — autre avertissement de Supabase — ne se déplace pas sans la
 réinstaller : à laisser.)
+
+> ⚠️ **Exécuté le 5 novembre 2026, sans effet réel** (comme prévu juste avant de le lancer).
+> Les fonctions `net.*` appartiennent à `supabase_admin` et n'avaient aucun droit particulier : `anon` et
+> `authenticated` les exécutent grâce au droit **public** (`PUBLIC`) donné par défaut. Un retrait
+> « from anon, authenticated » ne retire donc rien (vérifié : `anon` peut toujours exécuter
+> `net.http_post`). Seul effet : les droits par défaut sont devenus explicites
+> (`PUBLIC, supabase_admin`), ce qui est équivalent.
+> Pour vraiment fermer : il faudrait retirer le droit à `PUBLIC` **et** le redonner à `postgres` (sinon les
+> 12 fonctions du CRM ci-dessus s'arrêtent) ; ce n'est faisable que par `supabase_admin` (support
+> Supabase). **Je n'ai rien fait de plus.** Le risque reste faible tant que le schéma `net` n'est pas
+> exposé par l'API (réglage par défaut : Settings → API → Exposed schemas = `public`, `graphql_public`).
 
 ---
 
@@ -299,3 +325,112 @@ select format('alter function %s set search_path = public, pg_temp;', p.oid::reg
 4. Points 9 et 10 : nettoyage, quand tu as du temps.
 5. Points 2.3 et 6 (service_role pour le pont) : chantier à faire ensemble, avec les modifications de
    `Pflow-Crm`.
+
+---
+
+## Point 1 (buckets) — plan de test de 5 minutes
+
+À faire **avant** de jouer le SQL du point 1 (pour avoir la référence), puis **juste après**. La clé
+`anon` est la clé publique de Supabase (Settings → API → « anon public » ; elle est aussi dans le
+mini-site), elle n'est pas secrète.
+
+**0. Avant (1 min) — le trou existe bien.** Dans un terminal (remplacer `CLE_ANON`) :
+
+```bash
+curl -s -X POST "https://tekntxvkjhgyvbbwbogt.supabase.co/storage/v1/object/list/menus" -H "apikey: CLE_ANON" -H "Authorization: Bearer CLE_ANON" -H "Content-Type: application/json" -d '{"prefix":"","limit":20}'
+```
+
+Résultat attendu **avant** : une liste de dossiers (les identifiants des fiches de démarrage). Noter
+aussi l'adresse d'une image de carte : sur un mini-site, clic droit sur une photo → « Copier l'adresse
+de l'image » (elle contient `/storage/v1/object/public/cartes/`).
+
+**1. Jouer le SQL 1a, 1b, 1c** (SQL Editor de Supabase).
+
+**2. Après (4 min) :**
+
+| # | Test | Attendu |
+|---|---|---|
+| 1 | Relancer la commande `curl` ci-dessus | `[]` (plus rien de listé) |
+| 2 | Même commande en remplaçant `menus` par `cartes`, puis par `contenu-video` | `[]` (ou seulement des dossiers en cours d'effacement pour `contenu-video`) |
+| 3 | Ouvrir l'adresse d'image notée à l'étape 0 dans le navigateur | L'image s'affiche toujours |
+| 4 | Ouvrir le mini-site d'un resto (ex. ag_pizzaa) | Photos et carte s'affichent |
+| 5 | CRM (admin) : Atelier → un resto de test → ajouter une image de menu, puis la supprimer | Les deux marchent |
+| 6 | Dashboard d'un resto (son compte) : remplacer une photo de carte | Marche |
+| 7 | Le lendemain : GitHub → Actions → « Rendu des reels » | Dernières exécutions vertes (dépôt et purge des vidéos) |
+
+**Si un test échoue** : retour arrière immédiat (recrée les règles d'avant) :
+
+```sql
+drop policy if exists "menus lecture admins" on storage.objects;
+drop policy if exists "cartes lecture du resto" on storage.objects;
+drop policy if exists "contenu-video lecture purge" on storage.objects;
+create policy "menus lecture" on storage.objects for select to public using (bucket_id = 'menus');
+create policy "cartes lecture" on storage.objects for select to public using (bucket_id = 'cartes');
+create policy "contenu-video lecture" on storage.objects for select to public using (bucket_id = 'contenu-video');
+```
+
+---
+
+## Point 2 — procédure exacte pour changer `PONT_CLE` sans casser UChat ni les paiements
+
+### Où est la clé (vérifié dans le code du CRM, version `58c5b5a`)
+
+| Endroit | Rôle | Si pas à jour |
+|---|---|---|
+| Vercel, projet du CRM (PFlow Order) : variable `PONT_CLE` | Le serveur (`api/*.js`) appelle la base avec | — |
+| Base : `pont_config.cle_hash` (empreinte) | Vérifie la clé des appels serveur → base | Commandes du bot (suivi, annulation), confirmations de paiement, agents : refusés |
+| UChat : Bot Field `pflow_cle` de **chaque bot** (modèle, chaque resto, bot de démo) | Les bots appellent `api/pont.js` avec | Le bot répond « souci » (`CLE_INVALIDE`) |
+| GitHub, dépôt `Pflow-Crm` : secret Actions `PONT_CLE` | Rendu des vidéos Instagram (toutes les 2 h, à la 23e minute) | Le rendu échoue, réessayé 2 h plus tard |
+
+Les tâches planifiées de la base utilisent un autre jeton (`x-sup-jeton`) : pas concernées.
+L'empreinte en base se met à jour toute seule au clic sur **« Tester le bot »** dans le CRM (compte
+admin) : `api/pont.js` appelle alors `pont_relier` avec la clé de Vercel.
+
+### Avant le jour J
+
+1. **Recommandé : appliquer le patch 06** (`docs/etape-c/patches/06-pont-cle-transition.diff`) : pendant
+   la transition, l'ancienne clé reste acceptée pour les bots UChat (aucune coupure). Sans lui, voir
+   la variante plus bas.
+2. Lister tous les bots UChat qui ont le Bot Field `pflow_cle` (modèle, ag_pizzaa, Mexico, Cookies An Nou,
+   bot de démo…).
+3. Choisir un moment calme (la nuit, restos fermés), **pas** entre h 20 et h 25 d'une heure paire
+   (rendu des vidéos).
+4. Générer la nouvelle clé : **48 caractères, lettres et chiffres seulement** (gestionnaire de mots de
+   passe). Elle ne va que dans Vercel, UChat et GitHub (jamais dans un message ni un fichier).
+
+### Le jour J (≈ 15 min, dont 1 min sensible)
+
+| # | Où | Quoi | Temps |
+|---|---|---|---|
+| 1 | Vercel → projet du CRM → Settings → Environment Variables | Ajouter `PONT_CLE_ANCIENNE` = la valeur **actuelle** de `PONT_CLE` (Production) | 1 min |
+| 2 | Même écran | Modifier `PONT_CLE` = la **nouvelle** clé | 1 min |
+| 3 | GitHub → `Pflow-Crm` → Settings → Secrets and variables → Actions | `PONT_CLE` = la nouvelle clé | 1 min |
+| 4 | Vercel → Deployments → dernier déploiement de production → Redeploy | Attendre « Ready » | 1–2 min |
+| 5 | **Tout de suite** : CRM → Atelier → n'importe quel resto → panneau Bot WhatsApp → **Tester le bot** | Le diagnostic dit « Pont relié à la base à l'instant » | 30 s |
+| 6 | UChat : chaque bot → Settings → Bot Fields → `pflow_cle` = la nouvelle clé (le modèle d'abord) | Les bots pas encore faits marchent grâce à `PONT_CLE_ANCIENNE` | 1 min par bot |
+| 7 | CRM : **Tester le bot** sur chaque resto | Tout vert | 3 min |
+| 8 | WhatsApp : écrire à un bot de test (« bonjour », puis une question de suivi de commande) | Réponses normales | 2 min |
+| 9 | Stripe → Développeurs → Webhooks | Aucun envoi en échec (ou réessayé avec succès) | 1 min |
+| 10 | Quand **tous** les bots sont faits : Vercel → supprimer `PONT_CLE_ANCIENNE` → Redeploy, puis refaire 7 et 8 | Tout vert, l'ancienne clé ne marche plus | 3 min |
+
+**La minute sensible (entre 4 et 5)** : le nouveau serveur a la nouvelle clé, la base connaît encore
+l'ancienne. Pendant ces secondes, les appels serveur → base sont refusés :
+- **paiements Stripe** : Stripe renvoie automatiquement ses notifications refusées (pendant plusieurs
+  jours) → rien n'est perdu ;
+- **paiements SumUp** : la supervision relit les paiements non confirmés (`sup_paiements_sumup_a_relire`)
+  → rattrapés au passage suivant ;
+- **bots** : un suivi, une annulation ou une démo demandés pile à ce moment répondent « souci » ; une
+  nouvelle commande passe (elle n'utilise pas la clé), mais si le resto impose le paiement en ligne,
+  son lien de paiement peut manquer (`paiement_lien_pour` utilise la clé) : à vérifier dans le
+  tableau de bord s'il y a eu une commande pendant cette minute.
+
+D'où l'heure calme et le clic sur « Tester le bot » dès que Vercel affiche « Ready ».
+
+**Retour arrière** (à tout moment) : remettre l'ancienne valeur dans `PONT_CLE` (Vercel et GitHub),
+Redeploy, **Tester le bot**.
+
+### Variante sans le patch 06
+
+Mêmes étapes sans `PONT_CLE_ANCIENNE` (sauter 1 et 10). Mais entre l'étape 4 et la mise à jour du
+Bot Field de chaque bot (étape 6), **ce bot répond « souci » à tous ses clients**. À faire de nuit,
+la liste des bots ouverte dans UChat avant de commencer : compter 5 à 10 minutes de coupure.

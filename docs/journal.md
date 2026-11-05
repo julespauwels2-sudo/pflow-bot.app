@@ -460,3 +460,27 @@ faux Meta (`scripts/e2e/numero-pflow.js`) ; WhatsApp et boîte de réception tou
 - Textes du bot PFlow de base (`src/demos/pflow-bot.ts`) : à relire et ajuster (c'est du code, donc figé
   pour les prospects, comme demandé).
 - Le numéro PFlow : quel numéro exactement (le tien en coexistence, ou une puce dédiée) ? À voir en C0.
+
+## Suite — paiement des démos, patch paiement, sécurité du CRM
+
+- **Démos** : « Paiement en ligne pas encore configuré » s'affiche en simple info grise pour un resto en
+  démo (liste de contrôle et fiche d'infos) ; reste un point à vérifier pour les autres.
+- **Patch 05** (`docs/etape-c/patches/05-paiement-offre-de-base.diff`, non appliqué) : l'ancienne option
+  vendue (`paiement_restos.module`) ne bloque plus rien (SQL `qg64` rejouable + Atelier, Dashboard,
+  supervision, API). **Facturation non touchée** (79 €, MRR, fiche de prix : décision à prendre).
+  Aujourd'hui, le paiement en vigueur ne change pour aucun resto ; Cookies An Nou et les deux démos
+  passent de « option non vendue » à « dossier à préparer » dans l'Atelier. Testé sur une copie à jour
+  du CRM (`58c5b5a`) : nouveau test + 140 tests existants verts. Tableau par resto dans le README des patches.
+- **Sécurité du CRM, point 4 — appliqué** (seule exception autorisée) : `qg_onboarding_lancer` n'est plus
+  exécutable par `anon` ni `authenticated`. Avant : aucun appel depuis le code du CRM (vérifié sur la
+  dernière version). Après : le déclencheur de signature est actif et s'exécute en `postgres`, qui garde
+  le droit. ⚠️ Ce déclencheur avale les erreurs : vérifier l'onboarding à la prochaine signature.
+- **Point 5 — exécuté, sans effet** : les fonctions `net.*` sont ouvertes via le droit public de
+  `supabase_admin`, que la commande autorisée ne retire pas. Rien fait de plus (il faudrait le support
+  Supabase). Risque faible tant que `net` n'est pas exposé par l'API.
+- **Point 1** : plan de test de 5 minutes (avec retour arrière) dans `docs/securite-crm.md`.
+- **Point 2** : procédure exacte pour changer `PONT_CLE` dans `docs/securite-crm.md`. **Correction de
+  l'audit** : la clé n'est pas que sur Vercel, elle est aussi dans le Bot Field `pflow_cle` de chaque bot
+  UChat et dans un secret GitHub. Comme `api/pont.js` n'accepte qu'une clé, j'ai préparé le **patch 06**
+  (facultatif, testé) qui accepte `PONT_CLE_ANCIENNE` pendant la transition : aucune coupure des bots.
+- Les patches 01 à 06 s'appliquent tous, dans l'ordre, sur la dernière version du CRM (`58c5b5a`).

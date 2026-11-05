@@ -1,0 +1,286 @@
+diff --git a/repo/api/paiement.js b/repo/api/paiement.js
+index 9fc0339..d05d1b3 100644
+--- a/repo/api/paiement.js
++++ b/repo/api/paiement.js
+@@ -1211,7 +1211,7 @@ module.exports = async function (req, res) {
+   async function connecter() {
+     var rid = String(corps.restaurant_id || "");
+     var l = await ligneResto(rid); if (l.refus) return l.refus();
+-    if (!l.ligne || !l.ligne.module) return json(200, { ok: false, code: "OPTION_NON_ACTIVEE", erreur: "L'option paiement en ligne n'est pas activée pour ce resto (ou accès refusé)", aide: "CRM, onglet Atelier, le resto, panneau Paiement en ligne : activer l'option." });
++    if (!l.ligne) return json(200, { ok: false, code: "DOSSIER_A_PREPARER", erreur: "Pas encore de dossier paiement pour ce resto (ou accès refusé)", aide: "CRM, onglet Atelier, le resto, panneau Paiement en ligne : préparer le dossier." });
+     var rr = await sbFetch("/rest/v1/restaurants?id=eq." + rid + "&select=id,nom,email,slug,telephone,type,instagram,livraison&limit=1", null, jeton);
+     var r = rr.okHttp && rr.donnees && rr.donnees[0];
+     if (!r) return json(200, { ok: false, code: "RESTO_INTROUVABLE", erreur: "Restaurant introuvable ou accès refusé" });
+@@ -1287,7 +1287,7 @@ module.exports = async function (req, res) {
+     var rid = String(corps.restaurant_id || "");
+     var l = await ligneResto(rid); if (l.refus) return l.refus();
+     var ligne = l.ligne;
+-    if (!ligne || !ligne.module) return json(200, { ok: false, code: "OPTION_NON_ACTIVEE", erreur: "Option paiement en ligne non activée pour ce resto" });
++    if (!ligne) return json(200, { ok: false, code: "DOSSIER_A_PREPARER", erreur: "Pas encore de dossier paiement pour ce resto" });
+     if (!ligne.stripe_compte) return json(200, { ok: false, code: "COMPTE_ABSENT", erreur: "Pas encore de compte Stripe : lancer l'activation" });
+     if (!SK) return json(200, { ok: false, code: "CLE_ABSENTE", erreur: "STRIPE_SECRET_KEY absente de Vercel" });
+     var relu = await rafraichirCompte(rid, ligne.stripe_compte);
+diff --git a/repo/js/atelier.js b/repo/js/atelier.js
+index 8d12e15..c6e5f51 100644
+--- a/repo/js/atelier.js
++++ b/repo/js/atelier.js
+@@ -145,7 +145,7 @@
+ 
+     /* 4. Paiement actif (la phase vient de js/paiement.js, la meme que partout) */
+     var l = st().paiementLignes[rid] || null, PP = window.PaiementPflow;
+-    var ph = PP ? PP.phase(l) : (l && l.module ? (l.stripe_pret ? "actif" : "verification") : "non_vendu");
++    var ph = PP ? PP.phase(l) : (l ? (l.stripe_pret ? "actif" : "verification") : "a_preparer");
+     if (ph === "non_vendu") e("paiement", true, null, null, "", { auto: true, sansObjet: true, detail: "option non vendue, paiement sur place" });
+     else if (ph === "actif") e("paiement", true, l.stripe_maj_le, null, "", { auto: true });
+     else if (ph === "repli") e("paiement", true, null, null, "", { auto: true, sansObjet: true, detail: "repli : paiement sur place" });
+diff --git a/repo/js/paiement.js b/repo/js/paiement.js
+index f3cc4fe..2b3da67 100644
+--- a/repo/js/paiement.js
++++ b/repo/js/paiement.js
+@@ -65,7 +65,8 @@
+   function aDossier(l) { var p = (l && l.prepa) || {}; return !!(p.siret || p.raison_sociale); }
+ 
+   function phase(l) {
+-    if (!l || !l.module) return "non_vendu";
++    /* qg64 : le paiement en ligne fait partie de l'offre de base (plus d'option vendue) */
++    if (!l) return "a_preparer";
+     var d = l.stripe_details || {};
+     if (l.stripe_pret && d.dossier_envoye && l.stripe_virements && !manquesDe(l).length) return "actif";
+     if (l.repli && l.repli.solution) return "repli";
+@@ -132,7 +133,7 @@
+       if (e.ligne) lignes()[restoId] = e.ligne;
+       e.charge = true;
+       fini();
+-      if (!res.error && (avecStripe || (e.ligne && e.ligne.module && e.ligne.stripe_compte))) {
++      if (!res.error && (avecStripe || (e.ligne && e.ligne.stripe_compte))) {
+         api({ action: "etat", restaurant_id: restoId }).then(function (j) {
+           if (j && j.ok) { if (j.ligne) { e.ligne = j.ligne; lignes()[restoId] = j.ligne; } e.diag = j.points || null; e.modeTest = !!j.mode_test; e.webhookUrl = j.webhook_url || ""; e.erreur = j.erreur_stripe ? j.erreur_stripe.message : ""; }
+           else if (j) { e.diag = null; e.erreur = (j.erreur || "") + (j.aide ? " " + j.aide : ""); }
+@@ -178,11 +179,11 @@
+       return;
+     }
+ 
+-    var l = e.ligne || { module: false, mode: "obligatoire" }, d = l.stripe_details || {};
++    var l = e.ligne || { mode: "obligatoire" }, d = l.stripe_details || {};
+     var ph = phase(l), info = PHASES[ph] || PHASES.non_vendu;
+     /* qg55 : un resto sur SumUp n'a pas de compte Stripe a activer */
+     var su = e.sumup, avecSumup = !!(su && su.fournisseur === "sumup");
+-    if (avecSumup && l.module) ph = su.pret ? "actif" : "sumup_a_configurer";
++    if (avecSumup) ph = su.pret ? "actif" : "sumup_a_configurer";
+     var badges = {
+       non_vendu: "<span class=\"badge\">OPTION NON VENDUE</span>",
+       actif: "<span class=\"badge mint\">ACTIF</span>",
+@@ -192,9 +193,9 @@
+       sumup_a_configurer: "<span class=\"badge retard\">SUMUP À CONFIGURER</span>"
+     };
+     var badge = badges[ph] || "<span class=\"badge jour\">ACTIVATION EN COURS</span>";
+-    if (avecSumup && l.module) badge += " <span class=\"badge\">SUMUP</span>" + (su.cle_test ? " <span class=\"badge retard\">MODE TEST</span>" : "");
+-    else if (l.module && l.stripe_pret && e.modeTest) badge += " <span class=\"badge retard\">MODE TEST</span>";
+-    if (l.module && l.stripe_pret && l.mode === "coupe") badge += " <span class=\"badge jour\">COUPÉ PAR LE RESTO</span>";
++    if (avecSumup) badge += " <span class=\"badge\">SUMUP</span>" + (su.cle_test ? " <span class=\"badge retard\">MODE TEST</span>" : "");
++    else if (l.stripe_pret && e.modeTest) badge += " <span class=\"badge retard\">MODE TEST</span>";
++    if (l.stripe_pret && l.mode === "coupe") badge += " <span class=\"badge jour\">COUPÉ PAR LE RESTO</span>";
+ 
+     var phrase = ph === "non_vendu" ? "Ce resto encaisse sur place. Proposez l'option : une commande non payée fait produire pour rien (+79 € sur la fiche de prix)."
+       : (ph === "actif" ? (l.mode === "obligatoire" ? "Carte obligatoire : une commande n'arrive en cuisine qu'une fois payée." : (l.mode === "choix" ? "Au choix du client : carte ou sur place." : "Compte prêt, mais le paiement par carte est coupé : les clients paient sur place."))
+@@ -206,17 +207,14 @@
+     }
+     if (e.erreur) h += "<div style=\"font-size:.82rem;color:#E5735F;margin:6px 0;\">" + esc(e.erreur) + "</div>";
+ 
+-    /* L'option */
+-    h += "<div class=\"puces\" style=\"margin-top:10px;\">" +
+-      "<button class=\"puce " + (l.module ? "on" : "") + "\" id=\"pay-module\" aria-pressed=\"" + !!l.module + "\">" + (l.module ? "Option paiement en ligne VENDUE" : "Activer l'option paiement en ligne") + "</button>";
+-    if (l.module && !avecSumup) h += "<button class=\"puce\" id=\"pay-maj\">Actualiser depuis Stripe</button>";
+-    h += "</div>";
++    /* qg64 : plus de bouton « option vendue » (offre de base) ; seulement l'actualisation Stripe */
++    if (e.ligne && !avecSumup) h += "<div class=\"puces\" style=\"margin-top:10px;\"><button class=\"puce\" id=\"pay-maj\">Actualiser depuis Stripe</button></div>";
+ 
+-    if (l.module && su) h += blocFournisseur(e, su);
+-    if (l.module && ph !== "actif" && !avecSumup) h += blocActivation(e, l, r);
++    if (su) h += blocFournisseur(e, su);
++    if (ph !== "actif" && !avecSumup) h += blocActivation(e, l, r);
+ 
+     /* Le mode (reglable avant meme l'activation : c'est ce qui s'appliquera) */
+-    if (l.module) {
++    {
+       h += "<div style=\"border-top:1px solid var(--rule);margin-top:14px;padding-top:12px;\">" +
+         "<div class=\"st-sec\" style=\"margin-top:0;\">COMMENT LES CLIENTS PAIENT" + ((avecSumup ? su.pret : l.stripe_pret) ? "" : " (s'appliquera dès que le compte est actif)") + "</div><div class=\"puces\">" +
+         [["obligatoire", "Carte obligatoire (conseillé)"], ["choix", "Au choix : carte ou sur place"], ["coupe", "Sur place uniquement"]].map(function (m) {
+@@ -894,7 +892,7 @@
+   /* Pour la recette de mise en ligne */
+   function recette(restoId) {
+     var l = lignes()[restoId];
+-    if (!l || !l.module) return [];
++    if (!l) return [];
+     var ph = phase(l);
+     if (ph === "actif") return [{ niveau: (l.stripe_details || {}).mode_test ? "attention" : "ok", titre: "Paiement en ligne actif", detail: (l.stripe_details || {}).mode_test ? "mais en mode TEST : passer la clé sk_live pour encaisser" : "mode " + l.mode }];
+     if (ph === "repli") return [{ niveau: "ok", titre: "Paiement sur place (repli enregistré)", detail: "l'option n'est pas à facturer" }];
+diff --git a/repo/js/resto.js b/repo/js/resto.js
+index 2722a70..f6b2416 100644
+--- a/repo/js/resto.js
++++ b/repo/js/resto.js
+@@ -291,7 +291,7 @@
+     sb.from("paiement_restos").select("*").eq("restaurant_id", resto.id).maybeSingle().then(function (res) {
+       paiementCharge = true;
+       paiement = res.error ? null : res.data;
+-      if (retour && paiement && paiement.module) {
++      if (retour && paiement) {
+         ouvrirOnglet("infos");
+         if (retour === "reprendre") { activerStripe(); return; }
+         /* Retour de Stripe : on relit l'etat du compte chez Stripe */
+@@ -353,7 +353,7 @@
+   }
+   function nouvelleCommande() { if (window.StockPflow) window.StockPflow.commande(ctxStock()); }
+ 
+-  function paiementActif() { return !!(paiement && paiement.module && (sumup ? sumup.pret : paiement.stripe_pret) && paiement.mode !== "coupe"); }
++  function paiementActif() { return !!(paiement && (sumup ? sumup.pret : paiement.stripe_pret) && paiement.mode !== "coupe"); }
+ 
+   /* Filet de securite : un paiement reste "en attente" plus de 2 minutes ? On le fait relire chez Stripe. */
+   function rapprocherSiBesoin() {
+@@ -1677,10 +1677,9 @@
+   function blocPaiement() {
+     if (!paiementCharge) return "";
+     var h = "<div class=\"r-bloc\"><h3>Paiement en ligne</h3>";
+-    if (!paiement || !paiement.module) {
+-      var mp = moduleOffre("paiement");
+-      if (mp) return "<div class=\"r-bloc\"><h3>Paiement en ligne</h3>" + (mp.actif && !mp.ok ? suspenduTexte() : offreCarte(mp, "Aujourd'hui vos clients paient sur place.")) + "</div>";
+-      return h + "<div style=\"font-size:.9rem;color:var(--muted);\">Vos clients paient sur place. Pour qu'ils puissent régler par carte au moment de commander (l'argent arrive directement sur votre compte, sans commission PFlow), demandez l'option à PFlow.</div></div>";
++    /* qg64 : le paiement en ligne fait partie de l'offre de base (plus d'option à demander) */
++    if (!paiement) {
++      return h + "<div style=\"font-size:.9rem;color:var(--muted);\">Vos clients paient sur place pour l'instant. Le paiement par carte au moment de commander fait partie de votre offre (l'argent arrive directement sur votre compte, sans commission PFlow) : PFlow s'occupe du branchement avec vous.</div></div>";
+     }
+     /* qg55 : le resto encaisse avec son compte SumUp (branche par PFlow) */
+     if (sumup) {
+diff --git a/repo/js/supervision.js b/repo/js/supervision.js
+index 6d6ffb2..b7f2806 100644
+--- a/repo/js/supervision.js
++++ b/repo/js/supervision.js
+@@ -271,7 +271,7 @@
+   }
+   function cellulePaiement(r) {
+     var p = r.paiement;
+-    if (!p || !p.module) return point("gris") + "<span>Sur place</span>";
++    if (!p) return point("gris") + "<span>Sur place</span>";
+     if (p.mode === "coupe") return point("attention") + "<span>Coupé par le resto</span>";
+     if (p.deconnecte) return point("ko") + "<span>Stripe déconnecté</span>";
+     if (!p.compte) return point("attention") + "<span>Compte pas ouvert</span>";
+diff --git a/repo/sql/qg64-paiement-offre-de-base.sql b/repo/sql/qg64-paiement-offre-de-base.sql
+new file mode 100644
+index 0000000..29205ee
+--- /dev/null
++++ b/repo/sql/qg64-paiement-offre-de-base.sql
+@@ -0,0 +1,52 @@
++-- ==========================================================================
++-- PFlow CRM, qg64 (novembre 2026) : le paiement en ligne fait partie de l'offre de base
++-- Préparé par PFlow Bots (patch 05), à relire et à jouer par Jules. Rejouable sans risque.
++--
++-- Avant : le paiement en ligne n'était possible que si l'« option » était vendue
++-- (paiement_restos.module = true). Maintenant il fait partie de l'offre de base (SumUp ou Stripe) :
++-- seul compte ce qui est réellement prêt chez le prestataire, et le réglage du resto (mode).
++--
++-- Ce fichier retire la vérification de « module » partout où elle bloquait quelque chose
++-- (greffes vérifiées : chaque point de greffe doit exister, sinon rien n'est fait).
++-- Il NE TOUCHE PAS à la facturation : le module « paiement » du catalogue, son prix, le MRR et la
++-- fiche de prix restent comme avant (décision commerciale à part).
++-- La colonne paiement_restos.module reste (plus aucune fonction ne la lit) : retour arrière possible.
++-- ==========================================================================
++
++do $$ begin
++  if to_regprocedure('public.paiement_mode_public(uuid)') is null or to_regprocedure('public.sup_evaluer()') is null
++     or to_regprocedure('public.ag_phase_paiement(public.paiement_restos)') is null then
++    raise exception 'Il manque s2-paiement.sql, s11-agents.sql ou qg55-paiement-fournisseurs.sql : les jouer d''abord';
++  end if;
++end $$;
++
++do $$
++declare g record; src text; neuf text;
++begin
++  for g in select * from (values
++    -- Le mode de paiement en vigueur (page de commande, bot) : plus de condition d'option vendue.
++    ('public.paiement_mode_public(uuid)', 'when p\.module and p\.mode in', 'when /* qg64 */ p.mode in'),
++    ('public.agent_mode_effectif(public.paiement_restos)', 'when p\.module and p\.mode in', 'when /* qg64 */ p.mode in'),
++    -- La phase (Atelier) : sans ligne paiement, « dossier à préparer » au lieu de « option non vendue ».
++    ('public.ag_phase_paiement(public.paiement_restos)', 'when l\.restaurant_id is null or not l\.module then ''non_vendu''',
++      'when l.restaurant_id is null then ''a_preparer'' /* qg64 */'),
++    ('public.ag_executer(bigint,jsonb,text)', 'where restaurant_id = r\.id and module\)', 'where restaurant_id = r.id /* qg64 */)'),
++    -- Lien d'activation : la ligne paiement est créée si besoin, au lieu d'exiger l'option.
++    ('public.paiement_activation_lien(uuid,integer)',
++      'if not exists \(select 1 from public\.paiement_restos where restaurant_id = rid and module\) then\s*raise exception ''option paiement en ligne non activee'';\s*end if;',
++      'insert into public.paiement_restos (restaurant_id, module) values (rid, true) on conflict (restaurant_id) do nothing; /* qg64 */'),
++    ('public.paiement_activation_pour(text,uuid)', 'if not pr\.module then return jsonb_build_object\(''erreur'', ''option_retiree''\); end if;', '/* qg64 : plus d''option à vérifier */'),
++    -- Réglage du mode par le resto (Dashboard) : la ligne est créée si besoin.
++    ('public.paiement_regler(uuid,text)', 'update public\.paiement_restos set mode = p_mode where restaurant_id = rid and module = true;',
++      'insert into public.paiement_restos (restaurant_id, module, mode) values (rid, true, p_mode) on conflict (restaurant_id) do update set mode = excluded.mode; /* qg64 */'),
++    -- Supervision : comptes Stripe suivis et alertes, sans condition d'option.
++    ('public.sup_comptes_stripe(text)', 'where module and stripe_compte', 'where /* qg64 */ stripe_compte'),
++    ('public.sup_evaluer()', 'pr\.module and pr\.mode <> ''coupe''', '/* qg64 */ pr.mode <> ''coupe''')
++  ) as t(f, avant, apres) loop
++    src := pg_get_functiondef(g.f::regprocedure);
++    continue when position('qg64' in src) > 0;   -- déjà fait
++    neuf := regexp_replace(src, g.avant, g.apres);
++    if neuf = src then raise exception '% : point de greffe introuvable (rien n''a été modifié)', g.f; end if;
++    execute neuf;
++  end loop;
++end $$;
+diff --git a/repo/tests/qg64-paiement-base.test.js b/repo/tests/qg64-paiement-base.test.js
+new file mode 100644
+index 0000000..7407f6c
+--- /dev/null
++++ b/repo/tests/qg64-paiement-base.test.js
+@@ -0,0 +1,56 @@
++/* qg64 : le paiement en ligne fait partie de l'offre de base. L'ancienne « option vendue »
++   (paiement_restos.module) ne bloque plus rien : seul compte ce qui est prêt chez le prestataire,
++   et le réglage du resto. La facturation du module n'est pas touchée. */
++var test = require("node:test");
++var assert = require("node:assert/strict");
++var B = require("./aide-banc");
++
++var ADMIN = "11111111-1111-1111-1111-111111111111";
++var PRET = "77777777-0000-0000-0000-000000000001";     /* Stripe prêt, ancienne option NON vendue */
++var COUPE = "77777777-0000-0000-0000-000000000002";    /* Stripe prêt, le resto a coupé */
++var RIEN = "77777777-0000-0000-0000-000000000003";     /* pas encore de ligne paiement */
++var banc = null;
++async function b() {
++  if (banc) return banc;
++  banc = await B.creerBanc();
++  await banc.db.exec("insert into auth.users (id, email) values ('" + ADMIN + "', 'jules@test.fr');" +
++    "insert into public.admins (user_id) values ('" + ADMIN + "') on conflict do nothing;" +
++    "insert into public.restaurants (id, nom, statut, slug, commande_active, retrait) values" +
++    " ('" + PRET + "', 'Pret', 'actif', 'pret', true, true), ('" + COUPE + "', 'Coupe', 'actif', 'coupe', true, true), ('" + RIEN + "', 'Rien', 'signe', 'rien', true, true);" +
++    "insert into public.paiement_restos (restaurant_id, module, mode, stripe_compte, stripe_pret) values" +
++    " ('" + PRET + "', false, 'choix', 'acct_pret', true), ('" + COUPE + "', false, 'coupe', 'acct_coupe', true);");
++  return banc;
++}
++async function q(sql, params) { return (await (await b()).db.query(sql, params || [])).rows; }
++async function en(role, uid, sql, params) {
++  var d = (await b()).db;
++  await d.exec("set role " + role + "; select set_config('request.jwt.claim.sub', '" + (uid || "") + "', false);");
++  try { return (await d.query(sql, params || [])).rows; } finally { await d.exec("reset role; select set_config('request.jwt.claim.sub', '', false);"); }
++}
++
++test("qg64 : le mode en vigueur ne dépend plus de l'option vendue", async function () {
++  assert.equal((await q("select public.paiement_mode_public($1) v", [PRET]))[0].v, "choix", "Stripe prêt, option non vendue : paiement en ligne au choix");
++  assert.equal((await q("select public.paiement_mode_public($1) v", [COUPE]))[0].v, "non", "coupé par le resto : sur place");
++  assert.equal((await q("select public.paiement_mode_public($1) v", [RIEN]))[0].v, "non", "rien de prêt : sur place");
++  var vitrine = await en("anon", null, "select slug, paiement_en_ligne from public.vitrine where slug in ('pret', 'coupe') order by slug");
++  assert.deepEqual(vitrine.map(function (r) { return r.paiement_en_ligne; }), ["non", "choix"]);
++});
++
++test("qg64 : Atelier, sans ligne paiement = dossier à préparer (plus d'« option non vendue »)", async function () {
++  assert.notEqual((await q("select public.ag_phase_paiement(p) v from public.paiement_restos p where restaurant_id = $1", [PRET]))[0].v, "non_vendu");
++  assert.equal((await q("select public.ag_phase_paiement(null::public.paiement_restos) v"))[0].v, "a_preparer");
++});
++
++test("qg64 : lien d'activation et réglage du mode créent la ligne paiement si besoin", async function () {
++  var lien = (await en("authenticated", ADMIN, "select public.paiement_activation_lien($1, 10) v", [RIEN]))[0].v;
++  assert.ok(lien.token, "un lien d'activation est créé sans option vendue");
++  assert.equal((await en("authenticated", ADMIN, "select public.paiement_regler($1, 'obligatoire') v", [PRET]))[0].v, true);
++  assert.equal((await q("select mode from public.paiement_restos where restaurant_id = $1", [PRET]))[0].mode, "obligatoire");
++});
++
++test("qg64 : rejouable (le fichier ne modifie rien la deuxième fois)", async function () {
++  var fs = require("fs"), path = require("path");
++  var avant = (await q("select md5(pg_get_functiondef('public.paiement_mode_public(uuid)'::regprocedure)) h"))[0].h;
++  await (await b()).db.exec(fs.readFileSync(path.join(__dirname, "..", "sql", "qg64-paiement-offre-de-base.sql"), "utf8"));
++  assert.equal((await q("select md5(pg_get_functiondef('public.paiement_mode_public(uuid)'::regprocedure)) h"))[0].h, avant);
++});

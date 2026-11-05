@@ -255,6 +255,9 @@ describe("liste de contrôle (onboarding)", () => {
     await repos.bots.link(client.id, template.id);
     const sheet = { horaires: [], paiementEnLigne: { mode: "non" as const, aConfigurer: true } };
     expect(botChecklist(await load(), sheet, NOW)).toContainEqual({ level: "warning", message: "Paiement en ligne pas encore configuré (SumUp ou Stripe)." });
+    const input = await load();
+    const demo = botChecklist({ ...input, client: { ...input.client, crmStatut: "demo" } }, sheet, NOW);
+    expect(demo).toContainEqual({ level: "info", message: "Paiement en ligne pas encore configuré (SumUp ou Stripe)." });
     const ready = botChecklist(await load(), { ...sheet, paiementEnLigne: { mode: "choix" as const, aConfigurer: false } }, NOW);
     expect(ready.some((i) => i.message.startsWith("Paiement en ligne"))).toBe(false);
   });

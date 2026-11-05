@@ -1,0 +1,62 @@
+diff --git a/repo/api/pont.js b/repo/api/pont.js
+index 5346c25..849aeb7 100644
+--- a/repo/api/pont.js
++++ b/repo/api/pont.js
+@@ -108,7 +108,10 @@ module.exports = async function (req, res) {
+   var origine = null;
+ 
+   if (cleRecue) {
+-    if (!memeCle(cleRecue, CLE)) {
++    /* Changement de clé sans coupure : pendant la transition, PONT_CLE_ANCIENNE (facultative) est aussi
++       acceptée pour les bots UChat pas encore mis à jour. La retirer une fois tous les bots passés. */
++    var CLE_ANCIENNE = String(process.env.PONT_CLE_ANCIENNE || "").trim();
++    if (!memeCle(cleRecue, CLE) && !(CLE_ANCIENNE && memeCle(cleRecue, CLE_ANCIENNE))) {
+       await noterCleInvalide(req, CLE, SB_URL, SB_ANON);
+       return finir(401, { ok: false, ok_texte: "non", code: "CLE_INVALIDE", texte: TEXTE_SOUCI,
+         erreur: "Clé du pont invalide",
+diff --git a/repo/tests/pont-cle-ancienne.test.js b/repo/tests/pont-cle-ancienne.test.js
+new file mode 100644
+index 0000000..2d4bb6d
+--- /dev/null
++++ b/repo/tests/pont-cle-ancienne.test.js
+@@ -0,0 +1,40 @@
++/* Changement de PONT_CLE sans couper UChat : PONT_CLE_ANCIENNE est acceptée pendant la transition
++   (bots pas encore mis à jour), refusée dès qu'elle est retirée de Vercel. */
++var test = require("node:test");
++var assert = require("node:assert/strict");
++var creerBanc = require("./aide-banc").creerBanc;
++var appeler = require("./aide-http").appeler;
++
++var R = "99999999-0000-0000-0000-000000000009";
++var banc = null;
++async function b() {
++  if (banc) return banc;
++  banc = await creerBanc();
++  await banc.db.exec("insert into public.restaurants (id, nom, statut, slug, commande_active, retrait, telephone) values ('" + R + "', 'Clé', 'actif', 'cle-test', true, true, '0690 00 00 09');");
++  global.fetch = async function (url, init) {
++    url = String(url);
++    if (/\/rest\/v1\/rpc\//.test(url)) return banc.fetch(url, init);
++    var m = url.match(/\/rest\/v1\/vitrine\?(.*)$/);
++    if (m) {
++      var slug = new URLSearchParams(m[1]).get("slug");
++      var r = await banc.db.query("select * from public.vitrine" + (slug ? " where slug = $1" : ""), slug ? [slug.replace(/^eq\./, "")] : []);
++      return { ok: true, status: 200, json: async function () { return r.rows; } };
++    }
++    return { ok: true, status: 200, json: async function () { return []; } };
++  };
++  process.env.PONT_CLE = banc.cle; process.env.SUPABASE_URL = "http://banc"; process.env.SUPABASE_ANON_KEY = "anon";
++  return banc;
++}
++async function appel(cle) {
++  return appeler(require("../api/pont.js"), { body: { action: "resto", slug: "cle-test" }, headers: { "x-pflow-cle": cle, host: "order.pflow.fr", "content-type": "application/json" } });
++}
++
++test("PONT_CLE_ANCIENNE acceptée pendant la transition, refusée ensuite ; une clé inconnue toujours refusée", async function () {
++  var bc = await b();
++  process.env.PONT_CLE_ANCIENNE = "ancienne-cle-du-pont-0123456789";
++  assert.notEqual((await appel(bc.cle)).statut, 401, "la nouvelle clé passe");
++  assert.notEqual((await appel("ancienne-cle-du-pont-0123456789")).statut, 401, "l'ancienne clé passe pendant la transition");
++  assert.equal((await appel("cle-inconnue-0000000000000000")).statut, 401);
++  delete process.env.PONT_CLE_ANCIENNE;
++  assert.equal((await appel("ancienne-cle-du-pont-0123456789")).statut, 401, "transition finie : l'ancienne clé est refusée");
++});

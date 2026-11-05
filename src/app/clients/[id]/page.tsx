@@ -93,7 +93,7 @@ export default function ClientPage() {
             template={state.data.template}
             infoSheet={state.data.infoSheet}
           />
-          <InfoSheetForm key={id} clientId={id} timezone={state.data.client.timezone} initial={state.data.infoSheet} locked={state.data.locked} onSaved={reload} />
+          <InfoSheetForm key={id} clientId={id} timezone={state.data.client.timezone} initial={state.data.infoSheet} locked={state.data.locked} isDemo={state.data.client.crmStatut === "demo"} onSaved={reload} />
           <AiCallsCard clientId={id} calls={state.data.aiCalls} onChange={reload} />
           <DangerZone client={state.data.client} />
         </div>
