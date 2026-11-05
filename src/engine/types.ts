@@ -84,6 +84,11 @@ export interface DeliveryDays {
   note?: string;
 }
 
+export interface OnlinePayment {
+  mode: "choix" | "obligatoire" | "non";
+  aConfigurer: boolean;
+}
+
 export interface InfoSheet {
   /** Horaires d'ouverture, exprimés dans le fuseau du client. Un jour absent = fermé. */
   horaires: OpeningDay[];
@@ -102,6 +107,14 @@ export interface InfoSheet {
    */
   joursLivraison?: DeliveryDays[];
   retrait?: boolean;
+  /**
+   * Paiement en ligne, lu dans le CRM (mode réellement en vigueur, fonction paiement_mode_public) :
+   * « choix » (en ligne par carte ou sur place), « obligatoire » (en ligne seulement), « non » (sur
+   * place seulement). aConfigurer : aucun prestataire de paiement en ligne prêt (onboarding).
+   * Absent hors CRM (mode local).
+   */
+  paiementEnLigne?: OnlinePayment;
+  /** Précisions sur le paiement sur place (facultatif), ex. « Espèces, carte, tickets resto ». */
   modesPaiement?: string;
   zonesLivraison?: string;
   pointsDeVente?: string;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatPayment,
   NO_ROUND_TEXT,
   formatFixedDelivery,
   formatWeekdays,
@@ -249,5 +250,33 @@ describe("jours de livraison fixes par zone", () => {
     expect(infoSheetVariables({ horaires: [], livraison: false, joursLivraison: jours }, now, tz).jours_livraison).toBe("");
     const v = infoSheetVariables({ horaires: [], livraison: true, zonesLivraison: zones, joursLivraison: [{ id: "x", zone: "Jarry", jours: [] }] }, now, tz);
     expect(v.infos_livraison).toBe(zones);
+  });
+});
+
+describe("texte du paiement", () => {
+  const base = { horaires: [] };
+  it("phrase selon le mode en vigueur, sans jamais nommer le prestataire", () => {
+    expect(formatPayment({ ...base, paiementEnLigne: { mode: "choix", aConfigurer: false } })).toBe(
+      "Vous pouvez payer *en ligne par carte* au moment de la commande, ou *sur place*.",
+    );
+    expect(formatPayment({ ...base, paiementEnLigne: { mode: "obligatoire", aConfigurer: false }, modesPaiement: "Espèces" })).toBe(
+      "Le paiement se fait *en ligne par carte*, au moment de la commande.",
+    );
+    expect(formatPayment({ ...base, retrait: true, paiementEnLigne: { mode: "non", aConfigurer: true } })).toBe("Le paiement se fait *sur place*.");
+    expect(formatPayment({ ...base, livraison: true, retrait: true, paiementEnLigne: { mode: "non", aConfigurer: false } })).toBe(
+      "Le paiement se fait *sur place*, au comptoir ou à la livraison.",
+    );
+    expect(formatPayment({ ...base, livraison: true, paiementEnLigne: { mode: "non", aConfigurer: false } })).toBe("Le paiement se fait *sur place*, à la livraison.");
+    for (const mode of ["choix", "obligatoire", "non"] as const) {
+      expect(formatPayment({ ...base, paiementEnLigne: { mode, aConfigurer: false } })).not.toMatch(/sumup|stripe/i);
+    }
+  });
+
+  it("précisions sur place ajoutées après la phrase ; sans CRM, les précisions seules", () => {
+    expect(formatPayment({ ...base, paiementEnLigne: { mode: "choix", aConfigurer: false }, modesPaiement: " Espèces, tickets resto " })).toBe(
+      "Vous pouvez payer *en ligne par carte* au moment de la commande, ou *sur place*.\nSur place : Espèces, tickets resto",
+    );
+    expect(formatPayment({ ...base, modesPaiement: "Espèces" })).toBe("Espèces");
+    expect(infoSheetVariables({ ...base, paiementEnLigne: { mode: "obligatoire", aConfigurer: false } }, new Date(), "America/Guadeloupe").modes_paiement).toContain("en ligne par carte");
   });
 });

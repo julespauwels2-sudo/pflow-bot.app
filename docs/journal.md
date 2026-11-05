@@ -384,3 +384,16 @@ locale vérifiée intacte), rien chez Meta. **Je m'arrête ici** : on reprend en
   infos **facultatives** (`points_de_vente`, `modes_paiement`…) → simple info grise, et la fiche affiche
   « Tout est prêt » s'il ne reste que des infos.
 - **Modes de paiement** : recherche en lecture seule faite, rien modifié (en attente de ta décision).
+- **Paiement** (décision de Jules : le paiement en ligne fait partie de l'offre de base) :
+  - le mode réellement en vigueur est lu dans le CRM par `paiement_mode_public` (lecture seule ; le
+    bot ne peut appeler qu'une liste blanche de fonctions de lecture, test à l'appui) ;
+  - phrase grisée « CRM » sans nom de prestataire : « Vous pouvez payer *en ligne par carte* au moment
+    de la commande, ou *sur place*. » / « Le paiement se fait *en ligne par carte*… » / « Le paiement
+    se fait *sur place*[, au comptoir ou à la livraison]. » ; le champ devient « Précisions sur place
+    (facultatif) », ajouté après la phrase (« Sur place : … »), ignoré si paiement en ligne obligatoire ;
+  - liste de contrôle : « Paiement en ligne pas encore configuré (SumUp ou Stripe) » quand rien n'est en
+    vigueur et que le resto n'a pas coupé le paiement en ligne lui-même (réglage « coupé » du CRM) ;
+  - note ajoutée dans `docs/plan.md` : les seules options payantes côté bot sont celles du CRM.
+  - ⚠️ **Côté CRM (pas touché)** : la fonction `paiement_mode_public` vérifie encore `module`
+    (l'ancienne « option vendue »). Un resto avec `module = false` reste « sur place » même avec un
+    prestataire prêt (cas de Cookies An Nou). À corriger dans PFlow Order si l'option n'existe plus.

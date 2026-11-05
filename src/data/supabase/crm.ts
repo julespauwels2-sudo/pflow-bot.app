@@ -3,9 +3,10 @@
  * et un test vérifie qu'il ne contient aucun appel d'écriture.
  *
  * Tables lues : restaurants, resto_modules, qg_zones_livraison, produits, groupes_options,
- * options, produits_groupes.
+ * options, produits_groupes, paiement_restos (réglage « coupé » seulement).
+ * Fonction lue : paiement_mode_public (mode de paiement en ligne en vigueur, lecture seule).
  */
-import { DEFAULT_TIMEZONE, type InfoSheet, type IsoWeekday, type OpeningDay } from "@/engine";
+import { DEFAULT_TIMEZONE, type InfoSheet, type IsoWeekday, type OnlinePayment, type OpeningDay } from "@/engine";
 import type { DbReader } from "./db";
 
 /** Statuts du CRM dont les restos apparaissent dans l'app bots (en plus de ceux qui ont un bot). */
@@ -75,6 +76,8 @@ export interface CrmData {
   groupes: CrmGroupe[];
   options: CrmOption[];
   produitsGroupes: CrmProduitGroupe[];
+  /** Paiement en ligne en vigueur, par resto (absent si le CRM n'a pas pu le dire). */
+  paiements: Map<string, OnlinePayment>;
 }
 
 /** Lit dans le CRM tout ce dont le bot a besoin, pour les restos visibles. */
@@ -99,6 +102,7 @@ export async function readCrm(db: DbReader, botRestaurantIds: string[]): Promise
       in: { column: "restaurant_id", values: ids },
     }),
   ]);
+  const paiements = await readOnlinePayments(db, ids);
   const groupIds = groupes.map((g) => g.id);
   const [options, produitsGroupes] = await Promise.all([
     db.select<CrmOption & Record<string, unknown>>("options", "id, groupe_id, nom, prix_supplement, actif, ordre", { in: { column: "groupe_id", values: groupIds } }),
@@ -113,7 +117,34 @@ export async function readCrm(db: DbReader, botRestaurantIds: string[]): Promise
     groupes,
     options,
     produitsGroupes,
+    paiements,
   };
+}
+
+/**
+ * Paiement en ligne de chaque resto : uniquement le mode réellement en vigueur (paiement_mode_public),
+ * jamais la notion d'option vendue. « À configurer » : pas de paiement en ligne en vigueur alors que le
+ * resto ne l'a pas coupé lui-même (aucun prestataire prêt, SumUp ou Stripe).
+ */
+async function readOnlinePayments(db: DbReader, ids: string[]): Promise<Map<string, OnlinePayment>> {
+  const result = new Map<string, OnlinePayment>();
+  if (!db.readFunction || !ids.length) return result;
+  const reglages = await db.select<{ restaurant_id: string; mode: string } & Record<string, unknown>>("paiement_restos", "restaurant_id, mode", {
+    in: { column: "restaurant_id", values: ids },
+  });
+  const coupe = new Set(reglages.filter((r) => r.mode === "coupe").map((r) => r.restaurant_id));
+  await Promise.all(
+    ids.map(async (rid) => {
+      try {
+        const value = await db.readFunction!<string>("paiement_mode_public", { rid });
+        const mode = value === "choix" || value === "obligatoire" ? value : "non";
+        result.set(rid, { mode, aConfigurer: mode === "non" && !coupe.has(rid) });
+      } catch {
+        // Fonction indisponible : on n'affiche rien plutôt qu'une information fausse.
+      }
+    }),
+  );
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -226,7 +257,7 @@ export function crmMenuText(restaurantId: string, data: Pick<CrmData, "produits"
 }
 
 /** Champs de la fiche d'infos qui viennent du CRM (affichés en lecture seule). */
-export type CrmSheetField = "horaires" | "adresse" | "livraison" | "retrait" | "zonesLivraison" | "resumeCarte";
+export type CrmSheetField = "horaires" | "adresse" | "livraison" | "retrait" | "zonesLivraison" | "resumeCarte" | "paiementEnLigne";
 
 export function crmInfoSheet(restaurant: CrmRestaurant, data: CrmData): { sheet: Partial<InfoSheet>; locked: CrmSheetField[] } {
   const sheet: Partial<InfoSheet> = {};
@@ -252,6 +283,11 @@ export function crmInfoSheet(restaurant: CrmRestaurant, data: CrmData): { sheet:
   if (zones.length) {
     sheet.zonesLivraison = crmZonesText(zones);
     locked.push("zonesLivraison");
+  }
+  const paiement = data.paiements?.get(restaurant.id);
+  if (paiement) {
+    sheet.paiementEnLigne = paiement;
+    locked.push("paiementEnLigne");
   }
   const menu = crmMenuText(restaurant.id, data);
   if (menu) {

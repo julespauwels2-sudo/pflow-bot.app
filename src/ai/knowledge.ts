@@ -6,6 +6,7 @@
 import {
   fixedDeliveryDays,
   formatFixedDelivery,
+  formatPayment,
   formatRound,
   formatWeeklyHours,
   isPlanningDelivery,
@@ -86,7 +87,7 @@ export function buildKnowledgeBase({ nomResto, infoSheet: sheet, lienCommande }:
   }
 
   parts.push(section("Points de vente", sheet.pointsDeVente));
-  parts.push(section("Moyens de paiement", sheet.modesPaiement));
+  parts.push(section("Moyens de paiement", formatPayment(sheet).replace(/\*/g, "")));
   parts.push(section("Carte", sheet.resumeCarte));
   parts.push(section("Questions fréquentes", sheet.faq));
   parts.push(section("Règles spéciales du resto", sheet.reglesSpeciales));
@@ -108,7 +109,7 @@ export function missingKnowledge(sheet: InfoSheet): string[] {
   const missing: string[] = [];
   if (!sheet.horaires.length) missing.push("horaires");
   if (!sheet.resumeCarte?.trim()) missing.push("carte");
-  if (!sheet.modesPaiement?.trim()) missing.push("moyens de paiement");
+  if (!formatPayment(sheet)) missing.push("moyens de paiement");
   if (sheet.livraison && !fixedDeliveryDays(sheet).length && !isPlanningDelivery(sheet, sheet.tournees?.length ?? 0) && !sheet.zonesLivraison?.trim()) {
     missing.push("zones de livraison");
   }

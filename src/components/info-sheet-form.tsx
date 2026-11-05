@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   WEEKDAY_LABELS,
   fixedDeliveryDays,
+  formatPayment,
   infoSheetVariables,
   upcomingRounds,
   type DeliveryDays,
@@ -166,9 +167,30 @@ export function InfoSheetForm({
               </label>
             </div>
           </fieldset>
-          <Field label="Moyens de paiement">
-            <Input placeholder="Espèces ou carte bancaire au comptoir" {...text("modesPaiement")} />
-          </Field>
+          <div className="space-y-2">
+            {sheet.paiementEnLigne && (
+              <div data-testid="paiement-crm">
+                <p className="text-sm font-semibold">
+                  Paiement
+                  <CrmTag />
+                </p>
+                <p className="mt-1 rounded-xl bg-page px-3 py-2 text-sm text-muted">{paymentSentence(sheet)}</p>
+                {sheet.paiementEnLigne.aConfigurer && <p className="mt-1 text-xs text-coral">Paiement en ligne pas encore configuré (SumUp ou Stripe).</p>}
+              </div>
+            )}
+            <Field
+              label={sheet.paiementEnLigne ? "Précisions sur place (facultatif)" : "Moyens de paiement"}
+              hint={
+                sheet.paiementEnLigne?.mode === "obligatoire"
+                  ? "Paiement en ligne uniquement : ces précisions ne sont pas envoyées."
+                  : sheet.paiementEnLigne
+                    ? "Ajoutées après la phrase du CRM, ex. « Espèces, carte, tickets resto »."
+                    : undefined
+              }
+            >
+              <Input placeholder={sheet.paiementEnLigne ? "Espèces, carte, tickets resto" : "Espèces ou carte bancaire au comptoir"} {...text("modesPaiement")} />
+            </Field>
+          </div>
           {sheet.livraison && (
             <div className="sm:col-span-2">
               <DeliveryEditor sheet={sheet} timezone={timezone} onChange={change} zonesLocked={isLocked("zonesLivraison")} />
@@ -204,6 +226,11 @@ export function InfoSheetForm({
 }
 
 const newRoundId = () => crypto.randomUUID();
+
+/** Phrase du CRM telle que le client la lira (sans les astérisques de mise en forme). */
+function paymentSentence(sheet: InfoSheet): string {
+  return formatPayment({ ...sheet, modesPaiement: "" }).replace(/\*/g, "");
+}
 
 function CrmTag() {
   return <span className="ml-2 rounded-full bg-blue/10 px-2 py-0.5 text-[11px] font-semibold text-blue">CRM</span>;

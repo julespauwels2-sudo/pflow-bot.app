@@ -16,6 +16,21 @@ export interface SelectOptions {
 /** Lecture seule : c'est tout ce que reçoit le code qui lit le CRM. */
 export interface DbReader {
   select<T extends Row = Row>(table: string, columns: string, options?: SelectOptions): Promise<T[]>;
+  /** Appel d'une fonction du CRM en LECTURE SEULE, limité à READ_ONLY_FUNCTIONS. */
+  readFunction?<T = unknown>(name: ReadOnlyFunction, args: Record<string, unknown>): Promise<T>;
+}
+
+/**
+ * Seules fonctions du CRM que le bot peut appeler : elles ne font que lire (vérifié dans leur code).
+ * paiement_mode_public(rid) : « choix » | « obligatoire » | « non », le paiement en ligne en vigueur.
+ */
+export const READ_ONLY_FUNCTIONS = ["paiement_mode_public"] as const;
+export type ReadOnlyFunction = (typeof READ_ONLY_FUNCTIONS)[number];
+
+export function assertReadOnlyFunction(name: string): asserts name is ReadOnlyFunction {
+  if (!(READ_ONLY_FUNCTIONS as readonly string[]).includes(name)) {
+    throw new ReadOnlyTableError(`Fonction « ${name} » interdite : le bot n'appelle que des fonctions de lecture connues.`);
+  }
 }
 
 export interface Db extends DbReader {
@@ -56,6 +71,12 @@ export function supabaseDb(sb: SupabaseClient): Db {
       };
       if (!options.in) return run();
       return (await Promise.all(chunks(options.in.values).map(run))).flat();
+    },
+    async readFunction<T = unknown>(name: ReadOnlyFunction, args: Record<string, unknown>): Promise<T> {
+      assertReadOnlyFunction(name);
+      const { data, error } = await sb.rpc(name, args);
+      fail(name, error);
+      return data as T;
     },
     async insert(table, row) {
       assertBotTable(table);

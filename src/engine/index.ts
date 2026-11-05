@@ -22,6 +22,7 @@ export {
   fixedDeliveryDays,
   formatFixedDelivery,
   formatWeekdays,
+  formatPayment,
   EXCEPTIONAL_ROUNDS_TITLE,
   NO_ROUND_TEXT,
   type InfoVariables,

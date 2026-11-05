@@ -250,6 +250,15 @@ describe("liste de contrôle (onboarding)", () => {
     expect(noZone.some((i) => i.level === "warning" && i.message.startsWith("{{infos_livraison}}"))).toBe(true);
   });
 
+  it("paiement en ligne sans prestataire prêt : point d'onboarding", async () => {
+    const { repos, template, client, load } = await setup();
+    await repos.bots.link(client.id, template.id);
+    const sheet = { horaires: [], paiementEnLigne: { mode: "non" as const, aConfigurer: true } };
+    expect(botChecklist(await load(), sheet, NOW)).toContainEqual({ level: "warning", message: "Paiement en ligne pas encore configuré (SumUp ou Stripe)." });
+    const ready = botChecklist(await load(), { ...sheet, paiementEnLigne: { mode: "choix" as const, aConfigurer: false } }, NOW);
+    expect(ready.some((i) => i.message.startsWith("Paiement en ligne"))).toBe(false);
+  });
+
   it("sans slug : erreur", async () => {
     const { repos, template, client, load } = await setup();
     await repos.bots.link(client.id, template.id);

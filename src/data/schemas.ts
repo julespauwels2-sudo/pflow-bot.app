@@ -137,6 +137,7 @@ export const infoSheetSchema = z.object({
     .array(z.object({ id, zone: z.string(), jours: z.array(weekday), note: z.string().optional() }))
     .optional(),
   retrait: z.boolean().optional(),
+  paiementEnLigne: z.object({ mode: z.enum(["choix", "obligatoire", "non"]), aConfigurer: z.boolean() }).optional(),
   modesPaiement: z.string().optional(),
   zonesLivraison: z.string().optional(),
   pointsDeVente: z.string().optional(),

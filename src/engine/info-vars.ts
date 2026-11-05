@@ -191,6 +191,23 @@ export function isPlanningDelivery(sheet: Pick<InfoSheet, "livraison" | "livrais
   return Boolean(sheet.livraison) && (sheet.livraisonMode === "planning" || upcomingCount > 0);
 }
 
+/**
+ * Texte « Paiement » : phrase tirée du mode en vigueur dans le CRM (jamais le nom du prestataire, pour
+ * rester valable avec SumUp, Stripe ou un autre), puis les précisions sur place s'il y en a.
+ * Sans CRM (mode local) : les précisions seules, comme avant.
+ */
+export function formatPayment(sheet: InfoSheet): string {
+  const details = sheet.modesPaiement?.trim() ?? "";
+  const online = sheet.paiementEnLigne;
+  if (!online) return details;
+  if (online.mode === "obligatoire") return "Le paiement se fait *en ligne par carte*, au moment de la commande.";
+  const sentence =
+    online.mode === "choix"
+      ? "Vous pouvez payer *en ligne par carte* au moment de la commande, ou *sur place*."
+      : `Le paiement se fait *sur place*${sheet.livraison && sheet.retrait ? ", au comptoir ou à la livraison" : sheet.livraison ? ", à la livraison" : ""}.`;
+  return details ? `${sentence}\nSur place : ${details}` : sentence;
+}
+
 export function infoSheetVariables(sheet: InfoSheet, now: Date, timezone: string): InfoVariables {
   const horaires = formatWeeklyHours(sheet);
   const upcoming = upcomingRounds(sheet.tournees, now, timezone);
@@ -218,7 +235,7 @@ export function infoSheetVariables(sheet: InfoSheet, now: Date, timezone: string
   }
   const adresse = sheet.adresse?.trim() ?? "";
   const pointsDeVente = sheet.pointsDeVente?.trim() ?? "";
-  const paiement = sheet.modesPaiement?.trim() ?? "";
+  const paiement = formatPayment(sheet);
 
   const parts: string[] = [];
   if (horaires) parts.push(`🕒 *Horaires*\n${horaires}`);

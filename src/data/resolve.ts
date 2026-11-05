@@ -154,6 +154,8 @@ export function botChecklist(input: BotInput, infoSheet: InfoSheet, now: Date): 
   };
 
   if (!client.orderSlug) add("error", "Pas de slug du mini-site : les boutons « Commander » sont impossibles.");
+  // Onboarding : le paiement en ligne fait partie de l'offre de base (SumUp, Stripe…).
+  if (infoSheet.paiementEnLigne?.aConfigurer) add("warning", "Paiement en ligne pas encore configuré (SumUp ou Stripe).");
 
   // Erreurs des flux actifs, vérifiées avec les réglages de ce client.
   const list = botFlowList(entries.filter((e) => e.active));

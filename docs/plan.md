@@ -19,8 +19,13 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 ## Points notés pour plus tard
 
 ### Étape B
-- **Options payantes** (ex. relance panier abandonné) : aujourd'hui cochées sur la fiche client du
-  bot ; à terme, lues dans le CRM (ce que le client paie).
+- **Options payantes** (ex. relance panier abandonné) : lues dans le CRM (modules du resto). **Les
+  seules options payantes côté bot sont celles du CRM.** Le **paiement en ligne n'en est pas une** : il
+  fait partie de l'offre de base (SumUp, Stripe, peut-être d'autres plus tard). Le bot se base
+  uniquement sur le mode réellement en vigueur (`paiement_mode_public` : choix / obligatoire / non),
+  jamais sur la notion d'option vendue, et ne nomme jamais le prestataire (« en ligne par carte »).
+  Sans prestataire prêt : point d'onboarding « Paiement en ligne pas encore configuré (SumUp ou
+  Stripe) » dans la liste de contrôle (décision de Jules, novembre 2026).
 - Fiche d'infos lue **directement** dans le CRM (atelier) et le dashboard PFlow Order : horaires, carte…
   Les champs propres au bot (consigne IA, FAQ) restent dans les tables `bot_`. Regarder le CRM en
   lecture seule et proposer comment faire.

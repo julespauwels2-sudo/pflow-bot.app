@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createLocalRepositories } from "../local/repositories";
 import { createMasterTemplate } from "../template-seed";
 import { crmMenuText, crmOpeningHours, crmZonesText } from "../supabase/crm";
-import { assertBotTable, type Db, type Row, type SelectOptions } from "../supabase/db";
+import { assertBotTable, assertReadOnlyFunction, type Db, type Row, type SelectOptions } from "../supabase/db";
 import { createSupabaseStore } from "../supabase/store";
 import { autoLinkBots } from "../auto-bots";
 import { resolveBot } from "../resolve";
@@ -42,6 +42,10 @@ function fakeDb() {
       { id: "o2", groupe_id: "g1", nom: "Sans", prix_supplement: 0, actif: true, ordre: 0 },
     ],
     produits_groupes: [{ produit_id: "p1", groupe_id: "g1", ordre: 1 }],
+    paiement_restos: [
+      { restaurant_id: R1, module: true, mode: "obligatoire" },
+      { restaurant_id: R4, module: true, mode: "coupe" },
+    ],
     bot_reglages: [{ restaurant_id: R1, actif: true }],
     bot_modeles: [],
     bot_clients: [{ restaurant_id: R4, mode_declenchement: "toujours", modele_id: null, lie_le: null, cree_le: "2026-10-05T10:00:00Z", maj_le: "2026-10-05T10:00:00Z" }],
@@ -52,7 +56,15 @@ function fakeDb() {
     bot_appels_ia: [],
   };
   const writes: string[] = [];
+  const functionCalls: string[] = [];
+  // Mode en vigueur simulé (comme paiement_mode_public) : R2 paie en ligne ou sur place, les autres sur place.
+  const paymentModes: Record<string, string> = { [R2]: "choix" };
   const db: Db = {
+    async readFunction<T = unknown>(name: string, args: Record<string, unknown>) {
+      assertReadOnlyFunction(name);
+      functionCalls.push(name);
+      return (paymentModes[String(args.rid)] ?? "non") as T;
+    },
     async select<T extends Row = Row>(table: string, _columns: string, options: SelectOptions = {}) {
       let rows = structuredClone(tables[table] ?? []);
       if (options.in) rows = rows.filter((r) => options.in!.values.includes(String(r[options.in!.column])));
@@ -76,10 +88,10 @@ function fakeDb() {
       tables[table] = tables[table].filter((r) => !values.includes(String(r[column])));
     },
   };
-  return { db, tables, writes };
+  return { db, tables, writes, functionCalls };
 }
 
-const CRM_TABLES = ["restaurants", "resto_modules", "qg_zones_livraison", "produits", "groupes_options", "options", "produits_groupes", "bot_reglages"];
+const CRM_TABLES = ["restaurants", "resto_modules", "qg_zones_livraison", "produits", "groupes_options", "options", "produits_groupes", "bot_reglages", "paiement_restos"];
 
 function setup(fake = fakeDb()) {
   let n = 0;
@@ -119,9 +131,26 @@ describe("lecture du CRM", () => {
     expect(sheet.resumeCarte).toContain("Allergènes : Gluten, Œufs, Fruits à coque");
     expect(sheet.resumeCarte).toContain("Allergènes : non renseignés");
     expect(sheet.resumeCarte).not.toContain("Rupture");
-    expect(await repos.infoSheets.lockedFields(R1)).toEqual(["horaires", "adresse", "livraison", "retrait", "zonesLivraison", "resumeCarte"]);
+    expect(await repos.infoSheets.lockedFields(R1)).toEqual(["horaires", "adresse", "livraison", "retrait", "zonesLivraison", "paiementEnLigne", "resumeCarte"]);
     // Démo sans horaires ni carte : ces champs restent modifiables côté bot.
-    expect(await repos.infoSheets.lockedFields(R2)).toEqual(["livraison", "retrait"]);
+    expect(await repos.infoSheets.lockedFields(R2)).toEqual(["livraison", "retrait", "paiementEnLigne"]);
+  });
+
+  it("paiement en ligne : mode en vigueur lu dans le CRM (lecture seule), « à configurer » sans prestataire prêt", async () => {
+    const fake = fakeDb();
+    const { repos } = setup(fake);
+    // R1 : réglé « obligatoire » mais rien en vigueur (prestataire pas prêt) → sur place, à configurer.
+    expect((await repos.infoSheets.get(R1)).paiementEnLigne).toEqual({ mode: "non", aConfigurer: true });
+    expect((await repos.infoSheets.get(R2)).paiementEnLigne).toEqual({ mode: "choix", aConfigurer: false });
+    // R4 : le resto a coupé le paiement en ligne lui-même → pas un point d'onboarding.
+    expect((await repos.infoSheets.get(R4)).paiementEnLigne).toEqual({ mode: "non", aConfigurer: false });
+    expect(new Set(fake.functionCalls)).toEqual(new Set(["paiement_mode_public"]));
+    expect(fake.writes).toEqual([]);
+  });
+
+  it("seules les fonctions de lecture connues peuvent être appelées", () => {
+    expect(() => assertReadOnlyFunction("paiement_mode_public")).not.toThrow();
+    for (const f of ["paiement_confirmer", "passer_commande", "pont_relier"]) expect(() => assertReadOnlyFunction(f)).toThrow("interdite");
   });
 
   it("formatage : horaires invalides ignorés", () => {
