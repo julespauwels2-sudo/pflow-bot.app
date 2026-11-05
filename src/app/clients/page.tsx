@@ -6,7 +6,7 @@ import { AppShell } from "@/components/app-shell";
 import { LocalClock } from "@/components/local-clock";
 import { Badge, Button, Card, Field, FileButton, Input, Loading, Notice, Select } from "@/components/ui";
 import { ensureAutoBots, errorText, getRepositories, isCrmMode, useLoad } from "@/data/browser";
-import { botChecklist, type ChecklistItem } from "@/data/resolve";
+import { botChecklist, clientTab, type ChecklistItem, type ClientTab } from "@/data/resolve";
 import { loadDemo } from "@/data/demo";
 import { exportBackup, exportFileName, parseBackup } from "@/data/transfer";
 import { DEFAULT_ORDER_BASE_URL, DEFAULT_TIMEZONE } from "@/engine";
@@ -16,6 +16,17 @@ import { TIMEZONES, slugify, timezoneLabel } from "@/lib/timezones";
 type Message = { tone: "error" | "success"; text: string } | null;
 
 const CRM_STATUTS: Record<string, string> = { signe: "Signé", actif: "Actif", demo: "Démo", perdu: "Perdu" };
+
+const TAB_KEY = "pflow-bots:onglet-clients";
+
+function savedTab(): ClientTab {
+  if (typeof window === "undefined") return "clients";
+  try {
+    return window.localStorage.getItem(TAB_KEY) === "demos" ? "demos" : "clients";
+  } catch {
+    return "clients";
+  }
+}
 
 export default function ClientsPage() {
   const { state, reload } = useLoad(async (repos) => {
@@ -43,6 +54,20 @@ export default function ClientsPage() {
     return { rows, auto };
   }, []);
   const [message, setMessage] = useState<Message>(null);
+  const [tab, setTab] = useState<ClientTab>(savedTab);
+  const chooseTab = (next: ClientTab) => {
+    setTab(next);
+    try {
+      window.localStorage.setItem(TAB_KEY, next);
+    } catch {
+      // sans importance
+    }
+  };
+  const allRows = state.status === "ready" ? state.data.rows : [];
+  // Onglets seulement avec le CRM (en mode local, pas de statut).
+  const withTabs = isCrmMode && allRows.some((r) => r.client.crmStatut);
+  const counts = { clients: allRows.filter((r) => clientTab(r.client.crmStatut) === "clients").length, demos: allRows.filter((r) => clientTab(r.client.crmStatut) === "demos").length };
+  const rows = withTabs ? allRows.filter((r) => clientTab(r.client.crmStatut) === tab) : allRows;
 
   async function run(action: () => Promise<string | void>) {
     try {
@@ -142,9 +167,34 @@ export default function ClientsPage() {
               </Button>
             </Card>
           )}
-          {state.status === "ready" && state.data.rows.length > 0 && (
+          {withTabs && (
+            <div role="tablist" aria-label="Restos" className="mb-4 flex gap-1 border-b border-rule">
+              {(
+                [
+                  ["clients", "Clients"],
+                  ["demos", "Démos"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === id}
+                  data-testid={`onglet-${id}`}
+                  onClick={() => chooseTab(id)}
+                  className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold ${tab === id ? "border-pink text-navy" : "border-transparent text-muted hover:text-navy"}`}
+                >
+                  {label} <span className="ml-1 rounded-full bg-navy/5 px-2 py-0.5 text-xs">{counts[id]}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {state.status === "ready" && withTabs && rows.length === 0 && (
+            <p className="text-sm text-muted">{tab === "demos" ? "Aucun resto en démo dans le CRM." : "Aucun resto signé ou actif dans le CRM."}</p>
+          )}
+          {state.status === "ready" && rows.length > 0 && (
             <ul className="grid gap-3 sm:grid-cols-2">
-              {state.data.rows.map(({ client, flowCount, checklist }) => (
+              {rows.map(({ client, flowCount, checklist }) => (
                 <li key={client.id}>
                   <Link
                     href={`/clients/${client.id}`}

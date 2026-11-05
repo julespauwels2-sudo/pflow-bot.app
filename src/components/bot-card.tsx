@@ -141,9 +141,10 @@ export function BotCard({
       <div className="space-y-5">
         <div>
           <h3 className="text-sm font-semibold">À vérifier pour ce client</h3>
-          {checklist.length === 0 ? (
+          {!checklist.some((item) => item.level !== "info") && (
             <p className="mt-1 rounded-xl bg-wa/10 p-2.5 text-sm font-semibold text-green-700">Tout est prêt : il ne reste qu&apos;à connecter le numéro WhatsApp (étape C).</p>
-          ) : (
+          )}
+          {checklist.length > 0 && (
             <ul className="mt-1 space-y-1 text-sm" data-testid="checklist">
               {checklist.map((item) => (
                 <li key={item.message} className={LEVEL_STYLE[item.level]}>

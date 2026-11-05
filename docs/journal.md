@@ -372,3 +372,15 @@ reste inactif (« canal non configuré ») : C0 ne peut rien déclencher.
 Tâches 10 à 12 faites et poussées. Rien appliqué dans la base, rien modifié dans `Pflow-Crm` (copie
 locale vérifiée intacte), rien chez Meta. **Je m'arrête ici** : on reprend ensemble avec la liste
 « À tester par Jules » ci-dessus, puis tes décisions sur `securite-crm.md` et `docs/legal/`.
+
+## Retour de Jules — ajustements
+
+- **Page Clients en deux onglets** : « Clients » (signé, actif, et les anciens statuts d'un resto qui a
+  déjà un bot) et « Démos » (démo), avec le nombre dans chaque onglet. L'onglet est recalculé à chaque
+  chargement depuis le statut du CRM : un resto qui passe de démo à signé change d'onglet tout seul.
+  Le dernier onglet ouvert est retenu dans le navigateur. Pas d'onglets en mode local (pas de statut).
+- **Liste de contrôle** : infos **obligatoires** (`horaires`, `horaires_du_jour`, `adresse`,
+  `modes_service`, `infos_pratiques`, et `infos_livraison` si le resto livre) → point à vérifier ;
+  infos **facultatives** (`points_de_vente`, `modes_paiement`…) → simple info grise, et la fiche affiche
+  « Tout est prêt » s'il ne reste que des infos.
+- **Modes de paiement** : recherche en lecture seule faite, rien modifié (en attente de ta décision).

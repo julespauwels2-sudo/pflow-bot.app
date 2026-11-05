@@ -119,6 +119,23 @@ export function botFlowList(entries: ResolvedFlow[]): { id: string; name: string
   });
 }
 
+/**
+ * Variables de la fiche d'infos sans lesquelles le bot répond mal : vides = point à vérifier.
+ * {{infos_livraison}} s'y ajoute quand le resto livre. Toutes les autres sont facultatives.
+ */
+export const REQUIRED_INFO_VARIABLES = ["horaires", "horaires_du_jour", "adresse", "modes_service", "infos_pratiques"] as const;
+
+export type ClientTab = "clients" | "demos";
+
+/**
+ * Onglet de la page Clients : « Démos » pour le statut démo du CRM, « Clients » pour les autres (signé,
+ * actif, ou un ancien statut d'un resto qui a déjà un bot). Recalculé à chaque chargement depuis le CRM :
+ * un resto qui passe de démo à signé change d'onglet tout seul.
+ */
+export function clientTab(crmStatut: string | undefined): ClientTab {
+  return crmStatut === "demo" ? "demos" : "clients";
+}
+
 export interface ChecklistItem {
   level: "error" | "warning" | "info";
   message: string;
@@ -158,7 +175,15 @@ export function botChecklist(input: BotInput, infoSheet: InfoSheet, now: Date): 
       }
     }
   }
-  for (const [v, names] of usage) add("warning", `{{${v}}} est vide dans la fiche d'infos (utilisé par ${[...names].map((n) => `« ${n} »`).join(", ")}).`);
+  // Infos obligatoires (le bot ne peut pas bien répondre sans) : point à vérifier. Les autres sont
+  // facultatives (points de vente, paiement…) : leur titre n'est pas envoyé si elles sont vides, simple info.
+  const required = new Set<string>(REQUIRED_INFO_VARIABLES);
+  if (infoSheet.livraison) required.add("infos_livraison");
+  for (const [v, names] of usage) {
+    const used = [...names].map((n) => `« ${n} »`).join(", ");
+    if (required.has(v)) add("warning", `{{${v}}} est vide dans la fiche d'infos (utilisé par ${used}).`);
+    else add("info", `Facultatif : {{${v}}} est vide, rien n'est envoyé à sa place (utilisé par ${used}).`);
+  }
 
   const defaultFlow = flows.find((f) => {
     const t = findTrigger(f)?.data;

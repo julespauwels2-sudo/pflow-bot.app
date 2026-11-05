@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_CHANNEL_SETTINGS, findTrigger, runEngine, type Flow, type FlowNode } from "@/engine";
 import { createLocalRepositories } from "../local/repositories";
 import { createMemoryStore } from "../local/store";
-import { botChecklist, resolveBot, type BotInput } from "../resolve";
+import { botChecklist, clientTab, resolveBot, type BotInput } from "../resolve";
 import { createMasterTemplate } from "../template-seed";
 import type { FlowGraph } from "../types";
 
@@ -204,6 +204,16 @@ describe("bot lié au modèle", () => {
   });
 });
 
+describe("onglets de la page Clients", () => {
+  it("démo → onglet Démos ; signé, actif (ou autre statut avec un bot) → onglet Clients", () => {
+    expect(clientTab("demo")).toBe("demos");
+    expect(clientTab("signe")).toBe("clients");
+    expect(clientTab("actif")).toBe("clients");
+    expect(clientTab("perdu")).toBe("clients");
+    expect(clientTab(undefined)).toBe("clients");
+  });
+});
+
 describe("liste de contrôle (onboarding)", () => {
   it("signale les variables vides, le mode mots-clés et l'option non activée", async () => {
     const { repos, template, client, load } = await setup();
@@ -218,6 +228,26 @@ describe("liste de contrôle (onboarding)", () => {
     );
     expect(messages).toContain("« Panier abandonné » est inactif : Option « Relance panier abandonné » non activée.");
     expect(items.filter((i) => i.level === "error")).toEqual([]);
+  });
+
+  it("infos facultatives vides (points de vente, paiement) : simple info, pas un point à vérifier", async () => {
+    const { repos, template, client, load } = await setup();
+    await repos.bots.link(client.id, template.id);
+    const sheet = {
+      horaires: [{ jour: 2 as const, plages: [{ de: "08:00", a: "12:00" }] }],
+      adresse: "Jarry",
+      livraison: true,
+      zonesLivraison: "• Jarry",
+    };
+    const items = botChecklist(await load(), sheet, NOW);
+    const points = items.filter((i) => i.message.includes("{{points_de_vente}}"));
+    expect(points).toHaveLength(1);
+    expect(points[0].level).toBe("info");
+    expect(items.find((i) => i.message.includes("{{modes_paiement}}"))?.level).toBe("info");
+    expect(items.filter((i) => i.level !== "info").map((i) => i.message)).toEqual([]);
+    // Le resto livre mais aucune zone : là, c'est un point à vérifier.
+    const noZone = botChecklist(await load(), { ...sheet, zonesLivraison: "" }, NOW);
+    expect(noZone.some((i) => i.level === "warning" && i.message.startsWith("{{infos_livraison}}"))).toBe(true);
   });
 
   it("sans slug : erreur", async () => {
