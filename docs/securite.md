@@ -53,7 +53,8 @@ vers une adresse interne, plafond 10 Mo.
 - Le code refuse d'écrire ailleurs que dans les tables `bot_` du bot (`assertBotTable`), et refuse
   `bot_reglages` / `bot_cles` (tables du CRM qui commencent aussi par `bot_`).
 
-**Signalé par Supabase, mais côté CRM** (pas touché, à regarder à part si tu veux) :
+**Signalé par Supabase, mais côté CRM** (pas touché ; analyse détaillée et SQL proposé dans
+[securite-crm.md](securite-crm.md)) :
 - 1 vue `vitrine` en *security definer* (niveau « erreur » pour Supabase) ;
 - 141 fonctions *security definer* appelables par `anon` (dont les `bot_*` du pont PFlow Order,
   protégées par une clé passée en paramètre — à confirmer que c'est voulu) ;

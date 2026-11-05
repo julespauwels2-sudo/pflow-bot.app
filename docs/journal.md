@@ -319,3 +319,24 @@ Sur le site déployé de la branche, connecté avec ton compte.
 | 8 | `docs/etape-c/migration-c.sql` | Relire les changements Instagram (en tête de fichier et avant le RLS) | OK ou corrections, avant de l'appliquer à l'étape C | 5 min |
 | 9 | `docs/etape-c/guide-meta.md` § 9 | Lire la partie Instagram | Rien à faire maintenant ; savoir ce qui attend pour Instagram | 3 min |
 | 10 | Le tableau de la tâche 6 (ci-dessus) | Lire la comparaison des services vocaux | Choisir plus tard, après un essai avec 10 vrais vocaux | 2 min |
+
+## 5 novembre 2026 — troisième session autonome (tâches 10 à 12)
+
+Mêmes règles : rien dans le CRM, rien dans `Pflow-Crm`, aucune migration, rien chez Meta.
+
+### Tâche 10 — Sécurité du CRM ✅ (analyse seulement, rien appliqué)
+
+**[docs/securite-crm.md](securite-crm.md)** : 12 points classés par gravité, risque concret en
+langage simple et SQL proposé. Fait en **lecture seule** (catalogue de la base, code des fonctions,
+copie locale de `Pflow-Crm`).
+- **Bonne nouvelle** : aucune table lisible sans règle ; les fonctions d'admin vérifient toutes
+  `est_admin()` ; les 72 fonctions du pont vérifient `PONT_CLE` ; les liens publics utilisent des
+  jetons longs.
+- **À traiter en premier** : (1) les buckets publics `menus` / `contenu-video` sont **listables** et
+  leurs dossiers sont des jetons → quelqu'un pourrait réécrire un questionnaire de démarrage encore
+  ouvert (3 aujourd'hui) ; (2) tout le pont repose sur une seule clé : vérifier sa longueur ;
+  (3) comptes admins sans double authentification.
+- Le point « vue `vitrine` » (signalé « erreur ») est **voulu** (mini-site) : risque faible, liste de
+  tes clients récupérable ; proposition d'un simple commentaire à court terme.
+- Piège évité : `qg_sport_*` est utilisée par ta page Sport, le SQL proposé ajoute une vérification au
+  lieu de retirer le droit.
