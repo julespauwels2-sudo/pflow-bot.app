@@ -5,6 +5,7 @@ des examens de Jules (fin novembre). Tout ici est à relire et à valider avant 
 
 | Document | Contenu |
 |---|---|
+| [checklist-c0.md](checklist-c0.md) | **À lire en premier** : tout ce qu'il faut avoir prêt avant la partie Meta, dans l'ordre, avec les temps |
 | [plan.md](plan.md) | Plan détaillé de l'étape C, découpé en sous-étapes testables, décisions à prendre |
 | [migration-c.sql](migration-c.sql) | Deuxième migration SQL proposée (numéros, contacts, sessions, messages…), **non appliquée** |
 | [pflow-order.md](pflow-order.md) | Liste exacte des modifications à faire dans PFlow Order (dépôt `Pflow-Crm`), fichier par fichier |

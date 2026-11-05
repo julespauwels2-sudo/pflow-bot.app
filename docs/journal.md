@@ -356,3 +356,19 @@ Dans **[docs/legal/](legal/README.md)** :
 - `README.md` : **6 points à aligner avant publication** (surtout : la purge des 12 mois n'est pas
   encore activée, et les fonctions Vercel tournent probablement aux États-Unis faute de région réglée)
   et les points de droit à trancher (montage WhatsApp avec Meta, paiement en ligne, base légale).
+
+### Tâche 12 — Checklist C0 ✅
+
+**[docs/etape-c/checklist-c0.md](etape-c/checklist-c0.md)** (liée depuis le README de l'étape C) :
+dans l'ordre — ce qui prend des jours (politique de confidentialité en ligne, site, e-mail pro,
+documents pour la vérification d'entreprise), les accès à vérifier la veille, le matériel (ordinateur,
+ton téléphone, pas de carte bancaire ni de puce pour C0), la phrase à préparer, le déroulé du jour J en
+9 étapes (≈ 1 h), ce qu'il ne faut pas faire, ce que tu me donnes à la fin.
+Vérifié dans le code : avec les 3 variables WhatsApp mais sans `SUPABASE_SERVICE_ROLE_KEY`, le webhook
+reste inactif (« canal non configuré ») : C0 ne peut rien déclencher.
+
+### Fin de la troisième session
+
+Tâches 10 à 12 faites et poussées. Rien appliqué dans la base, rien modifié dans `Pflow-Crm` (copie
+locale vérifiée intacte), rien chez Meta. **Je m'arrête ici** : on reprend ensemble avec la liste
+« À tester par Jules » ci-dessus, puis tes décisions sur `securite-crm.md` et `docs/legal/`.
