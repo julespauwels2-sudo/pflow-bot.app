@@ -340,3 +340,19 @@ copie locale de `Pflow-Crm`).
   tes clients récupérable ; proposition d'un simple commentaire à court terme.
 - Piège évité : `qg_sport_*` est utilisée par ta page Sport, le SQL proposé ajoute une vérification au
   lieu de retirer le droit.
+
+### Tâche 11 — Politique de confidentialité et clause RGPD ✅ (premiers jets)
+
+Dans **[docs/legal/](legal/README.md)** :
+- `politique-confidentialite.md` : deux rôles (PFlow sous-traitant pour les clients des restos,
+  responsable pour ses propres clients et prospects), données, finalités et bases légales, IA (Claude,
+  pas de décision automatisée, possibilité de parler à une personne), vocaux (audio non conservé),
+  sous-traitants (Meta, Anthropic, Supabase, Vercel, transcription), transferts, durées (12 mois…),
+  droits, CNIL.
+- `clause-rgpd-sous-traitance.md` : article 28 complet (instructions, confidentialité, sécurité,
+  sous-traitants ultérieurs avec préavis, droits des personnes, violation sous 48 h, fin de contrat,
+  audits proportionnés, transferts) + annexes (description du traitement, sous-traitants, mesures de
+  sécurité).
+- `README.md` : **6 points à aligner avant publication** (surtout : la purge des 12 mois n'est pas
+  encore activée, et les fonctions Vercel tournent probablement aux États-Unis faute de région réglée)
+  et les points de droit à trancher (montage WhatsApp avec Meta, paiement en ligne, base légale).
