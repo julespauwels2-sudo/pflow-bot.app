@@ -330,6 +330,9 @@ select format('alter function %s set search_path = public, pg_temp;', p.oid::reg
 
 ## Point 1 (buckets) — plan de test de 5 minutes
 
+> **Décision de Jules (6 novembre 2026)** : plus tard, **avant le prochain questionnaire d'onboarding
+> envoyé à un client** (c'est le questionnaire qui crée les dossiers listables dans `menus`).
+
 À faire **avant** de jouer le SQL du point 1 (pour avoir la référence), puis **juste après**. La clé
 `anon` est la clé publique de Supabase (Settings → API → « anon public » ; elle est aussi dans le
 mini-site), elle n'est pas secrète.
@@ -372,6 +375,10 @@ create policy "contenu-video lecture" on storage.objects for select to public us
 ---
 
 ## Point 2 — procédure exacte pour changer `PONT_CLE` sans casser UChat ni les paiements
+
+> **Décision de Jules (6 novembre 2026)** : la clé n'a jamais fui → **pas de changement** ; patch 06 mis de
+> côté. **Renouveler la clé après l'arrêt d'UChat** (noté dans `docs/plan.md`) : il ne restera alors que
+> Vercel et le secret GitHub, sans coupure de bots.
 
 ### Où est la clé (vérifié dans le code du CRM, version `58c5b5a`)
 

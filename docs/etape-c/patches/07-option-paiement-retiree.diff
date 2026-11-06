@@ -1,0 +1,291 @@
+diff --git a/repo/guide-paiement-en-ligne.html b/repo/guide-paiement-en-ligne.html
+index a719634..0dea93f 100644
+--- a/repo/guide-paiement-en-ligne.html
++++ b/repo/guide-paiement-en-ligne.html
+@@ -130,8 +130,8 @@ account.application.deauthorized</pre></div></div></div></div>
+ 
+ <section id="resto">
+   <h2><span class="n">4</span>Activer un restaurant <span class="chrono">5 à 10 min par resto</span></h2>
+-  <p class="ch">À refaire pour chaque resto qui prend l'option à +79.</p>
+-<div class="etape" data-e="r1"><input type="checkbox"><div class="corps"><div class="t">Vendre l'option dans le CRM</div><div class="d">CRM, onglet <b>Boutiques</b>, ouvrir le resto, panneau <b>Paiement en ligne</b>, cliquer <b>Activer l'option paiement en ligne</b>. Tant que ce n'est pas fait, le restaurateur ne voit rien de tout ça dans son dashboard.</div></div></div>
++  <p class="ch">À refaire pour chaque resto : le paiement en ligne est inclus dans la formule.</p>
++<div class="etape" data-e="r1"><input type="checkbox"><div class="corps"><div class="t">Préparer le dossier dans le CRM</div><div class="d">CRM, onglet <b>Boutiques</b>, ouvrir le resto, panneau <b>Paiement en ligne</b> : préparer le dossier (SIRET, e-mail du resto). Plus d'option à vendre : le paiement en ligne est inclus dans la formule.</div></div></div>
+ <div class="etape" data-e="r2"><input type="checkbox"><div class="corps"><div class="t">Ouvrir le compte Stripe du resto</div><div class="d">Deux chemins, même résultat. Soit le restaurateur le fait seul : son dashboard, onglet <b>Infos</b>, bouton <b>Activer mes paiements</b>. Soit tu le fais avec lui : dans le CRM, <b>Ouvrir l'activation Stripe</b>. Il lui faut sous la main : pièce d'identité, SIRET, IBAN du compte pro, son téléphone. Le lien Stripe est à usage unique, il ne s'envoie pas par message.</div></div></div>
+ <div class="etape" data-e="r3"><input type="checkbox"><div class="corps"><div class="t">Vérifier</div><div class="d">Retour dans le CRM : le badge passe de « ACTIVATION COMMENCÉE » à « STRIPE VÉRIFIE LE DOSSIER » puis « ACTIF ». Stripe valide souvent en quelques minutes, parfois un jour ou deux s'il demande un justificatif. Le bouton <b>Actualiser depuis Stripe</b> relit l'état à la demande.</div></div></div>
+ <div class="etape" data-e="r4"><input type="checkbox"><div class="corps"><div class="t">Choisir le mode</div><div class="d">Dans le même panneau (ou dans le dashboard du resto) : <b>Au choix</b>, <b>Carte obligatoire</b> ou <b>Sur place uniquement</b>. Conseil de vente : carte obligatoire pour les restos qui subissent des commandes jamais récupérées.</div></div></div>
+@@ -171,7 +171,7 @@ account.application.deauthorized</pre></div></div></div></div>
+   <h2>Les questions qu'on va te poser</h2>
+   <table>
+     <tr><th>Question</th><th>Réponse</th></tr>
+-    <tr><td>Combien ça coûte au restaurateur ?</td><td>L'option PFlow (+79), puis uniquement les frais de Stripe, prélevés par Stripe sur chaque paiement : de l'ordre de 1,5 % + 0,25 € pour une carte européenne. Vérifier le tarif du jour sur stripe.com/fr/pricing avant de l'annoncer. PFlow ne prend rien.</td></tr>
++    <tr><td>Combien ça coûte au restaurateur ?</td><td>Rien côté PFlow (inclus dans la formule), uniquement les frais de Stripe, prélevés par Stripe sur chaque paiement : de l'ordre de 1,5 % + 0,25 € pour une carte européenne. Vérifier le tarif du jour sur stripe.com/fr/pricing avant de l'annoncer. PFlow ne prend rien.</td></tr>
+     <tr><td>Quand reçoit-il son argent ?</td><td>Stripe vire sur son IBAN automatiquement, selon le calendrier de son compte (premier virement sous 7 à 14 jours, ensuite quelques jours ouvrés). Il voit tout dans son compte Stripe, bouton « Mon compte Stripe » du dashboard.</td></tr>
+     <tr><td>Un client veut être remboursé ?</td><td>Annuler la commande depuis le dashboard : remboursement intégral automatique, le client est prévenu sur WhatsApp. Pour un remboursement partiel : depuis le compte Stripe du resto, le dashboard PFlow affichera « Remboursée en partie ».</td></tr>
+     <tr><td>Un client conteste auprès de sa banque ?</td><td>C'est un litige : il se gère dans le compte Stripe du resto (compte Standard). PFlow l'inscrit au journal des paiements pour que tu le voies.</td></tr>
+diff --git a/repo/js/app.js b/repo/js/app.js
+index 1e4bbf3..f9ed947 100644
+--- a/repo/js/app.js
++++ b/repo/js/app.js
+@@ -39,7 +39,7 @@
+      (resto_modules, le systeme unique). Les valeurs ci-dessous ne servent que si le SQL s12 n'est pas joue. */
+   var OFFRE = { id: "order", label: "PFlow Order", prix: 49, installation: 0 };
+   var PRIX_LIVRAISON = 69;
+-  var PRIX_PAIEMENT = 79;
++  var PRIX_PAIEMENT = 0;   /* qg65 : le paiement en ligne est inclus dans la formule (plus d'option) */
+ 
+   /* Les types de commerce (mission 10 : ceux que la Decouverte sait trouver). Chaque type a son premier
+      message dans Commerce, Messages (modeles "Decouverte" : champ pour_types). */
+@@ -198,7 +198,7 @@
+   function mrrDe(r) {
+     var f = formuleDe(r);
+     if (!f) return 0;
+-    return f.prix + (r.option_livraison ? PRIX_LIVRAISON : 0) + (paiementFacture(r) ? PRIX_PAIEMENT : 0);
++    return f.prix + (r.option_livraison ? PRIX_LIVRAISON : 0);
+   }
+   /* Ce que le resto paiera par mois une fois tout actif (pour les messages et les objectifs) */
+   function mensuelVendu(r) {
+@@ -207,16 +207,15 @@
+       Object.keys(m).forEach(function (k) { if (m[k].actif) { tot += Number(m[k].prix_mensuel || 0); if (k === "order") base = true; } });
+       return tot + (base ? 0 : OFFRE.prix);
+     }
+-    return OFFRE.prix + (r.option_livraison ? PRIX_LIVRAISON : 0) + (paiementVendu(r) ? PRIX_PAIEMENT : 0);
++    return OFFRE.prix + (r.option_livraison ? PRIX_LIVRAISON : 0);
+   }
+ 
+   function offreTexte(r) {
+     var opts = [];
+     if (state.sqlS12) {
+-      state.catalogue.forEach(function (c) { if (!c.base && moduleActif(r, c.code)) opts.push(c.nom.toLowerCase()); });
++      state.catalogue.forEach(function (c) { if (!c.base && c.etat !== "retire" && moduleActif(r, c.code)) opts.push(c.nom.toLowerCase()); });
+     } else {
+       if (r.option_livraison) opts.push("zones de livraison");
+-      if (paiementVendu(r)) opts.push("paiement en ligne");
+     }
+     return OFFRE.label + (opts.length ? " avec " + opts.join(" et ") : "");
+   }
+@@ -226,7 +225,6 @@
+     state.catalogue.forEach(function (c) {
+       if (c.base) { OFFRE.label = c.nom; OFFRE.prix = Number(c.prix_mensuel); }
+       if (c.code === "livraison") PRIX_LIVRAISON = Number(c.prix_mensuel);
+-      if (c.code === "paiement") PRIX_PAIEMENT = Number(c.prix_mensuel);
+     });
+   }
+ 
+@@ -970,12 +968,8 @@
+   function changerStatut(r, st) {
+     if (st === "signe") { signer(r); return; }
+     var patch = { statut: st };
+-    sauverResto(r.id, patch, "Déplacé vers " + (LIB_STATUT[st] || st)).then(function () {
+-      /* Le paiement en ligne entre dans l'offre par defaut des la proposition (jamais decide = oui) */
+-      if (st === "proposition" && (state.sqlS12 ? !modulesDe(r).paiement : (!ligneP(r) && !(state.paiementVendu && state.paiementVendu[r.id])))) {
+-        reglerPaiement(r.id, true, "Paiement en ligne ajouté à l'offre par défaut (retirable)");
+-      }
+-    });
++    /* qg65 : le paiement en ligne est inclus dans la formule, plus rien à ajouter à l'offre */
++    sauverResto(r.id, patch, "Déplacé vers " + (LIB_STATUT[st] || st));
+   }
+ 
+   /* La signature : le seul endroit ou un resto passe du Commerce a l'Atelier.
+@@ -983,14 +977,12 @@
+      fiche de production, fin des relances, date de mise en ligne promise, historique. */
+   function signer(r) {
+     if (state.sqlS12 && window.FacturationPflow) return signerModules(r);
+-    var dejaPaiement = ligneP(r) ? paiementVendu(r) : true;
+     var vise = plusJours(todayStr(), 7);
+     var f = fenetre("Signer " + r.nom + " ?",
+       "<div class=\"pf-dlg-texte\">Il sort du pipeline, ses relances s'arrêtent et il entre dans l'Atelier avec sa fiche de production. Vérifiez l'offre signée :</div>" +
+       "<div class=\"puces\" style=\"margin-top:12px;\">" +
+       "<span class=\"puce on\">" + OFFRE.label + ", " + OFFRE.prix + " € par mois</span>" +
+       "<button class=\"puce" + (r.option_livraison ? " on-mint" : "") + "\" data-o=\"liv\" aria-pressed=\"" + !!r.option_livraison + "\">Zones de livraison +" + PRIX_LIVRAISON + " €</button>" +
+-      "<button class=\"puce" + (dejaPaiement ? " on-mint" : "") + "\" data-o=\"paie\" aria-pressed=\"" + dejaPaiement + "\">Paiement en ligne +" + PRIX_PAIEMENT + " €</button>" +
+       "<button class=\"puce" + (r.installation_payee ? " on-mint" : "") + "\" data-o=\"inst\" aria-pressed=\"" + !!r.installation_payee + "\">Création payée</button></div>" +
+       "<label for=\"sg-vise\">Mise en ligne promise au resto</label><input id=\"sg-vise\" type=\"date\" value=\"" + vise + "\">",
+       "<button class=\"btn g\" data-x>Annuler</button><button class=\"btn p\" id=\"sg-ok\">Signé, vers l'Atelier</button>");
+@@ -1003,13 +995,12 @@
+     });
+     f.q("#sg-ok").addEventListener("click", function () {
+       var o = function (k) { return f.q("[data-o=" + k + "]").getAttribute("aria-pressed") === "true"; };
+-      var paie = o("paie"), date = f.q("#sg-vise").value;
++      var date = f.q("#sg-vise").value;
+       f.q("#sg-ok").disabled = true;
+       sauverResto(r.id, { statut: "signe", formule: OFFRE.id, option_livraison: o("liv"), installation_payee: o("inst") }, null, true).then(function (ok) {
+         if (!ok) { f.q("#sg-ok").disabled = false; return; }
+         f.fermer();
+         var suite = [];
+-        if (paie !== paiementVendu(r) || !ligneP(r)) suite.push(reglerPaiement(r.id, paie, null));
+         if (date && date !== vise) suite.push(sb.rpc("atelier_promesse", { rid: r.id, p_date: date }));
+         Promise.all(suite).then(function () {
+           toast(r.nom + " est signé : il est dans l'Atelier, étape 1 Fiche reçue");
+@@ -1341,20 +1332,16 @@
+     var blocFa = state.sqlS12 && window.FacturationPflow ? window.FacturationPflow.ficheHtml(r) : null;
+     if (blocFa) {
+       h += "<h3 class=\"sec\">" + (signe(r) ? "Options et facturation" : "L'offre proposée") + "</h3>" + blocFa;
+-      if (!paiementVendu(r) && enCommerce(r)) h += "<div class=\"aide-fiche\">Paiement en ligne proposé par défaut : une commande non payée fait produire pour rien. Retirez-le seulement si le resto le refuse.</div>";
+     } else {
+     /* l'offre : la meme a la signature et apres (c'est le contrat) */
+     h += "<div class=\"puces\" style=\"margin-top:10px;\">";
+     h += "<button class=\"puce " + (f ? "on" : "") + "\" data-formule=\"order\" aria-pressed=\"" + !!f + "\">" + OFFRE.label + ", " + OFFRE.prix + " &euro; par mois</button>";
+     h += "<button class=\"puce " + (r.option_livraison ? "on-mint" : "") + "\" data-livraison aria-pressed=\"" + !!r.option_livraison + "\">Zones de livraison +" + PRIX_LIVRAISON + " &euro;</button>";
+-    h += "<button class=\"puce " + (paiementVendu(r) ? "on-mint" : "") + "\" data-paiement aria-pressed=\"" + paiementVendu(r) + "\">Paiement en ligne +" + PRIX_PAIEMENT + " &euro;</button>";
+     h += "<button class=\"puce " + (r.installation_payee ? "on-mint" : "") + "\" data-instal aria-pressed=\"" + !!r.installation_payee + "\">" + (OFFRE.installation > 0 ? "Création payée (" + OFFRE.installation + " &euro;)" : "Création offerte") + "</button>";
+     h += "</div>";
+     if (f) {
+       h += "<div class=\"mrr-fiche\">Abonnement : <b>" + eur(mensuelVendu(r)) + " par mois</b>, création " + (OFFRE.installation > 0 ? eur(OFFRE.installation) : "offerte") +
+-        (r.statut === "actif" ? ". Compté dans le MRR" + (paiementVendu(r) && !paiementFacture(r) ? " sans le paiement en ligne tant que Stripe n'est pas actif" : "") + "." : ". Compté dans le MRR dès la mise en ligne.") + "</div>";
+-    } else if (!paiementVendu(r) && enCommerce(r)) {
+-      h += "<div class=\"aide-fiche\">Paiement en ligne proposé par défaut : une commande non payée fait produire pour rien. Retirez-le seulement si le resto le refuse.</div>";
++        (r.statut === "actif" ? ". Compté dans le MRR." : ". Compté dans le MRR dès la mise en ligne.") + "</div>";
+     }
+     }
+ 
+diff --git a/repo/js/dashboard-demo.js b/repo/js/dashboard-demo.js
+index 102f4f8..52ba377 100644
+--- a/repo/js/dashboard-demo.js
++++ b/repo/js/dashboard-demo.js
+@@ -256,7 +256,6 @@
+     modules: [
+       module("order", "PFlow Order", 49, "Vos clients commandent sur WhatsApp, la commande tombe sur votre tablette.", ["Bot WhatsApp qui répond 24 h sur 24", "Page de commande à votre carte, zéro commission", "Dashboard des commandes en direct", "Gestion du stock : une rupture d'ingrédient cache les bons plats partout"], true),
+       module("livraison", "Zones de livraison", 69, "Livrez vos clients : zones, frais de livraison, adresse vérifiée.", ["Le client choisit livraison ou à emporter", "Vos frais de livraison appliqués tout seuls", "L'adresse arrive avec la commande"]),
+-      module("paiement", "Paiement en ligne", 79, "Vos clients paient par carte en commandant. Fini les commandes jamais récupérées.", ["L'argent arrive directement sur votre compte", "Zéro commission PFlow", "Carte obligatoire ou au choix du client"]),
+       module("avis", "Avis Google", 59, "Après chaque commande, vos clients contents laissent un avis Google.", ["Plus d'avis, une meilleure note", "Vous passez devant les autres sur Google Maps"])] };
+   var BILAN = { jours: 30, avis: { clics: 0, prete: false, active: false, google: { avant: null, maintenant: null }, envoyes: 0, ignores: 0, prix_mensuel: null },
+     relance: { clics: 0, prete: false, active: false, echecs: 0, envoyes: 0, ignores: 0, montant: 0, commandes: 0, prix_mensuel: null },
+diff --git a/repo/js/facturation.js b/repo/js/facturation.js
+index 10ed0da..52cfaf5 100644
+--- a/repo/js/facturation.js
++++ b/repo/js/facturation.js
+@@ -473,7 +473,8 @@
+   function aboDe(rid) { return (PF().state.abos && PF().state.abos[rid]) || null; }
+ 
+   function ficheHtml(r) {
+-    var cat = (PF().state.catalogue || []).filter(function (m) { return m.etat !== "retire" || (modulesDe(r.id)[m.code] || {}).actif; });
++    /* qg65 : le paiement en ligne est inclus dans la formule, ce n'est plus une option */
++    var cat = (PF().state.catalogue || []).filter(function (m) { return m.code !== "paiement" && (m.etat !== "retire" || (modulesDe(r.id)[m.code] || {}).actif); });
+     if (!cat.length) return null;
+     var mods = modulesDe(r.id), ab = aboDe(r.id), signe = PF().signe(r);
+     var h = "<div class=\"fa-mods\">";
+diff --git a/repo/js/paiement.js b/repo/js/paiement.js
+index 2b3da67..8259b08 100644
+--- a/repo/js/paiement.js
++++ b/repo/js/paiement.js
+@@ -197,7 +197,7 @@
+     else if (l.stripe_pret && e.modeTest) badge += " <span class=\"badge retard\">MODE TEST</span>";
+     if (l.stripe_pret && l.mode === "coupe") badge += " <span class=\"badge jour\">COUPÉ PAR LE RESTO</span>";
+ 
+-    var phrase = ph === "non_vendu" ? "Ce resto encaisse sur place. Proposez l'option : une commande non payée fait produire pour rien (+79 € sur la fiche de prix)."
++    var phrase = ph === "non_vendu" ? "Ce resto encaisse sur place pour l'instant : préparez son dossier, le paiement en ligne est inclus dans la formule."
+       : (ph === "actif" ? (l.mode === "obligatoire" ? "Carte obligatoire : une commande n'arrive en cuisine qu'une fois payée." : (l.mode === "choix" ? "Au choix du client : carte ou sur place." : "Compte prêt, mais le paiement par carte est coupé : les clients paient sur place."))
+         : (ph === "sumup_a_configurer" ? "Encaissement par SumUp : saisissez le code marchand et la clé API du resto ci-dessous." : info.t + "."));
+     h += "<div style=\"display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;\">" + badge + "<span style=\"font-size:.86rem;\">" + esc(phrase) + "</span></div>";
+diff --git a/repo/js/resto.js b/repo/js/resto.js
+index f6b2416..856121e 100644
+--- a/repo/js/resto.js
++++ b/repo/js/resto.js
+@@ -1919,7 +1919,8 @@
+     if (!z) return;
+     if (!offre) { z.innerHTML = "<div class=\"r-vide\">Chargement...</div>"; chargerOffre(); return; }
+     var ab = offre.abonnement, mods = offre.modules || [], h = "";
+-    var actifs = mods.filter(function (m) { return m.actif; }), autres = mods.filter(function (m) { return !m.actif && m.etat !== "retire"; });
++    /* qg65 : le paiement en ligne est inclus dans la formule (affiché à part, comme le stock) */
++    var actifs = mods.filter(function (m) { return m.actif && m.code !== "paiement"; }), autres = mods.filter(function (m) { return !m.actif && m.etat !== "retire" && m.code !== "paiement"; });
+ 
+     h += "<div class=\"r-bloc\"><h3>Mon abonnement PFlow</h3>";
+     if (!ab) h += "<div class=\"r-note\">Votre abonnement démarre avec votre mise en ligne. PFlow finit la mise en place.</div>";
+@@ -1936,6 +1937,7 @@
+     }).join("") +
+       /* QG32 : le stock, inclus pour tous (pas une option) */
+       (actifs.some(function (m) { return m.base; }) ? "<div class=\"r-mod\"><span><b>Gestion du stock</b><small>Ingrédients, ruptures en un geste, commandes au téléphone ou sur place</small></span><em>inclus</em></div>" : "") +
++      (actifs.some(function (m) { return m.base; }) ? "<div class=\"r-mod\"><span><b>Paiement en ligne</b><small>Vos clients paient par carte en commandant, l'argent arrive sur votre compte</small></span><em>inclus</em></div>" : "") +
+       "</div><div class=\"r-note\">Sans engagement, résiliable chaque mois. Zéro commission sur vos ventes.</div></div>";
+ 
+     /* Mission 16 : ce que ses options lui rapportent, et ses campagnes */
+diff --git a/repo/sql/qg65-paiement-inclus.sql b/repo/sql/qg65-paiement-inclus.sql
+new file mode 100644
+index 0000000..024b344
+--- /dev/null
++++ b/repo/sql/qg65-paiement-inclus.sql
+@@ -0,0 +1,42 @@
++-- ==========================================================================
++-- PFlow CRM, qg65 (novembre 2026) : l'option « Paiement en ligne » (79 €) est retirée
++-- Préparé par PFlow Bots (patch 07), à relire et à jouer par Jules APRÈS qg64. Rejouable sans risque.
++--
++-- Décision de Jules : personne ne paie l'option, le paiement en ligne fait partie de la formule.
++-- Comme pour les zones de livraison (qg44) : le module du catalogue passe à 0 €, « inclus dans la
++-- formule », et n'est plus proposé comme option (état « retire »). L'ancienne fiche est gardée dans
++-- qg_sauvegardes. Le fonctionnement du paiement ne dépend déjà plus de l'option (qg64).
++-- Volontairement NON touchés : pf_module_ok (le rendre vrai pour le paiement ferait créer une ligne
++-- paiement_restos pour chaque resto par pf_modules_sync) et la checklist d'installation
++-- (install_bloquants, qui ne connaît que Stripe : elle bloquerait à tort un resto sur SumUp).
++-- Aucune facture n'est touchée (aucune n'a jamais porté ce module) ; les lignes resto_modules
++-- existantes restent (prix figé ramené à 0 si besoin) pour l'historique.
++-- ==========================================================================
++
++do $$ begin
++  if to_regclass('public.modules_catalogue') is null or to_regclass('public.qg_sauvegardes') is null then
++    raise exception 'Il manque s12-modules.sql ou qg29-tarifs.sql : les jouer d''abord';
++  end if;
++  if position('qg64' in pg_get_functiondef('public.paiement_mode_public(uuid)'::regprocedure)) = 0 then
++    raise exception 'Jouer d''abord qg64-paiement-offre-de-base.sql (patch 05)';
++  end if;
++end $$;
++
++-- 1. Le module du catalogue : inclus, 0 €, plus proposé comme option (l'ancienne fiche est gardée)
++insert into public.qg_sauvegardes (cle, avant)
++select 'qg65:modules_catalogue:' || code, to_jsonb(m) from public.modules_catalogue m where code = 'paiement'
++on conflict (cle) do nothing;
++update public.modules_catalogue
++   set prix_mensuel = 0, prix_unique = 0, prix_libelle = 'inclus dans la formule', etat = 'retire', maj_le = now()
++ where code = 'paiement' and (prix_mensuel <> 0 or prix_unique <> 0 or etat <> 'retire' or prix_libelle is distinct from 'inclus dans la formule');
++
++-- 2. Les prix figés des restos : 0 € (ils le sont déjà en novembre 2026 ; gardés dans qg_sauvegardes sinon)
++insert into public.qg_sauvegardes (cle, avant)
++select 'qg65:resto_modules:paiement:' || restaurant_id, to_jsonb(m) from public.resto_modules m
++ where module = 'paiement' and coalesce(prix_mensuel, 0) <> 0
++on conflict (cle) do nothing;
++update public.resto_modules set prix_mensuel = 0 where module = 'paiement' and coalesce(prix_mensuel, 0) <> 0;
++
++-- Contrôle : une ligne, deux « t »
++select (select prix_mensuel = 0 and etat = 'retire' from public.modules_catalogue where code = 'paiement') as option_retiree,
++       not exists (select 1 from public.resto_modules where module = 'paiement' and coalesce(prix_mensuel, 0) <> 0) as prix_a_zero;
+diff --git a/repo/tests/qg65-paiement-inclus.test.js b/repo/tests/qg65-paiement-inclus.test.js
+new file mode 100644
+index 0000000..e9f489f
+--- /dev/null
++++ b/repo/tests/qg65-paiement-inclus.test.js
+@@ -0,0 +1,36 @@
++/* qg65 : l'option « Paiement en ligne » (79 €) est retirée : incluse dans la formule, 0 €, plus proposée
++   comme option. Aucune facture touchée, aucune ligne paiement créée d'office. */
++var test = require("node:test");
++var assert = require("node:assert/strict");
++var B = require("./aide-banc");
++
++var R = "88888888-0000-0000-0000-000000000001";
++var banc = null;
++async function b() {
++  if (banc) return banc;
++  banc = await B.creerBanc();
++  await banc.db.exec("insert into public.restaurants (id, nom, statut, slug, commande_active, retrait) values ('" + R + "', 'Inclus', 'actif', 'inclus', true, true);");
++  return banc;
++}
++async function q(sql, params) { return (await (await b()).db.query(sql, params || [])).rows; }
++
++test("qg65 : le module paiement du catalogue est inclus (0 €) et retiré des options ; l'ancienne fiche est gardée", async function () {
++  var c = (await q("select prix_mensuel::float p, prix_unique::float u, prix_libelle l, etat from public.modules_catalogue where code = 'paiement'"))[0];
++  assert.deepEqual(c, { p: 0, u: 0, l: "inclus dans la formule", etat: "retire" });
++  var avant = (await q("select avant from public.qg_sauvegardes where cle = 'qg65:modules_catalogue:paiement'"))[0];
++  assert.ok(avant, "ancienne fiche sauvegardée");
++});
++
++test("qg65 : sans effet de bord : pas de ligne paiement créée d'office, les vraies options ne changent pas", async function () {
++  assert.equal((await q("select count(*)::int n from public.paiement_restos where restaurant_id = $1", [R]))[0].n, 0);
++  assert.equal((await q("select public.pf_module_ok($1, 'relance') v", [R]))[0].v, false);
++});
++
++test("qg65 : rejouable, contrôle final à deux « t »", async function () {
++  var fs = require("fs"), path = require("path");
++  var avant = (await q("select count(*)::int n from public.qg_sauvegardes where cle like 'qg65:%'"))[0].n;
++  var r = await (await b()).db.exec(fs.readFileSync(path.join(__dirname, "..", "sql", "qg65-paiement-inclus.sql"), "utf8"));
++  assert.equal((await q("select count(*)::int n from public.qg_sauvegardes where cle like 'qg65:%'"))[0].n, avant, "rien de sauvegardé deux fois");
++  var controle = r[r.length - 1].rows[0];
++  assert.deepEqual(controle, { option_retiree: true, prix_a_zero: true });
++});

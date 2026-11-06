@@ -18,6 +18,13 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 
 ## Points notés pour plus tard
 
+### Sécurité du CRM (décisions de Jules, novembre 2026)
+- **`PONT_CLE` : à renouveler après l'arrêt d'UChat** (quand plus aucun bot UChat n'a le Bot Field
+  `pflow_cle`). Jamais fuité : pas de changement avant. Restent alors Vercel et le secret GitHub du
+  rendu des vidéos (procédure : `docs/securite-crm.md`, point 2). Le patch 06 ne sera plus utile.
+- Buckets publics listables (point 1 de `docs/securite-crm.md`) : à corriger **avant le prochain
+  questionnaire d'onboarding envoyé à un client**.
+
 ### Démos sur le numéro PFlow (fait, actif après la migration C)
 - Le futur webhook PFlow Order (événements de commande) ne doit **jamais** viser le numéro PFlow ni une
   démo : les commandes de démo passent par la page de démonstration du CRM, qui n'écrit rien.

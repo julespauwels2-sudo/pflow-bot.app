@@ -10,13 +10,14 @@ Préparés le 5 novembre 2026 sur une **copie** du code de PFlow Order (dépôt 
 | `03-retour-whatsapp.diff` | `repo/js/commande.js` | Pages de confirmation (y compris « Commande payée ») : venu du bot → « Retour sur WhatsApp » avec « ✅ Commande n° 42 passée » ; sinon le bouton d'avant |
 | `04-pre-remplissage.diff` | `repo/api/bot-contact.js` (nouveau), `repo/js/commande.js`, `repo/tests/pflow-bots-contact.test.js` | Jeton chiffré `?wa=` du bouton « Commander » → prénom et téléphone WhatsApp pré-remplis |
 | `05-paiement-offre-de-base.diff` | `repo/sql/qg64-paiement-offre-de-base.sql` (nouveau), `repo/js/paiement.js`, `repo/js/resto.js`, `repo/js/atelier.js`, `repo/js/supervision.js`, `repo/api/paiement.js`, `repo/tests/qg64-paiement-base.test.js` | Le paiement en ligne fait partie de l'offre de base : l'ancienne « option vendue » (`paiement_restos.module`) ne bloque plus rien (voir plus bas) |
-| `06-pont-cle-transition.diff` | `repo/api/pont.js`, `repo/tests/pont-cle-ancienne.test.js` | Facultatif : `PONT_CLE_ANCIENNE` acceptée pendant un changement de clé, pour ne pas couper les bots UChat (procédure : `docs/securite-crm.md`, point 2) |
+| `06-pont-cle-transition.diff` | `repo/api/pont.js`, `repo/tests/pont-cle-ancienne.test.js` | **Mis de côté** (décision de Jules : la clé n'a jamais fui, pas de changement avant l'arrêt d'UChat). `PONT_CLE_ANCIENNE` acceptée pendant un changement de clé |
+| `07-option-paiement-retiree.diff` | `repo/sql/qg65-paiement-inclus.sql` (nouveau), `repo/js/app.js`, `repo/js/facturation.js`, `repo/js/resto.js`, `repo/js/dashboard-demo.js`, `repo/js/paiement.js`, `repo/guide-paiement-en-ligne.html`, `repo/tests/qg65-paiement-inclus.test.js` | Retrait de l'option « Paiement en ligne » à 79 € : catalogue, MRR, boutons « +79 € », Dashboard, guide. **À appliquer après le 05** |
 
 **Sans les variables `PFLOW_BOTS_URL` et `PFLOW_BOTS_SECRET` dans Vercel (projet PFlow Order), aucun
 comportement ne change.** Retirer les variables = retour immédiat à la situation actuelle.
 
-Les patches 05 et 06 ont été préparés plus tard, sur le commit `58c5b5a` (6 commits après `5ac768c`).
-**Vérifié : les 6 patches s'appliquent dans l'ordre sur `58c5b5a`.**
+Les patches 05 et 06 ont été préparés plus tard, sur le commit `58c5b5a`, et le 07 sur `08dd2e3`.
+**Vérifié le 6 novembre 2026 : les 7 patches s'appliquent dans l'ordre (01 à 05, 07, puis 06) sur `08dd2e3`.**
 
 ## Patch 05 — le paiement en ligne dans l'offre de base
 
@@ -56,7 +57,41 @@ L'agent Atelier proposera désormais les étapes du paiement pour Cookies An Nou
 phase Atelier, création de la ligne paiement, fichier rejouable) ; 140 tests existants du CRM qui
 touchent au paiement, à l'Atelier, à la supervision et au Dashboard : tous passent (1 ignoré, Deno absent).
 
-## Patch 06 — changer `PONT_CLE` sans couper UChat (facultatif)
+## Patch 07 — l'option « Paiement en ligne » à 79 € est retirée
+
+Décision de Jules (6 novembre 2026) : personne ne la paie, le paiement en ligne est inclus dans la formule.
+
+**Constat en base (lecture seule)** : l'option coûte **déjà 0 €** dans le catalogue des modules, les
+8 lignes « paiement » des restos sont à 0 €, et **aucune facture** n'a jamais porté ce module. Les
+« 79 € » ne viennent que du code (valeur par défaut, textes, démo du Dashboard, guide).
+
+**Ce qui change** (même méthode que pour les zones de livraison, `qg44`) :
+- SQL `qg65` (rejouable, après `qg64`) : le module « paiement » du catalogue passe « inclus dans la
+  formule », 0 €, état « retiré » (plus proposé comme option) ; l'ancienne fiche est gardée dans
+  `qg_sauvegardes` ; les prix figés des restos ramenés à 0 € s'il en reste.
+- CRM : plus de bouton « Paiement en ligne +79 € » (fiche client, dialogue de signature, offre proposée) ;
+  plus d'ajout automatique de l'option au passage en « proposition » ; MRR et mensualité calculés sans
+  elle ; plus de mention « sans le paiement en ligne tant que Stripe n'est pas actif ».
+- Dashboard du resto : « Paiement en ligne — inclus » affiché à part (comme « Gestion du stock »), plus
+  de carte d'option. Dashboard de démo : la carte « Paiement en ligne 79 € » disparaît.
+- Textes : panneau Paiement du CRM et guide du paiement en ligne (« inclus dans la formule »).
+
+**Volontairement non touché** :
+- `pf_module_ok('paiement')` : le rendre vrai pour tous ferait créer une ligne de paiement pour chaque
+  resto (synchro `pf_modules_sync`) — repéré par les tests, retiré du patch ;
+- la checklist d'installation (`install_bloquants`) : son étape « Paiement » ne s'affiche que pour les
+  restos qui avaient l'option, et elle ne connaît que Stripe (elle bloquerait à tort un resto sur SumUp).
+  **À reprendre plus tard** si tu veux que l'étape apparaisse pour tous ;
+- les factures (aucune concernée) et les lignes « paiement » des restos (gardées pour l'historique).
+
+**Vérifié** : nouveau test `qg65` (échoue sans le SQL, passe avec ; rejouable ; aucune ligne paiement
+créée d'office) ; 204 tests du CRM liés au paiement, aux modules, à la facturation et au Dashboard :
+tous verts (2 ignorés, Deno absent), avec 05 et 07 appliqués sur `08dd2e3`.
+
+## Patch 06 — changer `PONT_CLE` sans couper UChat (mis de côté)
+
+> **Décision de Jules (6 novembre 2026)** : la clé n'a jamais fui, pas de changement. À renouveler
+> après l'arrêt d'UChat (noté dans `docs/plan.md`) ; ce patch ne servira alors plus (plus de bots UChat).
 
 `api/pont.js` n'accepte qu'une clé : changer `PONT_CLE` coupe chaque bot UChat jusqu'à ce que son
 Bot Field `pflow_cle` soit mis à jour. Avec ce patch, `PONT_CLE_ANCIENNE` (variable Vercel facultative)
@@ -71,9 +106,9 @@ Depuis la racine du dépôt `Pflow-Crm`, sur une branche dédiée :
 git apply --check /chemin/vers/pflow-bot.app/docs/etape-c/patches/01-evenements-commande.diff
 ```
 
-Puis, dans l'ordre : `git apply` de 01, 02, 03, 04, 05, 06 (un commit par patch, 05 et 06 indépendants des
-autres), et `npm test` dans `repo/`. Pour 05 : jouer ensuite `repo/sql/qg64-paiement-offre-de-base.sql`
-dans Supabase (SQL Editor), après le déploiement du code.
+Puis, dans l'ordre : `git apply` de 01, 02, 03, 04, 05, 07 (un commit par patch ; 07 après 05), et
+`npm test` dans `repo/`. Pour 05 et 07 : jouer ensuite dans Supabase (SQL Editor), après le déploiement
+du code, `repo/sql/qg64-paiement-offre-de-base.sql` **puis** `repo/sql/qg65-paiement-inclus.sql`.
 
 ## Vérifié
 

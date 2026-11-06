@@ -484,3 +484,20 @@ faux Meta (`scripts/e2e/numero-pflow.js`) ; WhatsApp et boîte de réception tou
   UChat et dans un secret GitHub. Comme `api/pont.js` n'accepte qu'une clé, j'ai préparé le **patch 06**
   (facultatif, testé) qui accepte `PONT_CLE_ANCIENNE` pendant la transition : aucune coupure des bots.
 - Les patches 01 à 06 s'appliquent tous, dans l'ordre, sur la dernière version du CRM (`58c5b5a`).
+
+## Décisions de Jules (6 novembre 2026)
+
+- **Option paiement en ligne à 79 € retirée** → **patch 07** (`docs/etape-c/patches/07-option-paiement-retiree.diff`,
+  non appliqué, à appliquer après le 05). Constat en lecture seule : l'option est **déjà à 0 €** en base
+  (catalogue et 8 lignes de restos) et aucune facture ne l'a portée ; les 79 € ne sont que dans le code.
+  Le patch : SQL `qg65` (module « inclus dans la formule », retiré des options, ancienne fiche
+  sauvegardée), plus de bouton « +79 € » (fiche, signature, offre), MRR et mensualité sans elle,
+  « Paiement en ligne — inclus » sur le Dashboard du resto, démo et guide mis à jour. 204 tests du CRM
+  verts. Une première version rendait aussi le paiement « accessible à tous » (`pf_module_ok`) : les tests
+  ont montré qu'une ligne de paiement serait alors créée pour chaque resto → retiré du patch. Point restant
+  noté : la checklist d'installation (étape « Paiement » seulement pour les anciens détenteurs de
+  l'option, et Stripe seulement).
+- **`PONT_CLE`** : jamais fuité, pas de changement ; patch 06 mis de côté ; **renouveler la clé après
+  l'arrêt d'UChat** (noté dans `docs/plan.md`).
+- **Point 1 (buckets listables)** : **à faire avant le prochain questionnaire d'onboarding envoyé à un
+  client** (le plan de test de 5 minutes est prêt dans `docs/securite-crm.md`). À ne pas oublier.
