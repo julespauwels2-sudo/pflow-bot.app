@@ -213,3 +213,25 @@ export async function checkWhatsAppAccess(config: GraphConfig, phoneNumberId: st
   );
   return steps;
 }
+
+/**
+ * Abonne (POST) ou désabonne (DELETE) l'app de ce token aux messages d'un compte WhatsApp (page État).
+ * Avec le nouveau modèle de comptes de Meta, c'est l'ID du COMPTE DE MESSAGERIE qui répond (l'ID du
+ * « compte WhatsApp » renvoie « Invalid WhatsApp account usage », sous-code 2388339).
+ */
+export async function setAppSubscription(config: GraphConfig, accountId: string, subscribe: boolean): Promise<{ ok: boolean; detail: string }> {
+  const doFetch = config.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
+  const url = `${config.base.replace(/\/$/, "")}/${config.version}/${encodeURIComponent(accountId)}/subscribed_apps`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), config.timeoutMs ?? 10_000);
+  try {
+    const response = await doFetch(url, { method: subscribe ? "POST" : "DELETE", headers: { authorization: `Bearer ${config.token}` }, signal: controller.signal });
+    const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!response.ok || json.success === false) return { ok: false, detail: `Refus de Meta (${response.status}) : ${graphErrorText(json)}` };
+    return { ok: true, detail: subscribe ? "PFlow Bots est abonnée à ce compte." : "PFlow Bots est désabonnée de ce compte." };
+  } catch (error) {
+    return { ok: false, detail: `Meta injoignable : ${error instanceof Error ? error.message : String(error)}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}

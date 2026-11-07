@@ -371,6 +371,7 @@ const ETATS: Record<string, { label: string; confirm: string }> = {
 function CanauxCard({ comptes }: { comptes: SystemStatus["comptes"] }) {
   const [list, setList] = useState(comptes);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   async function change(id: string, etat: string) {
     if (!window.confirm(ETATS[etat].confirm)) return;
     setError("");
@@ -388,6 +389,28 @@ function CanauxCard({ comptes }: { comptes: SystemStatus["comptes"] }) {
       setError(errorText(e));
     }
   }
+  async function abonnement(id: string, abonner: boolean) {
+    const question = abonner
+      ? "Abonner l'app PFlow Bots aux messages de ce compte WhatsApp ?\n\nPFlow Bots recevra les messages de ses numéros (en test, il ne répond qu'aux numéros de test). Réversible : « Désabonner »."
+      : "Désabonner l'app PFlow Bots de ce compte ?\n\nPFlow Bots ne recevra plus aucun message de ses numéros.";
+    if (!window.confirm(question)) return;
+    setError("");
+    setInfo("");
+    try {
+      const token = await accessToken();
+      const response = await fetch("/api/etat/abonnement", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ id, abonner }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string; ok?: boolean; detail?: string };
+      if (body.error) throw new Error(body.error);
+      if (!body.ok) throw new Error(body.detail ?? `Erreur ${response.status}`);
+      setInfo(`${body.detail} Vérifiez avec « Tester l'accès du token » (ligne « Apps abonnées »).`);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
   return (
     <Card title="Canaux (numéros et comptes)" className="lg:col-span-2">
       <ul className="divide-y divide-rule text-sm" data-testid="canaux">
@@ -399,7 +422,17 @@ function CanauxCard({ comptes }: { comptes: SystemStatus["comptes"] }) {
               {c.etat === "test" ? ` · ${c.testNumeros} numéro(s) de test` : ""}
             </span>
             <Badge tone={c.etat === "actif" ? "success" : c.etat === "test" ? "info" : "warning"}>{ETATS[c.etat]?.label ?? c.etat}</Badge>
-            <span className="ml-auto flex gap-1">
+            <span className="ml-auto flex flex-wrap gap-1">
+              {c.plateforme === "whatsapp" && (
+                <>
+                  <Button variant="secondary" onClick={() => abonnement(c.id, true)}>
+                    Abonner PFlow Bots
+                  </Button>
+                  <Button variant="secondary" onClick={() => abonnement(c.id, false)}>
+                    Désabonner
+                  </Button>
+                </>
+              )}
               {Object.keys(ETATS)
                 .filter((e) => e !== c.etat)
                 .map((e) => (
@@ -414,6 +447,11 @@ function CanauxCard({ comptes }: { comptes: SystemStatus["comptes"] }) {
       {error && (
         <div className="mt-3">
           <Notice tone="error">{error}</Notice>
+        </div>
+      )}
+      {info && (
+        <div className="mt-3">
+          <Notice tone="success">{info}</Notice>
         </div>
       )}
       <p className="mt-2 text-xs text-muted">Un numéro de test Meta (+1 555…) ne passe jamais en actif. Guide de bascule : docs/etape-c/guide-c6-bascule.md.</p>

@@ -95,3 +95,18 @@ describe("options d'envoi du canal", () => {
     expect(sendOptions({ ...base, plateforme: "instagram", messagingAccountId: "1511" })).toEqual({});
   });
 });
+
+describe("abonnement de l'app au compte (page État)", () => {
+  it("POST pour abonner, DELETE pour désabonner, sur le compte donné ; refus de Meta expliqué", async () => {
+    const { setAppSubscription } = await import("../graph");
+    const calls: Call[] = [];
+    const ok = await setAppSubscription(config(fakeFetch({ "/4170/subscribed_apps": { status: 200, body: { success: true } } }, calls)), "4170", true);
+    expect(ok).toEqual({ ok: true, detail: "PFlow Bots est abonnée à ce compte." });
+    expect(calls[0]).toMatchObject({ url: "https://graph.test/v24.0/4170/subscribed_apps", init: { method: "POST" } });
+    await setAppSubscription(config(fakeFetch({ "/4170/subscribed_apps": { status: 200, body: { success: true } } }, calls)), "4170", false);
+    expect(calls[1].init?.method).toBe("DELETE");
+    const refus = await setAppSubscription(config(fakeFetch({ "/1808/subscribed_apps": { status: 400, body: { error: { message: "Invalid WhatsApp account usage", error_subcode: 2388339 } } } }, [])), "1808", true);
+    expect(refus).toEqual({ ok: false, detail: "Refus de Meta (400) : Invalid WhatsApp account usage [sous-code 2388339]" });
+    expect(JSON.stringify([ok, refus])).not.toContain("jeton-secret");
+  });
+});
