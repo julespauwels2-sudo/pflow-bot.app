@@ -5,6 +5,7 @@ import { resolveBot } from "@/data/resolve";
 import type { WorkspaceData } from "@/data/types";
 import { demoOrderUrl } from "@/demos/keyword";
 import { MASTER_TEMPLATE_NAME } from "@/data/template-seed";
+import { PFLOW_DEMO_BUTTONS } from "@/demos/pflow-bot";
 
 export interface LoadedBot {
   client: ClientContext;
@@ -41,12 +42,21 @@ export function loadBotFromWorkspace(data: WorkspaceData, restaurantId: string, 
     }
   }
   if (!flows.length) return null;
+  const infoSheet: InfoSheet = data.infoSheets[client.id] ?? { horaires: [] };
   return {
     client: options.demo
-      ? { id: client.id, nomResto: client.nomResto, orderSlug: "", timezone: client.timezone, ...(demoOrderUrl(client.demoCode) ? { orderUrl: demoOrderUrl(client.demoCode) } : {}) }
+      ? {
+          id: client.id,
+          nomResto: client.nomResto,
+          orderSlug: "",
+          timezone: client.timezone,
+          ...(demoOrderUrl(client.demoCode) ? { orderUrl: demoOrderUrl(client.demoCode) } : {}),
+          // Sans carte dans la démo : l'IA ne cite aucun produit ni prix, et propose les boutons PFlow.
+          demo: { sansCarte: !infoSheet.resumeCarte?.trim(), boutons: structuredClone(PFLOW_DEMO_BUTTONS) },
+        }
       : { id: client.id, nomResto: client.nomResto, orderSlug: client.orderSlug, timezone: client.timezone },
     flows,
-    infoSheet: data.infoSheets[client.id] ?? { horaires: [] },
+    infoSheet,
     agent: agentConfigFor(client.template ? template : null, flows),
     aiDailyLimit: aiDailyLimit(client.template ? template : null),
   };

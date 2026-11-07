@@ -2,15 +2,28 @@
  * Aiguillage du numéro PFlow (partagé par toutes les démos) — fonction pure, utilisée par le serveur
  * (webhook) et par le simulateur :
  * 1. un mot-clé de démo est prioritaire sur tout (y compris les mots-clés du modèle) ;
- * 2. sinon, le contact reste dans sa démo tant que sa session vit (inactivité < sessionMinutes) ;
- * 3. sinon, le bot PFlow de base répond.
+ * 2. sinon (voir 3), le contact reste dans sa démo tant que sa session vit (inactivité < sessionMinutes) ;
+ * 3. un bouton du bot PFlow de base (ou « obtenir ma démo ») fait quitter la démo ;
+ * 4. sinon, le bot PFlow de base répond.
  * Mot-clé : message identique au mot-clé (casse, accents et ponctuation ignorés) ou « démo <mot-clé> ».
  * Hors d'une démo, le mot-clé peut aussi être au milieu d'un court message (« Bonjour Byron »).
  */
-import { keywordMatches, type IncomingMessage } from "@/engine";
+import { decodeReplyId, keywordMatches, type IncomingMessage } from "@/engine";
 import type { DemoRecord } from "@/data/types";
 import { normalizeKeyword } from "./keyword";
 import { isDemoActive } from "./lifecycle";
+import { PFLOW_FLOW_PREFIX } from "./pflow-bot";
+
+/** Écrits pendant une démo, ces messages reviennent au bot PFlow de base (comme ses boutons). */
+const PFLOW_ESCAPE_TEXTS = ["obtenir ma demo"];
+
+/** Bouton du bot PFlow de base (ex. « Obtenir ma démo » sous une réponse de démo) ou son texte. */
+function isPflowAction(message: IncomingMessage): boolean {
+  if (message.kind === "button_reply" || message.kind === "list_reply") {
+    return Boolean(decodeReplyId(message.id)?.flowId.startsWith(PFLOW_FLOW_PREFIX));
+  }
+  return message.kind === "text" && PFLOW_ESCAPE_TEXTS.includes(normalizeKeyword(message.text));
+}
 
 /** Démo en cours d'un contact du numéro PFlow (gardée avec le contact). */
 export interface ContactDemo {
@@ -64,6 +77,8 @@ export function routePflowMessage(input: {
     if (active) return { kind: "demo", clientId: active.clientId, entered: true };
     if (hits[0]) return { kind: "ended", clientId: hits[0].clientId, nomResto: hits[0].nomResto };
   }
+  // Bouton PFlow (« Obtenir ma démo », « Tester la démo ») : on quitte la démo pour le bot PFlow de base.
+  if (isPflowAction(message)) return { kind: "pflow" };
   if (sessionAlive) return { kind: "demo", clientId: current!.clientId, entered: false };
   return { kind: "pflow" };
 }

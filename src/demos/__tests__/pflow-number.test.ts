@@ -10,7 +10,9 @@ import { processWebhookPayload } from "@/channels/core/processor";
 import { demoDirectory } from "../lifecycle";
 import type { Canal } from "@/channels/core/types";
 import { createGraphClient } from "@/channels/whatsapp/graph";
-import { PFLOW_TEXTS } from "../pflow-bot";
+import { PFLOW_DEMO_BUTTONS, PFLOW_TEXTS } from "../pflow-bot";
+import { buildPrompt } from "@/ai/prompt";
+import { TEXTS, type AiRequest } from "@/engine";
 
 const PFLOW_PHONE = "1000000099";
 const PROSPECT = "590690111111";
@@ -153,4 +155,75 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(sent.slice(from).some((m) => m.type === "interactive" && (m.interactive as { type: string }).type === "cta_url")).toBe(false);
     expect((await store.listContacts("pflow"))[0].demo).toMatchObject({ clientId: gwada.id });
   });
+
+  it("démo sans carte : l'IA ne connaît aucun produit, répond « démo » avec les boutons Obtenir / Tester ; pas de fonction de commande", async () => {
+    const repos = createLocalRepositories(createMemoryStore(), { now: () => new Date("2026-11-07T15:00:00Z") });
+    await createMasterTemplate(repos);
+    const gwada = await repos.clients.create({ nomResto: "Gwada food", orderSlug: "gwada-vrai-slug" });
+    await repos.demos.start(gwada.id, { days: 5 });
+    const data = await repos.workspace.exportAll();
+    expect(data.infoSheets[gwada.id]?.resumeCarte ?? "").toBe(""); // comme en production : aucune carte
+
+    const canal: Canal = {
+      id: "pflow", role: "pflow", restaurantId: "", plateforme: "whatsapp", accountId: PFLOW_PHONE, triggerMode: "toujours",
+      coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "test", testNumeros: [PROSPECT],
+    };
+    const store = createMemoryChannelStore([canal]);
+    const requests: AiRequest[] = [];
+    const answer = "C'est une démo : la carte de Gwada food n'y est pas encore 🙂";
+    const deps = {
+      store,
+      graph: createGraphClient({ token: "t", base, version: "v24.0" }),
+      loadBot: async (id: string, options?: { demo?: boolean }) => loadBotFromWorkspace(data, id, options),
+      loadDemos: async () => demoDirectory(data),
+      now: () => new Date("2026-11-07T21:29:24Z"),
+      sleep: async () => {},
+      ai: async (request: AiRequest) => {
+        requests.push(request);
+        return { decision: { action: "repondre" as const, fonction: "", texte: answer }, usage: { inputTokens: 1, outputTokens: 1 } };
+      },
+    };
+    const buttonsOf = (m: Record<string, unknown>) =>
+      ((m.interactive as { action?: { buttons?: { reply: { id: string; title: string } }[] } })?.action?.buttons ?? []).map((b) => b.reply);
+
+    // Accueil : pas de page de commande de démo → le texte d'accueil, puis « pas encore prête » + boutons PFlow.
+    let from = sent.length;
+    await processWebhookPayload(text("gwada food"), deps);
+    expect(texts(from).join()).toContain("Bienvenue chez Gwada food");
+    const notice = sent.slice(from).find((m) => JSON.stringify(m).includes("n'est pas encore prête dans cette démo"))!;
+    expect(buttonsOf(notice).map((b) => b.title)).toEqual(["🎁 Obtenir ma démo", "😋 Tester la démo"]);
+
+    // Question sur un prix : l'IA reçoit les règles « démo sans carte » et aucune fonction de commande.
+    from = sent.length;
+    await processWebhookPayload(text("c'est combien votre bokit poulet ?"), deps);
+    expect(requests).toHaveLength(1);
+    const req = requests[0];
+    expect(req.client.demo).toEqual({ sansCarte: true });
+    expect(req.infoSheet.resumeCarte ?? "").toBe("");
+    expect(req.functions.map((f) => f.name)).not.toEqual(expect.arrayContaining(["lancer_commande"]));
+    for (const hidden of ["lancer_commande", "proposer_commande", "suivre_commande", "annuler_commande"]) {
+      expect(req.functions.map((f) => f.name)).not.toContain(hidden);
+    }
+    const system = buildPrompt(req).system.map((b) => b.text).join("\n");
+    expect(system).toContain("tu ne connais AUCUN produit, AUCUN prix");
+    // La réponse de l'IA porte les deux boutons PFlow.
+    const reply = sent.slice(from).find((m) => JSON.stringify(m).includes("la carte de Gwada food n'y est pas encore"))!;
+    expect(reply.type).toBe("interactive");
+    expect(buttonsOf(reply).map((b) => b.title)).toEqual(["🎁 Obtenir ma démo", "😋 Tester la démo"]);
+
+    // « Tester la démo » : on quitte la démo pour le bot PFlow de base.
+    from = sent.length;
+    await processWebhookPayload(click(PFLOW_DEMO_BUTTONS[1].id, PFLOW_DEMO_BUTTONS[1].title), deps);
+    expect(texts(from).join()).toContain("PFlow Order");
+    expect((await store.listContacts("pflow"))[0].demo?.clientId).toBe("");
+
+    // Retour dans la démo, puis « Obtenir ma démo » : transfert à Jules (bot PFlow), jamais l'IA de la démo.
+    await processWebhookPayload(text("gwada food"), deps);
+    from = sent.length;
+    await processWebhookPayload(click(PFLOW_DEMO_BUTTONS[0].id, PFLOW_DEMO_BUTTONS[0].title), deps);
+    expect(texts(from).join()).toContain(PFLOW_TEXTS.demoRequest.slice(0, 40));
+    expect(requests).toHaveLength(1);
+    expect(texts(from).join()).not.toContain(TEXTS.handoff.slice(0, 30));
+  });
 });
+

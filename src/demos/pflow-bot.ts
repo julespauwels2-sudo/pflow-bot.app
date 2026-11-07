@@ -2,7 +2,7 @@
  * Bot PFlow de base du numéro PFlow : répond quand aucun mot-clé de démo n'a été écrit. Figé dans le
  * code (jamais modifié depuis l'app) : présentation de PFlow Order et comment obtenir sa démo.
  */
-import { DEFAULT_TIMEZONE, type Flow, type FlowNode } from "@/engine";
+import { DEFAULT_TIMEZONE, encodeReplyId, type ChoiceOption, type Flow, type FlowNode } from "@/engine";
 import type { LoadedBot } from "@/channels/core/bot-loader";
 
 export const PFLOW_BOT_ID = "pflow";
@@ -28,6 +28,18 @@ export const PFLOW_TEXTS = {
   demoEnded: (nom: string) =>
     `⏳ La démo de *${nom}* est terminée. Merci de l'avoir essayée ! Pour la prolonger ou passer à la vraie version, répondez « démo » et Jules vous recontacte 🙂`,
 };
+
+/** Flux du bot PFlow de base : un bouton qui y mène fait quitter la démo en cours (voir router.ts). */
+export const PFLOW_FLOW_PREFIX = "pflow-";
+
+/**
+ * Boutons PFlow ajoutés aux réponses d'une démo sans carte : « Obtenir ma démo » (transfert à Jules) et
+ * « Tester la démo » (le resto de démo PFlow). Leurs ids visent les flux du bot PFlow de base.
+ */
+export const PFLOW_DEMO_BUTTONS: ChoiceOption[] = [
+  { id: encodeReplyId({ flowId: "pflow-demo", nodeId: "t", handle: "next" }), title: "🎁 Obtenir ma démo" },
+  { id: encodeReplyId({ flowId: "pflow-tester", nodeId: "t", handle: "next" }), title: "😋 Tester la démo" },
+];
 
 const welcome: Flow = {
   id: "pflow-accueil",
@@ -72,11 +84,22 @@ const demoRequest: Flow = {
   edges: [{ id: "e1", source: "t", target: "h" }],
 };
 
+/** « Tester la démo » : le resto de démo PFlow (démo permanente). En attendant : la présentation de PFlow. */
+const tryDemo: Flow = {
+  id: "pflow-tester",
+  name: "PFlow — tester la démo",
+  nodes: [
+    { id: "t", type: "trigger", position: at(0, 0), data: { keywords: [] } },
+    { id: "g", type: "goto_flow", position: at(340, 0), data: { flowId: "pflow-decouvrir" } },
+  ],
+  edges: [{ id: "e1", source: "t", target: "g" }],
+};
+
 /** Le bot PFlow de base, prêt pour le moteur (sans IA : aucun coût). */
 export function pflowBaseBot(): LoadedBot {
   return {
     client: { id: PFLOW_BOT_ID, nomResto: "PFlow", orderSlug: "", timezone: DEFAULT_TIMEZONE },
-    flows: structuredClone([welcome, discover, demoRequest]),
+    flows: structuredClone([welcome, discover, demoRequest, tryDemo]),
     infoSheet: { horaires: [] },
     aiDailyLimit: 0,
   };

@@ -4,7 +4,7 @@ import type { AiRequest, InfoSheet } from "@/engine";
 import { askClaude, buildClaudeParams } from "../claude";
 import { buildKnowledgeBase, missingKnowledge } from "../knowledge";
 import { costUsd, formatUsd } from "../models";
-import { buildPrompt, decisionJsonSchema, formatLocalNow } from "../prompt";
+import { buildPrompt, decisionJsonSchema, demoRules, formatLocalNow } from "../prompt";
 import { aiRequestSchema } from "../schemas";
 import { httpAiPort } from "../http-port";
 
@@ -199,3 +199,40 @@ describe("validation et coût", () => {
     await expect(port(request)).rejects.toThrow("Clé API absente");
   });
 });
+
+describe("démo sur le numéro PFlow : règles de l'IA", () => {
+  const demoRequest = (sansCarte: boolean): AiRequest => ({
+    ...request,
+    client: { ...request.client, nomResto: "Gwada food", lienCommande: "", demo: { sansCarte } },
+    infoSheet: sansCarte ? { horaires: [] } : sheet,
+  });
+  const systemText = (req: AiRequest) => buildPrompt(req).system.map((b) => b.text).join("\n\n");
+
+  it("sans carte : aucun produit ni prix, réponse « c'est une démo », boutons Obtenir / Tester ; avant la base (en cache)", () => {
+    const prompt = buildPrompt(demoRequest(true));
+    const text = systemText(demoRequest(true));
+    expect(text).toContain("# Démonstration PFlow (règles prioritaires)");
+    expect(text).toContain("La carte de Gwada food n'a pas encore été ajoutée à cette démo : tu ne connais AUCUN produit, AUCUN prix");
+    expect(text).toContain("Ne cite jamais un produit, un plat, une boisson, un prix");
+    expect(text).toContain("« Obtenir ma démo »");
+    expect(text).toContain("« Tester la démo »");
+    // Base de connaissances sans section Carte ; les règles de démo sont avant elle (même préfixe en cache).
+    const titles = prompt.system.map((b) => b.title);
+    expect(titles.indexOf("Démonstration")).toBeLessThan(titles.indexOf("Base de connaissances"));
+    expect(prompt.system.find((b) => b.title === "Base de connaissances")!.text).not.toContain("## Carte");
+  });
+
+  it("démo avec carte : seulement le rappel « démonstration » ; hors démo : rien", () => {
+    const withMenu = systemText(demoRequest(false));
+    expect(withMenu).toContain("Cette conversation est une démonstration de PFlow préparée pour Gwada food");
+    expect(withMenu).not.toContain("AUCUN produit");
+    expect(systemText(request)).not.toContain("Démonstration PFlow");
+    expect(demoRules("X", false)).not.toContain("Obtenir ma démo");
+  });
+
+  it("la route /api/ai garde le champ démo (sinon les règles seraient perdues côté simulateur)", () => {
+    const parsed = aiRequestSchema.parse(demoRequest(true));
+    expect(parsed.client.demo).toEqual({ sansCarte: true });
+  });
+});
+

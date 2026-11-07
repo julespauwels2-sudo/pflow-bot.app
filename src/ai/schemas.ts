@@ -13,6 +13,8 @@ export const aiRequestSchema = z.object({
     maintenantLocal: text(40),
     lienCommande: text(500),
     prenomContact: text(100).optional(),
+    // Démo sur le numéro PFlow : sans ce champ, la route perdrait les règles de démo (zod retire l'inconnu).
+    demo: z.object({ sansCarte: z.boolean() }).optional(),
   }),
   consigne: text(30_000),
   model: text(100).optional(),
