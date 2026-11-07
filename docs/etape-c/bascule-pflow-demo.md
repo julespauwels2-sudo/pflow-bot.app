@@ -77,25 +77,31 @@ pas. Démos en cours (jusqu'au 12 novembre) : **« Gwada food »** et **« Gwada
 Démos : Prolonger si besoin).
 
 1. Depuis **ton numéro perso**, écris à PFlow Démo : **« Bonjour »**. Le **bot PFlow de base** répond.
-2. Écris **« Gwada food »** : la **démo** démarre (Accueil de Gwada food). Le bouton « Commander » ouvre la
-   page de démonstration ; rien n'est commandé pour de vrai.
+2. Écris **« Gwada food »** : la **démo** démarre (Accueil de Gwada food). Le bouton « Commander » n'apparaît
+   que si la démo a un **lien de démo** dans le CRM (aujourd'hui, ni Gwada food ni Gwada Smash Burger n'en
+   ont) : sinon, pas de bouton, c'est voulu. Avec un lien, il ouvre la page de démonstration (rien n'est
+   commandé pour de vrai).
 3. Pose une question (« vous livrez où ? ») : l'IA de la démo répond.
 4. **Depuis l'appli WhatsApp Business** du téléphone de PFlow Démo, réponds à ton numéro perso. Puis, depuis
    ton numéro perso, écris « Bonjour » : **le bot ne répond pas** (pause de 12 h, « le gérant a répondu »).
    Pour lever la pause : PFlow Bots → **Boîte de réception** → ta conversation → **Rendre au bot**.
 5. Page État → derniers événements : tes messages, et ceux que tu as envoyés depuis l'appli (« echo »).
-6. Si tout est bon : désactive le bot UChat de ce numéro, puis page État → **Passer en actif**. Fais écrire
-   un ami (un « vrai » prospect) : bot de base, puis mot-clé de démo.
+6. **⛔ ÉTAPE BLOQUANTE — facturation.** Depuis le **1er octobre 2026**, les messages de service (réponses dans
+   la fenêtre de 24 h) sont **payants**. Dans **WhatsApp Manager → compte de messagerie `4170754433058228` →
+   Paramètres de paiement**, regarde qui paie :
+   - **ton moyen de paiement** (PFlow 1) → OK, on continue ;
+   - **la ligne de crédit Smart Link** (UChat) → **on ne passe PAS en actif** : les messages envoyés par PFlow
+     Bots seraient facturés à UChat. À régler d'abord (ajouter ton moyen de paiement au compte, ou accord
+     avec UChat), puis revenir ici.
+7. Si l'étape 6 est réglée : désactive le bot UChat de ce numéro (sans retirer Smart Link), puis page État →
+   **Passer en actif**. Fais écrire un ami (un « vrai » prospect) : bot de base, puis mot-clé de démo.
 
 ## Devise AED du compte de messagerie
 
-- **Inutile de la changer pour l'instant.** Le bot n'envoie que des réponses dans les 24 h (pas de modèles
-  marketing), et la devise ne change que l'affichage et la facturation des messages payants.
-- **D'après la documentation de Meta, la devise d'un compte existant ne se change pas.** Il faudrait créer un
-  nouveau compte (Meta mentionne aussi une API de migration de devise, à confirmer). Ma session n'arrive pas à
-  ouvrir le site de Meta : à vérifier de ton côté.
-- **À vérifier** : WhatsApp Manager → compte de messagerie → **Paramètres de paiement**. Qui paie : une ligne de
-  crédit de **Smart Link** (donc UChat) ou ton moyen de paiement ? Et les messages de service (réponses dans
-  les 24 h) sont-ils facturés en novembre 2026 ? Des sources tierces annoncent un changement au 1er octobre
-  2026. Si une ligne de crédit Smart Link paie, les messages envoyés par PFlow Bots lui seraient facturés :
-  à régler avec UChat avant la bascule.
+- La devise ne compte que pour les messages payants. **Depuis le 1er octobre 2026, les réponses dans les 24 h
+  le sont** (confirmé par Jules) : la devise et surtout **le payeur** comptent donc (étape 6 bloquante).
+- D'après la documentation de Meta, la devise d'un compte existant **ne se change pas** (il faudrait un
+  nouveau compte ; Meta évoque aussi une API de migration de devise, à vérifier). AED n'empêche pas de
+  fonctionner : les montants sont seulement facturés en dirhams (avec les frais de change de ta banque).
+- Décision à prendre avant de passer **plusieurs** numéros sur ce compte : garder AED, ou créer un compte de
+  messagerie en EUR pour les numéros des restos (à voir avec le diagnostic des autres numéros).

@@ -25,6 +25,14 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - Buckets publics listables (point 1 de `docs/securite-crm.md`) : à corriger **avant le prochain
   questionnaire d'onboarding envoyé à un client**.
 
+### Sortie d'UChat (décision de Jules, 8 novembre 2026)
+- Bascule numéro par numéro : **pause du bot UChat** pour le contact de test pendant les essais, puis
+  **désactivation du bot UChat** du numéro à la bascule. Le partenaire **Smart Link** (prestataire d'UChat,
+  accès total aux comptes) **reste en place** pendant toutes les bascules (retour arrière possible).
+- **Retrait de Smart Link = toute dernière étape**, seulement **après l'arrêt complet d'UChat** (plus aucun
+  numéro ni bot sur UChat), et après avoir vérifié qu'aucun compte de messagerie n'est payé par sa ligne de
+  crédit. Puis renouveler `PONT_CLE` (ci-dessus).
+
 ### Démos sur le numéro PFlow (fait, actif après la migration C)
 - Le futur webhook PFlow Order (événements de commande) ne doit **jamais** viser le numéro PFlow ni une
   démo : les commandes de démo passent par la page de démonstration du CRM, qui n'écrit rien.

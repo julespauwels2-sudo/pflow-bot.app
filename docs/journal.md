@@ -698,3 +698,28 @@ Tests : PFlow Bots 372 (vitest) ; simulateur `accueil-ia.js`, `agent-ia.js`, `co
   numéro perso) n'est plus enregistré du tout.
 - **Diagnostic C6** : `docs/etape-c/diagnostic-numeros.md` (écrans Meta + 5 requêtes de l'explorateur,
   lecture des cas A/B/C, ordre : PFlow Démo → Cookies An Nou → Mexico et ag pizza ; numéro perso jamais).
+
+
+## 8 novembre 2026 — PFlow Démo : canal créé (accord de Jules)
+
+1. **Canal PFlow Démo** : vérifié avant (lecture seule) qu'aucune ligne de `bot_canaux` n'existait avec
+   `compte_id 1284474614757490` ou `messaging_account_id 4170754433058228` (ni ces WABA) → aucune. Insert appliqué
+   tel que présenté : rôle `pflow`, `toujours`, coexistence, **état test** (seul 590690938108 reçoit des réponses),
+   id `3c38356d-…`.
+2. **Message d'un numéro hors liste sur un canal en test** (code, `src/channels/core/processor.ts`) :
+   ligne 98 `claimEvent` enregistre l'événement brut (texte, numéro, nom de profil) dans
+   `bot_webhook_evenements` (gardé 30 jours, visible masqué sur la page État) **avant** la vérification de la
+   ligne 103 (« canal en test : numéro hors liste »), puis `finishEvent` y note la raison. **Pas** de contact
+   (ligne 105, jamais atteinte), **pas** de message dans la boîte de réception (`bot_messages`), **pas** d'IA, ni
+   d'alerte, ni d'envoi, ni d'accusé de lecture : **aucun coût**. Correctif en PR (sans fusion) : canal en test
+   (numéro hors liste) ou coupé → rien enregistré ; il reste une ligne de log sans numéro (compteur).
+3. **Facturation** : étape bloquante ajoutée avant « Passer en actif » dans `bascule-pflow-demo.md` (payeur du
+   compte de messagerie 4170754433058228 ; ligne de crédit Smart Link → pas d'actif).
+4. **Démos « Gwada food » et « Gwada Smash Burger »** : elles n'ont **jamais tourné sur un vrai numéro**.
+   Ce sont des lignes de `bot_demos` créées automatiquement par PFlow Bots le 7 novembre (04 h 32 UTC, statut
+   « démo » dans le CRM), sur aucun canal (le canal PFlow n'existait pas). Aucun contact ni message côté PFlow
+   Bots ; côté CRM : aucun événement du pont (UChat) pour ces restos, aucun lien de démo (`qg_demo_liens`),
+   aucun rendez-vous de démo. Personne n'a écrit ; aucun dernier message. Sans lien de démo, leur bouton
+   « Commander » n'apparaît pas (voulu).
+5. **plan.md** : Smart Link reste pendant les bascules ; son retrait est la toute dernière étape, après l'arrêt
+   complet d'UChat.
