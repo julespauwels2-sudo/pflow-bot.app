@@ -23,6 +23,9 @@ autorisations, expiration Jamais), mets-le dans `WHATSAPP_TOKEN` et redéploie.
 
 ## 2. Abonner PFlow Bots, et vérifier (sans afficher de token)
 
+**Avant** : fusionner la PR https://github.com/julespauwels2-sudo/pflow-bot.app/pull/1 (les messages des vrais
+prospects, encore servis par UChat, ne sont alors pas enregistrés par PFlow Bots).
+
 Il y a deux façons de faire. **La plus simple : la page État**, avec le token du serveur (jamais affiché).
 1. Joue d'abord le SQL de la partie 4 : le canal est créé **en test**.
 2. Page **État → Canaux** → PFlow Démo → **Abonner PFlow Bots** (confirmation). Ça fait

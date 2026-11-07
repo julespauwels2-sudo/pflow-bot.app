@@ -711,8 +711,10 @@ Tests : PFlow Bots 372 (vitest) ; simulateur `accueil-ia.js`, `agent-ia.js`, `co
    `bot_webhook_evenements` (gardé 30 jours, visible masqué sur la page État) **avant** la vérification de la
    ligne 103 (« canal en test : numéro hors liste »), puis `finishEvent` y note la raison. **Pas** de contact
    (ligne 105, jamais atteinte), **pas** de message dans la boîte de réception (`bot_messages`), **pas** d'IA, ni
-   d'alerte, ni d'envoi, ni d'accusé de lecture : **aucun coût**. Correctif en PR (sans fusion) : canal en test
-   (numéro hors liste) ou coupé → rien enregistré ; il reste une ligne de log sans numéro (compteur).
+   d'alerte, ni d'envoi, ni d'accusé de lecture : **aucun coût**. Correctif en PR, sans fusion :
+   https://github.com/julespauwels2-sudo/pflow-bot.app/pull/1 (canal en test, numéro hors liste, ou canal coupé →
+   rien enregistré ; il reste une ligne de log sans numéro, qui sert de compteur). À fusionner avant
+   « Abonner PFlow Bots ».
 3. **Facturation** : étape bloquante ajoutée avant « Passer en actif » dans `bascule-pflow-demo.md` (payeur du
    compte de messagerie 4170754433058228 ; ligne de crédit Smart Link → pas d'actif).
 4. **Démos « Gwada food » et « Gwada Smash Burger »** : elles n'ont **jamais tourné sur un vrai numéro**.
