@@ -743,3 +743,26 @@ Tests : PFlow Bots 372 (vitest) ; simulateur `accueil-ia.js`, `agent-ia.js`, `co
    palette matcha + PFlow, isolation, ce qui manque) : `docs/etape-c/demo-permanente.md`. **Rien de codé** avant
    l'accord de Jules.
 3. **plan.md** : le passage en actif de PFlow Démo est bloqué tant que la démo permanente n'existe pas.
+
+
+## 8 novembre 2026 — démo permanente validée, PR ouvertes ; IA en démo sans carte
+
+1. **IA d'une démo sans bot publié (PR n° 2)** : vérifié dans le code. L'IA voit la fiche du resto lue dans le CRM
+   (`src/data/supabase/crm.ts` : horaires, adresse, livraison, zones, **carte avec prix et options**) plus la fiche
+   PFlow Bots. Gwada food n'a **ni carte, ni horaires, ni adresse**, ni fiche PFlow Bots ; la base de connaissances n'a
+   donc pas de section « Carte ». Les règles PFlow interdisaient déjà d'inventer. Ajouté pour une démo **sans carte** :
+   - règles de démo prioritaires dans le prompt (`demoRules`, avant la base, en cache) : aucun produit ni prix, même
+     en exemple ; réponse « c'est une démo, la carte n'y est pas encore » ;
+   - les réponses portent les boutons « Obtenir ma démo » et « Tester la démo », qui ramènent au bot PFlow ;
+   - fonctions de commande retirées à l'IA ; bouton « Commander » sans page de démo remplacé par le même message ;
+   - tests (prompt, route `/api/ai`, faux Meta de bout en bout).
+   **Coût IA mesuré en production** (Haiku 5.5, 6 appels WhatsApp réels) : 0,0004 $ par réponse en moyenne,
+   0,0007 $ au plus. Une conversation de démo (3 à 6 questions) : **0,001 à 0,004 $** ; plafond : 20 réponses IA par
+   contact et par jour, soit **0,015 $ au plus** par prospect et par jour. Le bot PFlow de base et la démo
+   permanente : aucune IA, **0 $**. (Hors coût Meta des messages, payé par la carte de Jules.)
+2. **Démo permanente validée** (Mint Burger, carte, options et palette telles quelles ; logo simple ; photos plus
+   tard, champ prévu ; les deux mécanismes du Dashboard). PR sans fusion :
+   - CRM : https://github.com/julespauwels2-sudo/Pflow-Crm/pull/79 (aucun SQL) ;
+   - PFlow Bots : https://github.com/julespauwels2-sudo/pflow-bot.app/pull/3 (à fusionner après la n° 2).
+3. **Facturation de PFlow Démo réglée** (carte de Jules) : retirée des blocages. Seul blocage restant pour passer
+   PFlow Démo en actif : la démo permanente.

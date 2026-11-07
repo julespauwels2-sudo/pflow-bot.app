@@ -89,14 +89,16 @@ Démos : Prolonger si besoin).
    ton numéro perso, écris « Bonjour » : **le bot ne répond pas** (pause de 12 h, « le gérant a répondu »).
    Pour lever la pause : PFlow Bots → **Boîte de réception** → ta conversation → **Rendre au bot**.
 5. Page État → derniers événements : tes messages, et ceux que tu as envoyés depuis l'appli (« echo »).
-6. **⛔ ÉTAPE BLOQUANTE — facturation.** Depuis le **1er octobre 2026**, les messages de service (réponses dans
-   la fenêtre de 24 h) sont **payants**. Dans **WhatsApp Manager → compte de messagerie `4170754433058228` →
-   Paramètres de paiement**, regarde qui paie :
+6. **✅ Facturation : réglée le 8 novembre 2026** (la carte de Jules est enregistrée sur le compte de messagerie
+   `4170754433058228`). Pour mémoire, la vérification faite : depuis le **1er octobre 2026**, les messages de
+   service (réponses dans la fenêtre de 24 h) sont **payants**. Dans **WhatsApp Manager → compte de messagerie
+   `4170754433058228` → Paramètres de paiement**, regarder qui paie :
    - **ton moyen de paiement** (PFlow 1) → OK, on continue ;
    - **la ligne de crédit Smart Link** (UChat) → **on ne passe PAS en actif** : les messages envoyés par PFlow
      Bots seraient facturés à UChat. À régler d'abord (ajouter ton moyen de paiement au compte, ou accord
      avec UChat), puis revenir ici.
-7. Si l'étape 6 est réglée : désactive le bot UChat de ce numéro (sans retirer Smart Link), puis page État →
+7. **Seul blocage restant : la démo permanente** (`demo-permanente.md`, PR CRM n° 79 et PR PFlow Bots n° 3).
+   Une fois fusionnées et testées : désactive le bot UChat de ce numéro (sans retirer Smart Link), puis page État →
    **Passer en actif**. Fais écrire un ami (un « vrai » prospect) : bot de base, puis mot-clé de démo.
 
 ## Devise AED du compte de messagerie

@@ -1,7 +1,21 @@
-# Démo permanente du numéro PFlow Démo — PROPOSITION (à valider par Jules avant toute PR)
+# Démo permanente du numéro PFlow Démo — VALIDÉE (8 novembre 2026)
 
 8 novembre 2026. Remplace la démo générique d'UChat (pages faites avec ChatGPT, ancienne DA, faux dashboard) par
-le **vrai produit**. Rien n'est codé tant que Jules n'a pas validé.
+le **vrai produit**. Proposition validée par Jules, avec ses ajustements (partie 0). Aucun SQL.
+
+## 0. Ce qui a été fait après validation
+
+| Point | Décision de Jules | Fait |
+|---|---|---|
+| Carte, options, palette | Validées telles quelles (partie 5) | `repo/img/demo/mint-burger/carte.json` du CRM |
+| Logo | Logo simple : « Mint Burger » en navy, feuille de matcha | `repo/img/demo/mint-burger/logo.svg` (texte en tracés : même rendu sur tous les téléphones) |
+| Photos | Tuiles de couleur pour l'instant, une photo par plat possible plus tard sans code | Champ `photo` par produit dans `carte.json` : déposer l'image dans `img/demo/mint-burger/` et écrire son adresse |
+| Dashboard | Les **deux** : commandes de ce téléphone des 6 dernières heures, **et** bouton « Voir ma commande sur le dashboard » sur la confirmation | Le bouton passe la commande dans l'adresse, après le `#` (jamais envoyée au serveur) : visible même dans un autre navigateur. Le Dashboard s'ouvre alors sur « Commandes », et la commande du prospect est la seule « à accepter » au départ |
+| Textes des 3 messages | À relire | Ton plus simple (partie 3, version finale dans `src/demos/pflow-bot.ts`) |
+| Facturation | Réglée (carte de Jules) | Seul blocage restant pour l'actif : cette démo |
+
+PR (sans fusion) : CRM https://github.com/julespauwels2-sudo/Pflow-Crm/pull/79 ; PFlow Bots
+https://github.com/julespauwels2-sudo/pflow-bot.app/pull/3 (part de la PR n° 2 : fusionner la n° 2 d'abord).
 
 ## 1. Inventaire : ce qui existe déjà dans le CRM (lu dans le code, dépôt Pflow-Crm, `main`)
 
@@ -52,7 +66,17 @@ le **vrai produit**. Rien n'est codé tant que Jules n'a pas validé.
 - **Intention de commander** (« Bonjour je veux commander », « commander », « menu », « la carte ») ou bouton
   **😋 Tester la démo** → **démo permanente**, directement.
 
-**Démo permanente** (3 messages à la suite, avec l'indicateur « en train d'écrire » entre eux) :
+**Démo permanente** (3 messages à la suite, avec l'indicateur « en train d'écrire » entre eux). Version finale,
+plus simple que la proposition ci-dessous :
+1. « 😋 Mettez-vous à la place d'un client de *Mint Burger*, notre resto de démo. Choisissez votre burger et passez
+   commande, comme sur une vraie page de commande. Rien n'est payé ni envoyé. » — **Je commande**
+2. « 📊 Côté resto, chaque commande arrive en direct sur le tableau de bord. Passez la vôtre, puis ouvrez-le pour la
+   voir arriver. » — **Voir le dashboard**
+3. « ✨ Et pour votre resto ? On adapte tout à votre carte et à votre façon de travailler. On en parle ? » —
+   **[🙋 Je veux le mien] [🍔 Découvrir PFlow]**
+4. « Je veux le mien » : « Super ! Jules, de PFlow, vous recontacte très vite 🙂 Dites-nous déjà le nom de votre resto. »
+
+Proposition d'origine :
 1. « 😋 Mettez-vous à la place d'un client de *Mint Burger* 🍔🍵 : composez votre commande directement depuis sa
    carte, comme sur WhatsApp 👇 » — bouton lien **« Je commande »** →
    `https://order.pflow.fr/demo/commande?r=pflow`
@@ -138,5 +162,5 @@ rappellent PFlow. **Logo** proposé si tu n'en as pas : « Mint Burger » en nav
 
 Les anciennes adresses d'UChat ne servent plus à rien ici : on ne les reprend pas.
 
-**Passage en actif de PFlow Démo** : bloqué tant que cette démo permanente n'existe pas (et tant que l'étape
-de facturation de `bascule-pflow-demo.md` n'est pas réglée).
+**Passage en actif de PFlow Démo** : bloqué tant que cette démo permanente n'existe pas (seul blocage restant :
+la facturation est réglée).
