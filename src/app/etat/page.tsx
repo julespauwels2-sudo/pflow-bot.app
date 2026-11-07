@@ -148,6 +148,7 @@ function ServerCards({ data }: { data: SystemStatus }) {
       </Card>
 
       {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && <WhatsAppAccessCard />}
+      {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && data.comptes.some((c) => c.plateforme === "whatsapp" && c.etat === "test") && <OrderEventTestCard />}
 
       <Card title="Clés détectées" className="lg:col-span-2">
         <ul className="grid gap-x-8 gap-y-1 text-sm md:grid-cols-2" data-testid="etat-cles">
@@ -257,6 +258,85 @@ function WhatsAppAccessCard() {
             Testé le {time(result.data.testeLe)} · API Graph {result.data.version}
           </p>
         </div>
+      )}
+    </Card>
+  );
+}
+
+const TEST_EVENTS = [
+  { value: "commande_validee", label: "🧾 Commande validée" },
+  { value: "commande_en_preparation", label: "👨‍🍳 En préparation" },
+  { value: "commande_prete", label: "✅ Prête" },
+  { value: "panier_abandonne", label: "🛒 Panier abandonné" },
+];
+
+/**
+ * Événement de commande simulé (aucune commande créée) : passe par la vraie route signée, vers le canal
+ * WhatsApp en test et son numéro de test seulement.
+ */
+function OrderEventTestCard() {
+  const [event, setEvent] = useState("commande_validee");
+  const [mode, setMode] = useState("retrait");
+  const [paiement, setPaiement] = useState("sur_place");
+  const [result, setResult] = useState<{ status: "idle" } | { status: "loading" } | { status: "error"; error: string } | { status: "ready"; text: string; ok: boolean }>({ status: "idle" });
+  async function run() {
+    setResult({ status: "loading" });
+    try {
+      const token = await accessToken();
+      const response = await fetch("/api/etat/evenement-test", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ event, mode, paiement }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string; canal?: string; destinataire?: string; resultat?: { pris?: boolean; raison?: string; envois?: Record<string, { etat: string; detail: string }> } };
+      if (body.error) throw new Error(body.error);
+      const r = body.resultat ?? {};
+      const envois = Object.entries(r.envois ?? {}).map(([k, v]) => `${k} : ${v.etat} (${v.detail})`).join(" · ");
+      setResult({ status: "ready", ok: Boolean(r.pris) && !envois.includes(": echec"), text: r.pris ? `${body.canal} → ${body.destinataire} · ${envois}` : `Pas pris : ${r.raison ?? `erreur ${response.status}`}` });
+    } catch (error) {
+      setResult({ status: "error", error: errorText(error) });
+    }
+  }
+  return (
+    <Card title="Événement de commande de test" className="lg:col-span-2">
+      <p className="text-xs text-muted">
+        Simulation : aucune commande n&apos;est créée. Le message part du numéro en test vers votre numéro de test seulement, par la même route signée que PFlow Order.
+        Votre fenêtre de 24 h doit être ouverte (écrivez « Bonjour » au bot avant).
+      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+        <select aria-label="Événement" className="rounded-lg border border-line px-2 py-1" value={event} onChange={(e) => setEvent(e.target.value)}>
+          {TEST_EVENTS.map((e) => (
+            <option key={e.value} value={e.value}>
+              {e.label}
+            </option>
+          ))}
+        </select>
+        {event !== "panier_abandonne" && (
+          <>
+            <select aria-label="Mode" className="rounded-lg border border-line px-2 py-1" value={mode} onChange={(e) => setMode(e.target.value)}>
+              <option value="retrait">Retrait</option>
+              <option value="livraison">Livraison</option>
+            </select>
+            <select aria-label="Paiement" className="rounded-lg border border-line px-2 py-1" value={paiement} onChange={(e) => setPaiement(e.target.value)}>
+              <option value="sur_place">Sur place</option>
+              <option value="en_ligne">En ligne</option>
+            </select>
+          </>
+        )}
+        <Button variant="secondary" onClick={run} disabled={result.status === "loading"}>
+          {result.status === "loading" ? "Envoi…" : "Envoyer l'événement de test"}
+        </Button>
+      </div>
+      {result.status === "error" && (
+        <div className="mt-3">
+          <Notice tone="error">{result.error}</Notice>
+        </div>
+      )}
+      {result.status === "ready" && (
+        <p className={`mt-3 text-sm ${result.ok ? "" : "text-coral"}`} data-testid="evenement-test">
+          {result.ok ? "✅ " : "⚠️ "}
+          {result.text}
+        </p>
       )}
     </Card>
   );
