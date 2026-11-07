@@ -77,6 +77,16 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   ouverte. Notification par e-mail (présente dans le template UChat) : proposer une solution gratuite.
 - Décision Vercel (plan Hobby non commercial) et webhook isolé pour pouvoir l'héberger ailleurs.
 
+### Avant la bascule de chaque resto (noté le 7 novembre 2026)
+- **ag_pizzaa** : son bot a **sa propre copie de l'Accueil** (personnalisation), qui ne reçoit plus les
+  mises à jour du modèle maître : mots-clés encore « bonjour, salut, hello, menu, **commander** » (le
+  modèle a déplacé « commander » vers « CTA - Commander »), pas de version courte de l'accueil (12 h),
+  prénom tiré du premier mot du profil. **Avant sa bascule** : soit supprimer sa copie pour le relier au
+  modèle (page du client → flux Accueil → « Revenir au modèle »), soit reporter ces changements à la main.
+  Son bot est aujourd'hui en mode « mots-clés uniquement ».
+- Événements de commande pas encore couverts : aucun (annulée, remboursée, annulation refusée et rappel
+  ajoutés le 7 novembre). Suivi et annulation par l'IA : `PFLOW_ORDER_PONT_CLE` dans Vercel (C5).
+
 ### Plus tard (décidé par Jules le 5 novembre 2026)
 - **Boîte de réception pour les gérants** : chaque gérant voit seulement les conversations de son resto
   (compte du dashboard, droit limité à son resto). Pas maintenant.
@@ -84,8 +94,8 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   Supabase Edge Functions) avant la bascule du premier client.
 
 ### Phase 2
-- Fonctions IA `annuler_commande` et `suivre_commande` (API PFlow Order), avec accord de Jules sur ce
-  que l'app peut modifier.
+- ~~Fonctions IA `annuler_commande` et `suivre_commande`~~ : faites le 7 novembre 2026 (C5, pont existant
+  de PFlow Order, annulation toujours confirmée par le client).
 - Messages vocaux : transcription (service payant à proposer, exception à la règle « coût quasi nul »).
 - Instagram, Embedded Signup, messages différés et relances, statistiques, migration des clients UChat.
 - Fonctions IA génériques et serveurs MCP.
