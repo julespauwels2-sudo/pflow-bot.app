@@ -501,3 +501,18 @@ faux Meta (`scripts/e2e/numero-pflow.js`) ; WhatsApp et boîte de réception tou
   l'arrêt d'UChat** (noté dans `docs/plan.md`).
 - **Point 1 (buckets listables)** : **à faire avant le prochain questionnaire d'onboarding envoyé à un
   client** (le plan de test de 5 minutes est prêt dans `docs/securite-crm.md`). À ne pas oublier.
+
+## C1 — webhook branché, passage en Live préparé (7 novembre 2026)
+
+- **Diagnostic** : Meta a bien envoyé le message de Jules au webhook (journaux Vercel, 04 h 12 UTC). L'échec
+  vient de la **migration C non appliquée** (table `bot_webhook_evenements` absente), pas du mode
+  Développement. → Appliquer la migration C (parties A et B, en attente du OK de Jules) puis refaire le test.
+- **Politique de confidentialité** : `docs/legal/site/confidentialite.html` remplace la page actuelle de
+  pflow.fr (périmée : sans PFlow Bots, Anthropic ni suppression des données), avec le gabarit exact du
+  site (dépôt `Site-PFlow`, lu en lecture seule, rien poussé). Nouvelle page `suppression-donnees.html`.
+  Identité lue dans `infos-legales.js` du site : aucune case à compléter (vérifié dans un navigateur, ordinateur
+  et téléphone).
+- **Mode Live** : `docs/etape-c/checklist-live.md` (champs exigés par Meta, valeurs à coller, icône
+  1024 × 1024 dans `docs/etape-c/meta/`). Pas nécessaire pour le test ; le sera pour les vrais numéros.
+- **Publication sans effet** sur les numéros UChat (autre app Meta) et sur les autres apps de Jules (chaque
+  app a son propre mode).
