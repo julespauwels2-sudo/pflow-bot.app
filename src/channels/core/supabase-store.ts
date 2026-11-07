@@ -19,6 +19,8 @@ function rowToCanal(r: Row): Canal {
     plateforme: r.plateforme === "instagram" ? "instagram" : "whatsapp",
     accountId: String(r.compte_id),
     ...(r.waba_id ? { wabaId: String(r.waba_id) } : {}),
+    // Colonne ajoutée par la migration 20261107010000 (absente avant : le champ est alors omis des envois).
+    ...(r.messaging_account_id ? { messagingAccountId: String(r.messaging_account_id) } : {}),
     ...(r.numero_affiche ? { numeroAffiche: String(r.numero_affiche) } : {}),
     triggerMode: r.mode_declenchement === "toujours" ? "toujours" : "mots_cles_uniquement",
     coexistence: Boolean(r.coexistence),

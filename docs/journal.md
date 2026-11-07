@@ -582,3 +582,15 @@ faux Meta (`scripts/e2e/numero-pflow.js`) ; WhatsApp et boîte de réception tou
   WhatsApp porte `messaging_account_id` = WABA du canal. Erreurs Meta plus complètes (sous-code, détail, trace).
 - **Bouton « Tester l'accès du token »** sur la page État : lectures seules (numéro, compte et portefeuille
   propriétaire, numéros du compte, apps abonnées), aucun envoi.
+
+### Cause de l'erreur #10 trouvée par Jules (7 novembre 2026)
+
+- `1511896410913657` est le **compte de messagerie** (Test Messaging Account), pas le WABA. Vrai WABA du numéro
+  de test : `1440277184838867`. Jules a attribué les **deux** éléments à `pflow-bots-serveur` (accès total).
+- `bot_canaux.waba_id` corrigé (1440277184838867) à la demande de Jules (une ligne, table du bot).
+- Code : `messaging_account_id` des envois = compte de messagerie du canal (nouvelle colonne), **plus le WABA** ;
+  sans valeur, le champ est omis (Meta choisit). Bouton « Tester l'accès du token » : WABA et compte de messagerie
+  testés séparément.
+- **Migration proposée, non appliquée** : `docs/etape-c/migration-c2-compte-messagerie.sql` (colonne
+  `messaging_account_id` + valeur du numéro de test). En attente de l'accord de Jules.
+- `guide-meta.md` : « Deux éléments à attribuer par numéro ».

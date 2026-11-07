@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       resultats.push({
         canal: canal.numeroAffiche ?? canal.accountId,
         etat: canal.etat,
-        etapes: await checkWhatsAppAccess({ token: config.token, base: config.graphBase, version: config.graphVersion }, canal.accountId, canal.wabaId),
+        etapes: await checkWhatsAppAccess({ token: config.token, base: config.graphBase, version: config.graphVersion }, canal.accountId, canal.wabaId, canal.messagingAccountId),
       });
     }
     return NextResponse.json({ testeLe: new Date().toISOString(), version: config.graphVersion, resultats }, { headers: { "cache-control": "no-store" } });

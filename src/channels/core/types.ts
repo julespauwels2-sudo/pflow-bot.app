@@ -12,9 +12,9 @@ export type EventSource = Plateforme | "pflow_order";
 /** Options d'envoi (WhatsApp). */
 export interface SendOptions {
   /**
-   * Compte de messagerie qui envoie (et paie) le message : l'ID du compte WhatsApp (WABA). Sans lui, Meta
-   * choisit lui-même parmi les comptes du numéro, parfois un compte auquel le token n'a pas accès
-   * (erreur « (#10) Viewer cannot access the provided Paid Message Account »).
+   * Compte de messagerie qui envoie (et paie) le message (bot_canaux.messaging_account_id, PAS le WABA).
+   * Sans lui, Meta choisit lui-même parmi les comptes du numéro ; si le token n'y a pas accès :
+   * « (#10) Viewer cannot access the provided Paid Message Account ».
    */
   messagingAccountId?: string;
 }
@@ -49,6 +49,12 @@ export interface Canal {
   accountId: string;
   /** WhatsApp uniquement. */
   wabaId?: string;
+  /**
+   * Compte de messagerie (« Messaging Account » / « Paid Message Account ») qui envoie et paie les messages.
+   * Distinct du WABA sur les numéros récents (ex. numéro de test : WABA 1440…, messagerie 1511…).
+   * À attribuer, comme le WABA, à l'utilisateur système (guide-meta.md).
+   */
+  messagingAccountId?: string;
   numeroAffiche?: string;
   triggerMode: TriggerMode;
   coexistence: boolean;

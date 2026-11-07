@@ -112,11 +112,29 @@ Je te préviendrai : il faut que l'adresse réponde avant de la donner à Meta.
   Meta suit sur la ligne d'erreur).
 - Mode **Développement** : l'app ne reçoit que le faux message du bouton « Tester ». Les vrais messages
   n'arrivent qu'en **Live** (constaté le 7 novembre 2026).
-- « (#10) Viewer cannot access the provided Paid Message Account <WABA ID> » = le token de `WHATSAPP_TOKEN`
-  (utilisateur système) n'a pas accès au compte WhatsApp. Paramètres de l'entreprise → Utilisateurs système →
-  `pflow-bots-serveur` → **Attribuer des éléments** → Comptes WhatsApp → le compte → **Contrôle total**,
-  puis **générer un nouveau token** (app PFlow Bots, `whatsapp_business_messaging` +
-  `whatsapp_business_management`, sans expiration) → Vercel `WHATSAPP_TOKEN` → Redeploy.
+- « (#10) Viewer cannot access the provided Paid Message Account <ID> » = le token de `WHATSAPP_TOKEN`
+  (utilisateur système) n'a pas accès au **compte de messagerie** dont l'ID est cité. ⚠️ Cet ID n'est **pas**
+  le WABA (cause trouvée le 7 novembre 2026 : numéro de test, WABA `1440277184838867`, compte de messagerie
+  `1511896410913657`). Voir ci-dessous « Deux éléments à attribuer par numéro ».
+
+### ⚠️ Deux éléments à attribuer par numéro (utilisateur système)
+
+Meta sépare désormais deux objets pour chaque numéro :
+
+| Élément | Rôle | Où le voir | Dans `bot_canaux` |
+|---|---|---|---|
+| **Compte WhatsApp** (WABA, *WhatsApp Business Account*) | Numéros, modèles de message, webhook (`subscribed_apps`) | WhatsApp Manager, Paramètres de l'entreprise → Comptes → Comptes WhatsApp | `waba_id` |
+| **Compte de messagerie** (*Messaging Account*, cité « Paid Message Account » dans les erreurs) | Envoie et **paie** les messages | Paramètres de l'entreprise → Comptes (élément séparé, ex. « Test Messaging Account ») | `messaging_account_id` |
+
+Pour chaque numéro (test, puis chaque resto en C6) :
+1. Paramètres de l'entreprise → Utilisateurs système → `pflow-bots-serveur` → **Attribuer des éléments** :
+   - le **compte WhatsApp** → **Contrôle total** ;
+   - le **compte de messagerie** → **Contrôle total**.
+2. Pas besoin de régénérer le token si l'utilisateur système en a déjà un (il couvre « tous les objets »
+   attribués) ; en cas de doute, le régénérer et le remettre dans Vercel (`WHATSAPP_TOKEN`) → Redeploy.
+3. Renseigner les **deux ID** dans `bot_canaux` (`waba_id`, `messaging_account_id`).
+4. Page **État** → **Tester l'accès du token** : les lignes « Compte WhatsApp (WABA) » et « Compte de
+   messagerie » doivent être **OK**.
 
 ## 7. Passer l'app en mode « Live » (avant les vrais numéros, C6)
 
