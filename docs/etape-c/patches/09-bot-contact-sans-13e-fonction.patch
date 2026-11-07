@@ -1,0 +1,113 @@
+From 81aee1c1a8bfd6cfefc11359c96b5ff6b068f364 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 7 Nov 2026 06:35:18 +0000
+Subject: [PATCH] PFlow Bots (C4) : /api/bot-contact servi par api/pont.js
+ (limite de 12 fonctions de Vercel Hobby)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Le déploiement de la branche échouait : « No more than 12 Serverless Functions » (le patch 04 ajoutait
+api/bot-contact.js, une 13e fonction). Même méthode que /api/calcul : le code devient api/_bot-contact.js
+(pas une fonction), et vercel.json réécrit /api/bot-contact vers /api/pont?bot_contact=1. La page de
+commande garde la même adresse. Test : 12 fonctions au plus, réécriture présente, appel via pont.js.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HMGR77ZJVTw2W5VjXHoNSi
+---
+ repo/api/{bot-contact.js => _bot-contact.js} |  4 +++-
+ repo/api/pont.js                             |  5 +++++
+ repo/tests/pflow-bots-contact.test.js        | 20 ++++++++++++++++++--
+ repo/vercel.json                             |  4 ++++
+ 4 files changed, 30 insertions(+), 3 deletions(-)
+ rename repo/api/{bot-contact.js => _bot-contact.js} (90%)
+
+diff --git a/repo/api/bot-contact.js b/repo/api/_bot-contact.js
+similarity index 90%
+rename from repo/api/bot-contact.js
+rename to repo/api/_bot-contact.js
+index 9101501..a6a9a84 100644
+--- a/repo/api/bot-contact.js
++++ b/repo/api/_bot-contact.js
+@@ -1,7 +1,9 @@
+-/* PFlow, fonction serveur (etape C) : pre-remplissage de la page de commande quand le client vient du
++/* PFlow (etape C) : pre-remplissage de la page de commande quand le client vient du
+    bot PFlow Bots. Le bouton « Commander » du bot porte un jeton ?wa=... CHIFFRE par PFlow Bots (numero
+    WhatsApp, prenom, resto, expiration 2 h) ; cette adresse le dechiffre et renvoie { tel, prenom }.
+    Ne lit et n'ecrit rien en base. Sans PFLOW_BOTS_SECRET : 503 (la page continue sans pre-remplissage).
++   POST /api/bot-contact est reecrit vers /api/pont?bot_contact=1 (vercel.json) : pas de fonction de plus
++   (l'offre Hobby de Vercel limite un deploiement a 12 fonctions).
+ 
+    Format (identique a src/channels/pflow-order/contact-token.ts de PFlow Bots) :
+      jeton = base64url( iv (12 octets) | texte chiffre | tag (16 octets) ), AES-256-GCM,
+diff --git a/repo/api/pont.js b/repo/api/pont.js
+index 5346c25..a3b0a2e 100644
+--- a/repo/api/pont.js
++++ b/repo/api/pont.js
+@@ -74,7 +74,12 @@ async function noterCleInvalide(req, CLE, SB_URL, SB_ANON) {
+   } catch (e) { /* jamais bloquant */ }
+ }
+ 
++var BotContact = require("./_bot-contact.js");
++
+ module.exports = async function (req, res) {
++  /* Etape C : pre-remplissage depuis PFlow Bots (/api/bot-contact, reecrit ici par vercel.json : pas de
++     fonction de plus, l'offre Hobby limite un deploiement a 12 fonctions). */
++  if (new URL(req.url || "/", "http://local").searchParams.get("bot_contact") === "1") return BotContact(req, res);
+   var debut = Date.now();
+   res.setHeader("Content-Type", "application/json; charset=utf-8");
+   res.setHeader("Cache-Control", "no-store");
+diff --git a/repo/tests/pflow-bots-contact.test.js b/repo/tests/pflow-bots-contact.test.js
+index 945732a..7899d96 100644
+--- a/repo/tests/pflow-bots-contact.test.js
++++ b/repo/tests/pflow-bots-contact.test.js
+@@ -1,9 +1,9 @@
+-/* Etape C : pre-remplissage depuis le bot (api/bot-contact.js). Le jeton est fabrique ici comme le fait
++/* Etape C : pre-remplissage depuis le bot (api/_bot-contact.js, servi par api/pont.js). Le jeton est fabrique ici comme le fait
+    PFlow Bots (src/channels/pflow-order/contact-token.ts). */
+ var test = require("node:test");
+ var assert = require("node:assert/strict");
+ var crypto = require("node:crypto");
+-var handler = require("../api/bot-contact.js");
++var handler = require("../api/_bot-contact.js");
+ 
+ function jeton(contenu, secret) {
+   var iv = crypto.randomBytes(12);
+@@ -36,3 +36,19 @@ test("refusé : autre resto, expiré, mauvais secret, altéré ; sans secret : 5
+   delete process.env.PFLOW_BOTS_SECRET;
+   assert.equal((await appeler({ slug: "cookies-an-nou", jeton: j })).statusCode, 503);
+ });
++
++test("/api/bot-contact passe par api/pont.js (vercel.json) : pas de 13e fonction (limite Hobby : 12)", async function () {
++  var fs = require("node:fs"), path = require("node:path");
++  var api = fs.readdirSync(path.join(__dirname, "..", "api")).filter(function (f) { return /\.js$/.test(f) && f[0] !== "_"; });
++  assert.ok(api.length <= 12, api.length + " fonctions : " + api.join(", "));
++  var vercel = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "vercel.json"), "utf8"));
++  assert.ok(vercel.rewrites.some(function (r) { return r.source === "/api/bot-contact" && r.destination === "/api/pont?bot_contact=1"; }));
++  process.env.PFLOW_BOTS_SECRET = "secret-test";
++  delete require.cache[require.resolve("../api/pont.js")];
++  var pont = require("../api/pont.js");
++  var res = { statusCode: 0, headers: {}, setHeader: function (k, v) { this.headers[k] = v; }, end: function (b) { this.corps = JSON.parse(b); } };
++  await pont({ method: "POST", url: "/api/pont?bot_contact=1", headers: {},
++    body: { slug: "cookies-an-nou", jeton: jeton({ t: "590690123456", p: "Léa", s: "cookies-an-nou", e: maintenant + 3600 }, "secret-test") } }, res);
++  assert.deepEqual(res.corps, { ok: true, tel: "590690123456", prenom: "Léa" });
++  delete process.env.PFLOW_BOTS_SECRET;
++});
+diff --git a/repo/vercel.json b/repo/vercel.json
+index 48cbe49..b5d9126 100644
+--- a/repo/vercel.json
++++ b/repo/vercel.json
+@@ -144,6 +144,10 @@
+       "source": "/api/calcul",
+       "destination": "/api/instagram?calcul=1"
+     },
++    {
++      "source": "/api/bot-contact",
++      "destination": "/api/pont?bot_contact=1"
++    },
+     {
+       "source": "/calcul",
+       "destination": "/calcul.html"
+-- 
+2.43.0
+
