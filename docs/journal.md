@@ -563,3 +563,12 @@ faux Meta (`scripts/e2e/numero-pflow.js`) ; WhatsApp et boîte de réception tou
   non fusionnée, à fusionner par Jules).
 - **Checklist Live pas à pas** : `docs/etape-c/checklist-live.md` (étape 0 avant Meta, champs dans l'ordre de
   la page « Général », autorisations, publication, vérification).
+
+### Premier vrai message reçu, envoi refusé par Meta (7 novembre 2026, 05 h 24 UTC)
+
+- **Réception OK depuis le passage en Live** : 4 « Bonjour » reçus (04 h 46, 04 h 47, 04 h 48, 05 h 24 UTC),
+  contact créé, réponse calculée (lien + boutons), tout enregistré.
+- **Envoi refusé** : `(#10) Viewer cannot access the provided Paid Message Account 1511896410913657` = le token
+  `WHATSAPP_TOKEN` n'a pas accès au compte WhatsApp de test. Correction côté Meta (Jules) : attribuer le compte
+  WhatsApp à l'utilisateur système `pflow-bots-serveur` (contrôle total), régénérer le token, le mettre dans
+  Vercel, redéployer. Guide : `guide-meta.md` §6 « Dépannage ».

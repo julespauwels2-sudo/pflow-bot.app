@@ -110,6 +110,13 @@ Je te préviendrai : il faut que l'adresse réponde avant de la donner à Meta.
   `test_numeros` du canal.
 - « erreurs : 1 » avec « Envoi à … » = réponse calculée mais refusée par l'API Graph (le détail de l'erreur
   Meta suit sur la ligne d'erreur).
+- Mode **Développement** : l'app ne reçoit que le faux message du bouton « Tester ». Les vrais messages
+  n'arrivent qu'en **Live** (constaté le 7 novembre 2026).
+- « (#10) Viewer cannot access the provided Paid Message Account <WABA ID> » = le token de `WHATSAPP_TOKEN`
+  (utilisateur système) n'a pas accès au compte WhatsApp. Paramètres de l'entreprise → Utilisateurs système →
+  `pflow-bots-serveur` → **Attribuer des éléments** → Comptes WhatsApp → le compte → **Contrôle total**,
+  puis **générer un nouveau token** (app PFlow Bots, `whatsapp_business_messaging` +
+  `whatsapp_business_management`, sans expiration) → Vercel `WHATSAPP_TOKEN` → Redeploy.
 
 ## 7. Passer l'app en mode « Live » (avant les vrais numéros, C6)
 
