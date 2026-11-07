@@ -214,6 +214,15 @@ describe("de bout en bout contre un faux serveur Meta", () => {
     expect(other.skipped[0].reason).toContain("numéro inconnu");
   });
 
+  it("autre numéro du même compte (sans canal, ex. numéro perso) : rien n'est enregistré, ni message ni événement", async () => {
+    const { store, deps } = await setup({});
+    const before = store.events.size;
+    const other = await processWebhookPayload({ ...payload([text("message privé")]), entry: [{ changes: [{ field: "messages", value: { metadata: { phone_number_id: "999" }, contacts: [{ wa_id: "590690555555", profile: { name: "Ami" } }], messages: [{ ...text("message privé"), from: "590690555555" }] } }] }] }, deps);
+    expect(other.skipped[0].reason).toBe("numéro inconnu (aucun canal) : rien enregistré");
+    expect(store.events.size).toBe(before);
+    expect(await store.listContacts("canal1")).toEqual([]);
+  });
+
   it("transfert humain : alerte notée ; envoi refusé par Meta : noté en échec sans planter", async () => {
     received.length = 0;
     const { store, deps } = await setup({ triggerMode: "toujours" });

@@ -86,13 +86,19 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     await store.finishEvent(event.plateforme, event.wamid, reason);
   };
 
+  // Numéro sans canal (ex. un autre numéro du même compte WhatsApp, comme le numéro perso de Jules) :
+  // ignoré SANS RIEN ENREGISTRER (ni le message, ni le numéro). Données personnelles : on ne garde que
+  // ce qui concerne un canal de PFlow Bots.
+  const canal = await store.canalByAccount(event.plateforme, event.accountId);
+  if (!canal) {
+    report.skipped.push({ wamid: event.wamid, reason: "numéro inconnu (aucun canal) : rien enregistré" });
+    return;
+  }
   // Idempotence : un message renvoyé par Meta n'est jamais retraité.
   if (!(await store.claimEvent(event.plateforme, event.wamid, event))) {
     report.skipped.push({ wamid: event.wamid, reason: "déjà reçu" });
     return;
   }
-  const canal = await store.canalByAccount(event.plateforme, event.accountId);
-  if (!canal) return skip("numéro inconnu (aucun canal)");
   if (canal.etat === "coupe") return skip("canal coupé");
   if (canal.etat === "test" && !canal.testNumeros.includes(event.waId)) return skip("canal en test : numéro hors liste");
 
