@@ -81,9 +81,15 @@ export function nodeOutputs(node: FlowNode): Output[] {
         ...node.data.bubbles.flatMap((bubble) => bubble.buttons.flatMap((b) => (b.kind === "reply" ? [{ id: b.id, label: b.title }] : []))),
         { id: "next", label: "Étape suivante" },
       ];
+    case "commande":
+      return node.data.action === "annulable"
+        ? [
+            { id: "oui", label: "Annulable" },
+            { id: "non", label: "Pas annulable (raison envoyée)" },
+          ]
+        : [{ id: "next", label: "Suite" }];
     case "trigger":
     case "delay":
-    case "commande":
       return [{ id: "next", label: "Suite" }];
     case "list":
       return node.data.items.map((i) => ({ id: i.id, label: i.title }));

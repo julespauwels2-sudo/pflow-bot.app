@@ -35,9 +35,13 @@ export function flowVariables(nodes: FlowNode[]): VariableInfo[] {
     .filter((n): n is Extract<FlowNode, { type: "question" }> => n.type === "question")
     .map((n) => n.data.variable.trim())
     .filter(Boolean);
-  const taken = new Set([...BUILTIN_VARIABLES, ...fromEvent].map((v) => v.name));
+  // Bloc Commande « annulable » : numéro de la commande qui peut être annulée.
+  const fromOrder = nodes.some((n) => n.type === "commande" && n.data.action === "annulable")
+    ? [{ name: "commande_numero", label: "Numéro de la commande à annuler (bloc Commande « annulable »)" }]
+    : [];
+  const taken = new Set([...BUILTIN_VARIABLES, ...fromEvent, ...fromOrder].map((v) => v.name));
   const unique = [...new Set(fromQuestions)].filter((v) => !taken.has(v));
-  return [...BUILTIN_VARIABLES, ...fromEvent, ...unique.map((name) => ({ name, label: "Réponse à une question" }))];
+  return [...BUILTIN_VARIABLES, ...fromEvent, ...fromOrder, ...unique.map((name) => ({ name, label: "Réponse à une question" }))];
 }
 
 /** Variables {{...}} utilisées dans un texte. */

@@ -69,14 +69,8 @@ Bots actif (le routage est décidé par PFlow Bots, voir [pflow-order.md](pflow-
 
 ## Décisions à prendre avant C1
 
-1. **Hébergement du webhook.** Le plan Vercel Hobby est réservé à un usage non commercial. Options :
-   - **Vercel Pro** (environ 20 $/mois) : le plus simple, rien à déplacer ;
-   - **Supabase Edge Functions** (inclus dans le projet Supabase existant, quota gratuit large) : le
-     webhook isolé y est déplacé, l'interface reste sur Vercel ;
-   - rester sur Hobby pendant les tests sur le numéro de test uniquement, décider avant le premier vrai resto.
-
-   Recommandation : tests en C1–C3 sur l'existant, puis Supabase Edge Functions pour la prod si le budget
-   doit rester à zéro, sinon Vercel Pro. Tarifs et conditions à revérifier au moment de décider.
+1. **Hébergement du webhook.** ✅ Décidé le 8 novembre 2026 : **Vercel Pro** (équipe « Pflow » : CRM, site,
+   PFlow Bots). Analyse : `docs/hebergement.md`.
 2. **Propriété des numéros.** Phase 1 : tous les comptes WhatsApp (WABA) dans le Business Manager de
    PFlow, un seul utilisateur système et un seul token (variable `WHATSAPP_TOKEN`). L'onboarding par les
    restos eux-mêmes (« Embedded Signup », statut de fournisseur technique chez Meta) reste pour plus tard.

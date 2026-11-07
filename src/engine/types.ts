@@ -247,7 +247,7 @@ export interface NodeDataMap {
    * dernière commande) ou « annulation » (toujours précédée d'une confirmation dans le flux). La réponse
    * de PFlow Order est envoyée telle quelle, puis le flux continue.
    */
-  commande: { action: "suivi" | "annulation" };
+  commande: { action: OrderAction };
   goto_flow: { flowId: string };
   end: { text?: string };
   /** Pause avec l'indicateur « en train d'écrire ». */
@@ -439,6 +439,13 @@ export interface EngineInput {
   orderLinkQuery?: string;
 }
 
+/**
+ * Bloc Commande : « suivi » (état de la dernière commande), « annulable » (vérifie qu'il y a une commande
+ * qui peut encore être annulée : sortie « oui » vers la confirmation, sinon le client reçoit la raison et
+ * le flux suit la sortie « non »), « annulation » (annule, après confirmation).
+ */
+export type OrderAction = "suivi" | "annulable" | "annulation";
+
 /** Pont vers PFlow Order (suivi, annulation) : la réponse est le texte à envoyer au client. */
 export interface OrderBridgeRequest {
   action: "suivi" | "annulation";
@@ -453,6 +460,12 @@ export interface OrderBridgeResult {
   texte: string;
   /** Code de PFlow Order (ex. ANNULATION_ANNULEE, AUCUNE_COMMANDE). */
   code?: string;
+  /** Suivi : une commande récente existe-t-elle ? */
+  trouve?: boolean;
+  /** Suivi : statut de la dernière commande (nouvelle, attente_paiement, en_preparation, prete, terminee, annulee). */
+  statut?: string;
+  /** Suivi : numéro de la dernière commande. */
+  numero?: string;
 }
 export type OrderBridge = (request: OrderBridgeRequest) => Promise<OrderBridgeResult>;
 
@@ -474,7 +487,7 @@ export type EngineEvent =
   /** Mot-clé reconnu (avant le lancement du flux). */
   | { type: "keyword_matched"; flowId: string; keyword: string }
   /** Bloc Commande : appel du pont PFlow Order (suivi, annulation). */
-  | { type: "order_action"; action: "suivi" | "annulation"; ok: boolean; code?: string; fallback?: boolean }
+  | { type: "order_action"; action: OrderAction; ok: boolean; code?: string; fallback?: boolean; annulable?: boolean }
   /** Mot-clé présent dans une phrase longue : pas de flux, l'IA répond. */
   | { type: "keyword_skipped"; flowId: string; keyword: string }
   /** Bloc exécuté (trace pour le simulateur et le journal). */

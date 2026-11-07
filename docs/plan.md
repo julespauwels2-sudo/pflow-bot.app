@@ -75,7 +75,7 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - Bouton « Retour sur WhatsApp » (`wa.me`) sur la page de confirmation de PFlow Order.
 - Transfert humain : alerte dans la boîte de réception + WhatsApp au gérant si sa fenêtre de 24 h est
   ouverte. Notification par e-mail (présente dans le template UChat) : proposer une solution gratuite.
-- Décision Vercel (plan Hobby non commercial) et webhook isolé pour pouvoir l'héberger ailleurs.
+- ~~Décision Vercel~~ : Vercel Pro pris le 8 novembre 2026 (équipe « Pflow » : CRM, site, PFlow Bots).
 
 ### Avant la bascule de chaque resto (noté le 7 novembre 2026)
 - **ag_pizzaa** : son bot a **sa propre copie de l'Accueil** (personnalisation), qui ne reçoit plus les
@@ -90,8 +90,7 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 ### Plus tard (décidé par Jules le 5 novembre 2026)
 - **Boîte de réception pour les gérants** : chaque gérant voit seulement les conversations de son resto
   (compte du dashboard, droit limité à son resto). Pas maintenant.
-- **Hébergement** : Vercel gratuit pendant les tests sur le numéro de test Meta ; décision (Vercel Pro ou
-  Supabase Edge Functions) avant la bascule du premier client.
+- ~~Hébergement~~ : Vercel Pro (8 novembre 2026).
 
 ### Phase 2
 - ~~Fonctions IA `annuler_commande` et `suivre_commande`~~ : faites le 7 novembre 2026 (C5, pont existant

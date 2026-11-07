@@ -121,21 +121,26 @@ const suivreCommande: FlowGraph = {
   edges: [{ id: "e1", source: "t", target: "c" }],
 };
 
-/** C5 : jamais d'annulation sans confirmation du client (boutons Oui / Non). */
+/**
+ * C5 : d'abord vérifier qu'une commande peut être annulée (sinon la raison part tout de suite), puis
+ * jamais d'annulation sans confirmation du client (boutons Oui / Non).
+ */
 const annulerCommande: FlowGraph = {
   nodes: [
     trigger([]),
-    message("m", 340, 60, [
+    { id: "v", type: "commande", position: at(240, 60), data: { action: "annulable" } },
+    message("m", 560, 20, [
       {
-        text: "Vous voulez vraiment annuler votre dernière commande ?\n\nSi elle est payée en ligne et pas encore prête, vous êtes remboursé intégralement.",
+        text: "Vous voulez vraiment annuler votre commande n° {{commande_numero}} ?\n\nSi elle est payée en ligne, vous êtes remboursé intégralement.",
         buttons: [reply("oui", "✅ Oui, annuler"), reply("non", "↩️ Non, la garder")],
       },
     ]),
-    { id: "c", type: "commande", position: at(720, -20), data: { action: "annulation" } },
-    message("garde", 720, 180, [{ text: "C'est noté, votre commande continue 😊" }]),
+    { id: "c", type: "commande", position: at(940, -40), data: { action: "annulation" } },
+    message("garde", 940, 160, [{ text: "C'est noté, votre commande continue 😊" }]),
   ],
   edges: [
-    { id: "e1", source: "t", target: "m" },
+    { id: "e0", source: "t", target: "v" },
+    { id: "e1", source: "v", sourceHandle: "oui", target: "m" },
     { id: "e2", source: "m", sourceHandle: "oui", target: "c" },
     { id: "e3", source: "m", sourceHandle: "non", target: "garde" },
   ],

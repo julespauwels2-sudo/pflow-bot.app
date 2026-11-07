@@ -120,6 +120,5 @@ values
 ## Ce qui n'est pas encore fait (à décider)
 
 - **Embedded Signup** (cas C) : seulement si un numéro n'est pas déjà sur l'API.
-- **Hébergement** : Vercel Hobby interdit l'usage commercial → décision avant le premier client actif
-  (voir `docs/hebergement.md`).
+- ~~Hébergement~~ : Vercel Pro pris le 8 novembre (`docs/hebergement.md`).
 - ag_pizzaa : copie locale de l'Accueil à relier au modèle avant sa bascule (`docs/plan.md`).

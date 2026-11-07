@@ -21,7 +21,7 @@ import { explainTurn, describeIncoming, type JournalLine } from "./explain";
 /** Pont PFlow Order du simulateur : réponses d'exemple, clairement marquées. */
 export const simulatedOrderBridge: OrderBridge = async ({ action }) =>
   action === "suivi"
-    ? { ok: true, code: "OK", texte: "🧪 (Simulation) Votre commande n° 1042 (32 €) est en préparation." }
+    ? { ok: true, code: "OK", trouve: true, statut: "en_preparation", numero: "1042", texte: "🧪 (Simulation) Votre commande n° 1042 (32 €) est en préparation." }
     : { ok: true, code: "ANNULATION_ANNULEE", texte: "🧪 (Simulation) Votre commande n° 1042 est annulée. Vous êtes remboursé intégralement, sous 5 à 10 jours sur votre compte." };
 
 export type ChatEntry =

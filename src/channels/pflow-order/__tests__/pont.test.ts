@@ -65,7 +65,10 @@ describe("pont PFlow Order (C5)", () => {
 
   it("IA → annuler_commande : confirmation d'abord ; « Non » n'appelle jamais PFlow Order ; « Oui » annule", async () => {
     const { flows, agent } = await bot();
-    const { appels, bridge } = fauxPont({ annulation: { json: { ok: true, code: "ANNULATION_ANNULEE", texte: "Votre commande n° 42 est annulée." } } });
+    const { appels, bridge } = fauxPont({
+      suivi: { json: { ok: true, trouve: true, statut: "en_preparation", numero: 42, texte: "Votre commande n° 42 est en préparation." } },
+      annulation: { json: { ok: true, code: "ANNULATION_ANNULEE", texte: "Votre commande n° 42 est annulée." } },
+    });
     const ai = async () => ({ decision: { action: "fonction" as const, fonction: "annuler_commande", texte: "" }, usage: { inputTokens: 1, outputTokens: 1 } });
     const base = {
       now: new Date("2026-11-07T15:00:00Z"),
@@ -79,14 +82,50 @@ describe("pont PFlow Order (C5)", () => {
     const r1 = await runEngine({ ...base, contact, session: null, message: { kind: "text", text: "je veux annuler ma commande" } }, { ai, orderBridge: bridge });
     const question = r1.outgoing[0];
     if (question.kind !== "buttons") throw new Error("confirmation attendue");
-    expect(question.text).toContain("Vous voulez vraiment annuler");
-    expect(appels).toHaveLength(0);
+    expect(question.text).toContain("Vous voulez vraiment annuler votre commande n° 42 ?");
+    // Seule la vérification (suivi) a été faite : rien n'est annulé avant la confirmation.
+    expect(appels.map((a) => a.body.action)).toEqual(["suivi"]);
     const non = await runEngine({ ...base, contact: r1.contact, session: r1.session, message: { kind: "button_reply", id: question.buttons[1].id, title: "↩️ Non, la garder" } }, { ai, orderBridge: bridge });
     expect(non.outgoing).toEqual([{ kind: "text", text: "C'est noté, votre commande continue 😊" }]);
-    expect(appels).toHaveLength(0);
+    expect(appels.map((a) => a.body.action)).toEqual(["suivi"]);
     const oui = await runEngine({ ...base, contact: r1.contact, session: r1.session, message: { kind: "button_reply", id: question.buttons[0].id, title: "✅ Oui, annuler" } }, { ai, orderBridge: bridge });
     expect(oui.outgoing).toEqual([{ kind: "text", text: "Votre commande n° 42 est annulée." }]);
-    expect(appels.map((a) => a.body)).toEqual([{ action: "annulation", slug: "cookies-an-nou", client_tel: "590690938108" }]);
+    expect(appels.map((a) => a.body)).toEqual([
+      { action: "suivi", slug: "cookies-an-nou", client_tel: "590690938108" },
+      { action: "annulation", slug: "cookies-an-nou", client_tel: "590690938108" },
+    ]);
+  });
+
+  it("annuler_commande sans commande annulable : la raison tout de suite, sans confirmation ni annulation", async () => {
+    const { flows, agent } = await bot();
+    const ai = async () => ({ decision: { action: "fonction" as const, fonction: "annuler_commande", texte: "" }, usage: { inputTokens: 1, outputTokens: 1 } });
+    const run = async (suivi: unknown) => {
+      const { appels, bridge } = fauxPont({ suivi: { json: suivi }, annulation: { json: { ok: true, texte: "NE DOIT PAS ARRIVER" } } });
+      const r = await runEngine(
+        {
+          now: new Date("2026-11-07T15:00:00Z"),
+          client: { id: "c", nomResto: "Cookies An Nou", orderSlug: "cookies-an-nou", timezone: "America/Guadeloupe" },
+          channel: { id: "ch", clientId: "c", triggerMode: "toujours", ...DEFAULT_CHANNEL_SETTINGS },
+          flows,
+          infoSheet: { horaires: [] },
+          contact: { id: "590690938108", pause: null, aiUsage: { day: "", calls: 0 }, lastInboundAt: "2026-11-07T14:50:00Z" },
+          session: null,
+          message: { kind: "text", text: "je veux annuler ma commande" },
+          agent,
+        },
+        { ai, orderBridge: bridge },
+      );
+      expect(appels.map((a) => a.body.action)).toEqual(["suivi"]);
+      expect(r.outgoing).toHaveLength(1);
+      expect(r.session).toBeNull();
+      return r.outgoing[0].kind === "text" ? r.outgoing[0].text : "";
+    };
+    expect(await run({ ok: true, code: "AUCUNE_COMMANDE", trouve: false, texte: "Je ne vois pas de commande récente à votre nom chez Cookies An Nou. Vous voulez en passer une ?" })).toBe(
+      "Je ne vois pas de commande récente à votre nom chez Cookies An Nou. Vous voulez en passer une ?",
+    );
+    expect(await run({ ok: true, trouve: true, statut: "prete", numero: 42, texte: "x" })).toContain("n° 42 est déjà prête : elle ne peut plus être annulée");
+    expect(await run({ ok: true, trouve: true, statut: "annulee", numero: 42, texte: "x" })).toBe("Votre commande n° 42 est déjà annulée.");
+    expect(await run({ ok: true, trouve: true, statut: "terminee", numero: 42, texte: "x" })).toContain("déjà terminée");
   });
 
   it("pont absent, sans slug, ou en erreur : texte de repli, jamais d'exception", async () => {

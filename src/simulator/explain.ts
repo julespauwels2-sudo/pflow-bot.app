@@ -82,14 +82,16 @@ export function explainTurn(input: EngineInput, result: EngineResult): JournalLi
       case "keyword_matched":
         lines.push({ tone: "ok", text: `Mot-clé « ${e.keyword} » reconnu → flux « ${flowName(e.flowId)} »` });
         break;
-      case "order_action":
+      case "order_action": {
+        const label = e.action === "suivi" ? "suivi de la commande" : e.action === "annulable" ? "commande annulable ?" : "annulation de la commande";
         lines.push({
           tone: e.fallback ? "warn" : e.ok ? "ok" : "info",
           text: e.fallback
-            ? `PFlow Order : ${e.action === "suivi" ? "suivi" : "annulation"} impossible ici (pont non configuré) : texte de repli`
-            : `PFlow Order : ${e.action === "suivi" ? "suivi de la commande" : "annulation de la commande"}${e.code ? ` (${e.code})` : ""}`,
+            ? `PFlow Order : ${label} impossible ici (pont non configuré) : texte de repli`
+            : `PFlow Order : ${label}${e.action === "annulable" ? (e.annulable ? " → oui, confirmation demandée" : " → non, raison envoyée") : ""}${e.code ? ` (${e.code})` : ""}`,
         });
         break;
+      }
       case "keyword_skipped":
         lines.push({ tone: "info", text: `Mot-clé « ${e.keyword} » dans une phrase longue : pas de flux « ${flowName(e.flowId)} », l'IA répond` });
         break;

@@ -290,7 +290,9 @@ function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
     case "commande":
       return (
         <div className="space-y-1.5">
-          <p className="text-[13px] font-semibold">{node.data.action === "annulation" ? "Annuler sa dernière commande" : "Suivi de sa dernière commande"}</p>
+          <p className="text-[13px] font-semibold">
+            {node.data.action === "annulation" ? "Annuler sa dernière commande" : node.data.action === "annulable" ? "Commande annulable ?" : "Suivi de sa dernière commande"}
+          </p>
           <p className="text-[11px] text-muted">Réponse de PFlow Order envoyée au client</p>
         </div>
       );

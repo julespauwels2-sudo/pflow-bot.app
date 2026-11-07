@@ -22,6 +22,7 @@ import {
   type Flow,
   type FlowNode,
   type FlowNodeOf,
+  type OrderBridgeResult,
   type MessageBubble,
   type OutgoingMessage,
   type PauseReason,
@@ -54,6 +55,11 @@ export const TEXTS = {
   chooseOption: "Merci de choisir une des options ci-dessous 👇",
   orderLink: "Pour commander, c'est par ici 👇",
   orderButton: "Commander",
+  /** Pas de commande annulable (bloc Commande « annulable »). */
+  annulationDejaAnnulee: (n: string) => `Votre commande n° ${n} est déjà annulée.`,
+  annulationTerminee: (n: string) => `Votre commande n° ${n} est déjà terminée : elle ne peut plus être annulée. Écrivez « équipe » si vous avez un souci avec elle.`,
+  annulationTropTard: (n: string) =>
+    `Votre commande n° ${n} est déjà prête : elle ne peut plus être annulée. Appelez directement le restaurant si besoin.`,
   orderBridgeUnavailable:
     "Je ne peux pas consulter votre commande depuis ici pour le moment 🙏 Appelez directement le restaurant, ou écrivez « équipe » : quelqu'un vous répond.",
   questionError: {
@@ -144,7 +150,8 @@ class EngineRun {
   }
 
   private async runOrderAction(node: FlowNodeOf<"commande">): Promise<void> {
-    const { action } = node.data;
+    if (node.data.action === "annulable") return this.checkCancellable(node);
+    const action = node.data.action;
     const slug = this.input.client.orderSlug;
     const bridge = this.deps.orderBridge;
     if (!bridge || !slug) {
@@ -163,6 +170,39 @@ class EngineRun {
       }
     }
     if (this.session) this.followHandle(node, "next");
+  }
+
+  /**
+   * Avant de proposer d'annuler : y a-t-il une commande récente qui peut encore l'être ? (suivi du pont)
+   * Oui → sortie « oui » (confirmation), avec {{commande_numero}}. Non → la raison est envoyée, sortie « non ».
+   */
+  private async checkCancellable(node: FlowNodeOf<"commande">): Promise<void> {
+    const slug = this.input.client.orderSlug;
+    const bridge = this.deps.orderBridge;
+    const non = (text: string, extra: { ok: boolean; code?: string; fallback?: boolean }) => {
+      this.events.push({ type: "order_action", action: "annulable", annulable: false, ...extra });
+      this.send({ kind: "text", text });
+      if (this.session) this.followHandle(node, "non");
+    };
+    if (!bridge || !slug) return non(TEXTS.orderBridgeUnavailable, { ok: false, fallback: true });
+    let result: OrderBridgeResult;
+    try {
+      result = await bridge({ action: "suivi", slug, tel: this.contact.id });
+    } catch (error) {
+      this.events.push({ type: "error", message: `PFlow Order : ${errorMessage(error)}` });
+      return non(TEXTS.orderBridgeUnavailable, { ok: false, fallback: true });
+    }
+    const code = result.code;
+    const numero = result.numero ?? "";
+    if (result.trouve === false) return non(result.texte?.trim() || TEXTS.orderBridgeUnavailable, { ok: true, ...(code ? { code } : {}) });
+    if (!result.ok && result.trouve === undefined) return non(result.texte?.trim() || TEXTS.orderBridgeUnavailable, { ok: false, ...(code ? { code } : {}) });
+    if (result.statut === "annulee") return non(TEXTS.annulationDejaAnnulee(numero), { ok: true, code: "DEJA_ANNULEE" });
+    if (result.statut === "terminee") return non(TEXTS.annulationTerminee(numero), { ok: true, code: "TERMINEE" });
+    if (result.statut === "prete") return non(TEXTS.annulationTropTard(numero), { ok: true, code: "TROP_TARD" });
+    // nouvelle, attente_paiement, en_preparation (ou statut inconnu : PFlow Order tranchera à l'annulation).
+    this.events.push({ type: "order_action", action: "annulable", ok: true, annulable: true, ...(code ? { code } : {}) });
+    if (this.session && numero) this.session.vars.commande_numero = numero;
+    if (this.session) this.followHandle(node, "oui");
   }
 
   private async processMessage(): Promise<void> {

@@ -23,9 +23,17 @@ export function createOrderBridge(config: { baseUrl: string; cle: string; fetch?
         body: JSON.stringify({ action, slug, client_tel: tel }),
         signal: controller.signal,
       });
-      const json = (await response.json().catch(() => null)) as { ok?: boolean; texte?: string; code?: string } | null;
+      const json = (await response.json().catch(() => null)) as { ok?: boolean; texte?: string; code?: string; trouve?: boolean; statut?: string; numero?: unknown } | null;
       if (!json || typeof json.texte !== "string") throw new Error(`réponse illisible (HTTP ${response.status})`);
-      return { ok: response.ok && json.ok !== false, texte: json.texte, ...(json.code ? { code: json.code } : {}) };
+      return {
+        ok: response.ok && json.ok !== false,
+        texte: json.texte,
+        ...(json.code ? { code: json.code } : {}),
+        // Suivi : la dernière commande (pour vérifier qu'elle peut être annulée avant de le proposer).
+        ...(typeof json.trouve === "boolean" ? { trouve: json.trouve } : {}),
+        ...(typeof json.statut === "string" ? { statut: json.statut } : {}),
+        ...(json.numero !== undefined && json.numero !== null ? { numero: String(json.numero) } : {}),
+      };
     } finally {
       clearTimeout(timer);
     }

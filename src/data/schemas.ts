@@ -88,7 +88,7 @@ export const flowNodeSchema = z.discriminatedUnion("type", [
     }),
   }),
   z.object({ ...nodeBase, type: z.literal("handoff"), data: z.object({ text: z.string().optional() }) }),
-  z.object({ ...nodeBase, type: z.literal("commande"), data: z.object({ action: z.enum(["suivi", "annulation"]) }) }),
+  z.object({ ...nodeBase, type: z.literal("commande"), data: z.object({ action: z.enum(["suivi", "annulable", "annulation"]) }) }),
   z.object({ ...nodeBase, type: z.literal("goto_flow"), data: z.object({ flowId: z.string() }) }),
   z.object({ ...nodeBase, type: z.literal("end"), data: z.object({ text: z.string().optional() }) }),
   z.object({
