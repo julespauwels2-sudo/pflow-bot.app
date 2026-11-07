@@ -39,7 +39,17 @@ export function renderTemplate(text: string, vars: Record<string, string | undef
     .trim();
 }
 
-/** Premier mot du nom de profil WhatsApp (« Jules Pauwels » → « Jules »). */
+/**
+ * Prénom tiré du nom de profil WhatsApp, seulement quand il est sûr : un seul mot fait de lettres
+ * (« Jules », « Marie-Anne »). « Pauwels Jules » ou « Jules Pauwels » : impossible de savoir lequel est le
+ * prénom → vide, et « Hello {{prenom}} ! » devient « Hello ! ». Pareil pour un pseudo, des chiffres, un
+ * nom de commerce ou un emoji.
+ */
 export function firstName(profileName: string | undefined): string {
-  return profileName?.trim().split(/\s+/)[0] ?? "";
+  const parts = profileName?.trim().split(/\s+/).filter(Boolean) ?? [];
+  if (parts.length !== 1) return "";
+  const word = parts[0];
+  if (!/^\p{L}[\p{L}'’-]{1,19}$/u.test(word)) return "";
+  // « JULES » → « Jules » ; « jules » → « Jules ».
+  return word.charAt(0).toLocaleUpperCase("fr") + (word === word.toLocaleUpperCase("fr") ? word.slice(1).toLocaleLowerCase("fr") : word.slice(1));
 }

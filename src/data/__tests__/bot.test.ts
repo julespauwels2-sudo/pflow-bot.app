@@ -34,7 +34,8 @@ async function say(flows: Flow[], text: string) {
     channel: { id: "ch", clientId: "c", triggerMode: "toujours", ...DEFAULT_CHANNEL_SETTINGS },
     flows,
     infoSheet: { horaires: [] },
-    contact: { id: "x", profileName: "Léa", pause: null, aiUsage: { day: "", calls: 0 }, lastInboundAt: NOW.toISOString() },
+    // Pas de message précédent : nouvelle conversation, accueil complet.
+    contact: { id: "x", profileName: "Léa", pause: null, aiUsage: { day: "", calls: 0 } },
     session: null,
     message: { kind: "text", text },
   });

@@ -6,9 +6,10 @@ export interface VariableInfo {
 }
 
 export const BUILTIN_VARIABLES: VariableInfo[] = [
-  { name: "prenom", label: "Prénom du client (profil WhatsApp)" },
+  { name: "prenom", label: "Prénom du client (profil WhatsApp d'un seul mot, sinon vide : « Hello ! »)" },
   { name: "nom_resto", label: "Nom du resto" },
   { name: "lien_commande", label: "Lien de commande" },
+  { name: "nouvelle_conversation", label: "« oui » si le contact n'avait pas écrit depuis 12 h (ou jamais), sinon « non »" },
   // Fiche d'infos (calculées au fuseau du client)
   { name: "horaires", label: "Horaires de la semaine (jours regroupés)" },
   { name: "horaires_du_jour", label: "Horaires d'aujourd'hui" },

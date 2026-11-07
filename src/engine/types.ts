@@ -448,6 +448,8 @@ export type EngineEvent =
   | { type: "flow_started"; flowId: string; via: "mot_cle" | "defaut" | "ia" | "aller_au_flux" | "bouton" | "evenement" | "manuel" }
   /** Mot-clé reconnu (avant le lancement du flux). */
   | { type: "keyword_matched"; flowId: string; keyword: string }
+  /** Mot-clé présent dans une phrase longue : pas de flux, l'IA répond. */
+  | { type: "keyword_skipped"; flowId: string; keyword: string }
   /** Bloc exécuté (trace pour le simulateur et le journal). */
   | { type: "step"; flowId: string; nodeId: string; nodeType: string }
   | { type: "flow_ended"; flowId: string }

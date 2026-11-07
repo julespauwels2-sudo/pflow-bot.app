@@ -60,10 +60,10 @@ describe("modèle maître", () => {
       channel: { id: "ch", clientId: "c", triggerMode: "toujours" as const, ...DEFAULT_CHANNEL_SETTINGS },
       flows,
       infoSheet: { horaires: [{ jour: 2 as const, plages: [{ de: "08:00", a: "12:00" }] }], modesPaiement: "Espèces" },
-      contact: { id: "x", profileName: "Léa Martin", pause: null, aiUsage: { day: "", calls: 0 } },
+      contact: { id: "x", profileName: "Léa", pause: null, aiUsage: { day: "", calls: 0 } },
       session: null,
     };
-    // Accueil = flux par défaut : n'importe quel message le lance.
+    // Accueil = flux par défaut : une salutation (ou un premier contact très court) le lance.
     const r = await runEngine({ ...base, message: { kind: "text", text: "yo" } });
     expect(r.outgoing[0]).toMatchObject({
       kind: "link",
@@ -79,6 +79,65 @@ describe("modèle maître", () => {
     const r3 = await runEngine({ ...base, contact: r2.contact, session: r2.session, message: { kind: "button_reply", id: buttons.buttons[2].id, title: "💳 Paiement" } });
     expect(r3.outgoing[0]).toEqual({ kind: "text", text: "💳 *Paiement*\nEspèces" });
     expect(r3.outgoing[1]).toMatchObject({ kind: "link", buttonLabel: "😋 Je commande" });
+  });
+
+  it("scénarios de Jules (7 novembre) : IA pour les questions, accueil complet une fois, « commander » → CTA", async () => {
+    const repos = setup();
+    const template = await createMasterTemplate(repos);
+    const flows = (await repos.flows.listByOwner(template.id)).map(toEngineFlow).filter((f): f is Flow => f !== null);
+    const now = new Date("2026-11-07T05:57:00Z");
+    const aiCalls: string[] = [];
+    const ai = async (req: { message: string }) => {
+      aiCalls.push(req.message);
+      return { decision: { action: "repondre" as const, texte: "Notre best-seller : le cookie triple chocolat 🍪" }, usage: { inputTokens: 1, outputTokens: 1 } };
+    };
+    const base = {
+      now,
+      client: { id: "c", nomResto: "Cookies An Nou", orderSlug: "cookies-an-nou", timezone: "America/Guadeloupe" },
+      channel: { id: "ch", clientId: "c", triggerMode: "toujours" as const, ...DEFAULT_CHANNEL_SETTINGS },
+      flows,
+      infoSheet: { horaires: [] },
+      session: null,
+    };
+    const contact = (profileName: string, minutesAgo?: number) => ({
+      id: "x",
+      profileName,
+      pause: null,
+      aiUsage: { day: "", calls: 0 },
+      ...(minutesAgo === undefined ? {} : { lastInboundAt: new Date(now.getTime() - minutesAgo * 60_000).toISOString() }),
+    });
+    const say = (text: string, c = contact("Pauwels Jules", 5)) => runEngine({ ...base, contact: c, message: { kind: "text", text } }, { ai });
+    const textOf = (m: { kind: string }) => ("text" in m ? (m as { text: string }).text : "");
+
+    // 4. « Pauwels Jules » : pas de prénom deviné → « Hello ! ».
+    const first = await say("bonjour", contact("Pauwels Jules"));
+    expect(textOf(first.outgoing[0])).toBe("👋 Hello ! Bienvenue chez Cookies An Nou 🍔 Une petite faim ? Composez votre commande en quelques clics 👇");
+
+    // 2. Re-« bonjour » 5 min plus tard : version courte (une bulle, 3 boutons), pas le grand accueil.
+    const again = await say("Bonjour");
+    expect(again.outgoing.filter((m) => m.kind !== "typing")).toHaveLength(1);
+    expect(again.outgoing[0]).toMatchObject({ kind: "buttons", text: "Que puis-je faire pour vous ? 👇" });
+    const short = again.outgoing[0];
+    if (short.kind !== "buttons") throw new Error("boutons attendus");
+    expect(short.buttons.map((b) => b.title)).toEqual(["🛒 Commander", "⭐ Me conseiller", "ℹ️ Infos pratiques"]);
+    // … et son bouton « Commander » mène au bouton de commande.
+    const clicked = await runEngine({ ...base, contact: again.contact, session: again.session, message: { kind: "button_reply", id: short.buttons[0].id, title: "🛒 Commander" } }, { ai });
+    expect(clicked.outgoing[0]).toMatchObject({ kind: "link", buttonLabel: "😋 Je commande" });
+
+    // 2. « je veux commander » : CTA - Commander, pas l'Accueil.
+    const order = await say("je veux commander");
+    expect(order.outgoing).toHaveLength(1);
+    expect(order.outgoing[0]).toMatchObject({ kind: "link", buttonLabel: "😋 Je commande", url: "https://order.pflow.fr/c/cookies-an-nou" });
+
+    // 1. Une vraie question : l'IA répond (pas l'Accueil).
+    const question = await say("c'est quoi votre meilleur cookie ?");
+    expect(aiCalls).toEqual(["c'est quoi votre meilleur cookie ?"]);
+    expect(textOf(question.outgoing[0])).toBe("Notre best-seller : le cookie triple chocolat 🍪");
+    expect(question.outgoing.some((m) => textOf(m).includes("Bienvenue"))).toBe(false);
+
+    // « ma commande est où ? » n'envoie pas le bouton de commande : l'IA s'en occupe.
+    await say("ma commande est où ?");
+    expect(aiCalls).toHaveLength(2);
   });
 
   it("Infos pratiques > Livraison : tournées à venir (planning automatique), points de vente, et pas de titre vide", async () => {

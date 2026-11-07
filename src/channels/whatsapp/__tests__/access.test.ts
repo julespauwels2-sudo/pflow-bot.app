@@ -37,20 +37,23 @@ describe("test de l'accès du token (page État)", () => {
   it("compte de messagerie non renseigné : signalé, sans appel à Meta", async () => {
     const calls: Call[] = [];
     const steps = await checkWhatsAppAccess(config(fakeFetch({ "/111?": { status: 200, body: { display_phone_number: "+1" } } }, calls)), "111");
-    expect(steps.map((s) => s.etape)).toEqual(["Numéro WhatsApp", "Compte WhatsApp (WABA)", "Compte de messagerie"]);
+    expect(steps.map((s) => s.etape)).toEqual(["Numéro WhatsApp", "Compte WhatsApp (WABA)", "Compte de messagerie", "Numéros du compte", "Apps abonnées (webhook)"]);
     expect(steps[2].detail).toContain("Non renseigné");
+    expect(steps[3].detail).toBe("Aucun compte renseigné sur ce canal.");
     expect(calls).toHaveLength(1);
   });
 
-  it("lectures seules : numéro, compte, numéros, apps ; jamais d'envoi ni de token dans le résultat", async () => {
+  it("lectures seules : WABA et compte de messagerie séparés ; listes sur le compte qui répond ; jamais le token", async () => {
     const calls: Call[] = [];
+    const invalid = { status: 400, body: { error: { message: "Invalid parameter", code: 100, error_subcode: 2388339, fbtrace_id: "T1" } } };
     const steps = await checkWhatsAppAccess(
       config(fakeFetch({
         "/111?": { status: 200, body: { display_phone_number: "+1 555 186 2679", verified_name: "Test Number", quality_rating: "GREEN" } },
-        "/222?": { status: 200, body: { id: "222", name: "Test WhatsApp Business Account", owner_business_info: { id: "999", name: "PFlow" } } },
-        "/222/phone_numbers": { status: 200, body: { data: [{ id: "111", display_phone_number: "+1 555 186 2679" }] } },
-        "/222/subscribed_apps": { status: 200, body: { data: [{ whatsapp_business_api_data: { name: "PFlow Bots", id: "app" } }] } },
-        "/333": { status: 400, body: { error: { message: "(#10) Viewer cannot access", fbtrace_id: "T1" } } },
+        "/333/phone_numbers": { status: 200, body: { data: [{ id: "111", display_phone_number: "+1 555 186 2679" }] } },
+        "/333/subscribed_apps": { status: 200, body: { data: [{ whatsapp_business_api_data: { name: "PFlow Bots", id: "app" } }] } },
+        "/222/": invalid,
+        "/v24.0/222": { status: 200, body: { id: "222", name: "Test WhatsApp Account" } },
+        "/v24.0/333": { status: 200, body: { id: "333", name: "Test Messaging Account" } },
       }, calls)),
       "111",
       "222",
@@ -60,14 +63,27 @@ describe("test de l'accès du token (page État)", () => {
     expect(steps.map((s) => [s.etape, s.ok])).toEqual([
       ["Numéro WhatsApp", true],
       ["Compte WhatsApp (WABA)", true],
-      ["Numéros du compte WhatsApp", true],
-      ["Apps abonnées au compte WhatsApp", true],
-      ["Compte de messagerie", false],
+      ["Compte de messagerie", true],
+      ["Numéros du compte", true],
+      ["Apps abonnées (webhook)", true],
     ]);
-    expect(steps[1].detail).toContain("portefeuille propriétaire : PFlow (999)");
-    expect(steps[3].detail).toBe("PFlow Bots");
-    expect(steps[4].detail).toBe("Refus de Meta (400) : (#10) Viewer cannot access [trace T1]");
+    expect(steps[1].detail).toBe("Test WhatsApp Account · 222");
+    expect(steps[3].detail).toBe("+1 555 186 2679 (via le compte de messagerie)");
+    expect(steps[4].detail).toBe("PFlow Bots (via le compte de messagerie)");
     expect(JSON.stringify(steps)).not.toContain("jeton-secret");
+  });
+
+  it("les deux comptes refusent : l'erreur exacte de chacun", async () => {
+    const steps = await checkWhatsAppAccess(
+      config(fakeFetch({ "/subscribed_apps": { status: 400, body: { error: { message: "Invalid parameter", error_subcode: 2388339 } } } }, [])),
+      "111",
+      "222",
+      "333",
+    );
+    expect(steps[4].ok).toBe(false);
+    expect(steps[4].detail).toBe(
+      "compte de messagerie : Refus de Meta (400) : Invalid parameter [sous-code 2388339] | WABA : Refus de Meta (400) : Invalid parameter [sous-code 2388339]",
+    );
   });
 });
 

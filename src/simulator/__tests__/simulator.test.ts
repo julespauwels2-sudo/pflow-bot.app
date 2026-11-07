@@ -50,7 +50,7 @@ describe("journal : pourquoi le bot a réagi ou non", () => {
     const quiet = await playTurn(newSimulation(NOW), bot("mots_cles_uniquement", [defaut]), { kind: "text", text: "coucou" });
     expect(texts(quiet.state.turns[0].lines)).toEqual(["Ignoré : aucun mot-clé reconnu, et le canal est en mode « mots-clés uniquement »"]);
     const open = await playTurn(newSimulation(NOW), bot("toujours", [defaut]), { kind: "text", text: "coucou" });
-    expect(texts(open.state.turns[0].lines)[0]).toBe("Flux « Accueil par défaut » lancé (aucun mot-clé : flux par défaut)");
+    expect(texts(open.state.turns[0].lines)[0]).toBe("Flux « Accueil par défaut » lancé (salutation ou premier contact : flux par défaut)");
   });
 
   it("événement ignoré car fenêtre de 24 h fermée, puis envoyé quand le client a écrit", async () => {

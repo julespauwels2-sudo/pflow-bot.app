@@ -4,6 +4,7 @@ import { infoSheetVariables, withUpcomingRounds } from "./info-vars";
 import { fixedDelayMs, smartDelayMs, textOf } from "./delay";
 import { findDefaultFlow, findEventFlow, findTrigger, matchKeyword, normalize } from "./match";
 import { canSendFreeform } from "./window";
+import { isGreeting, isNewConversation, isShortMessage } from "./intent";
 import { decodeReplyId, encodeReplyId } from "./reply-id";
 import { firstName, renderTemplate } from "./template";
 import { localTime } from "./time";
@@ -96,10 +97,14 @@ class EngineRun {
   /** Bloc IA atteint avec un texte d'entrée : l'IA est appelée à la fin du traitement. */
   private pendingAiInput: { flowId: string; nodeId: string; text: string } | null = null;
 
+  /** Dernier message reçu du contact AVANT celui-ci (nouvelle conversation, premier contact). */
+  private readonly previousInboundAt: string | undefined;
+
   constructor(
     private readonly input: EngineInput,
     private readonly deps: EngineDeps,
   ) {
+    this.previousInboundAt = input.contact.lastInboundAt;
     this.contact = structuredClone(input.contact);
     this.session = input.session ? structuredClone(input.session) : null;
   }
@@ -200,14 +205,19 @@ class EngineRun {
     }
     this.session = null;
 
-    // 3. Mot-clé d'un déclencheur : on lance le flux.
+    // 3. Mot-clé d'un déclencheur (message court : l'intention est claire) : on lance le flux.
     if (this.tryKeyword(text)) return;
 
-    // 4. Canal en mode « toujours » : flux par défaut s'il existe, sinon IA de secours.
+    // 4. Canal en mode « toujours » :
+    //    - salutation (« bonjour », « salut ça va ») ou premier contact très court → flux par défaut (Accueil) ;
+    //    - tout autre message (vraie question, demande libre) → l'IA répond (et peut lancer un flux) ;
+    //    - sans IA disponible → flux par défaut, comme avant.
     //    (Jamais sur un canal « mots-clés uniquement » : numéros perso des gérants.)
     if (this.input.channel.triggerMode === "toujours") {
       const defaultFlow = findDefaultFlow(this.input.flows);
-      if (defaultFlow) {
+      const firstContact = !this.previousInboundAt;
+      const welcome = isGreeting(text) || (firstContact && isShortMessage(text, 2));
+      if (defaultFlow && (welcome || !this.deps.ai)) {
         this.startFlow(defaultFlow, "defaut");
         return;
       }
@@ -315,9 +325,19 @@ class EngineRun {
     }
   }
 
+  /**
+   * Mot-clé reconnu seulement dans un message court (KEYWORD_MAX_WORDS mots) : « je veux commander » lance
+   * son flux, « c'est quoi vos horaires de livraison à Jarry ? » va à l'IA (qui peut lancer le flux).
+   * Les mots-clés en mode « exact » ne sont pas concernés (le message entier doit déjà correspondre).
+   */
   private tryKeyword(text: string): boolean {
     const match = matchKeyword(this.input.flows, text);
     if (!match) return false;
+    const exact = findTrigger(match.flow)?.data.matchMode === "exact";
+    if (!exact && !isShortMessage(text)) {
+      this.events.push({ type: "keyword_skipped", flowId: match.flow.id, keyword: match.keyword });
+      return false;
+    }
     this.events.push({ type: "keyword_matched", flowId: match.flow.id, keyword: match.keyword });
     this.startFlow(match.flow, "mot_cle");
     return true;
@@ -740,6 +760,8 @@ class EngineRun {
     return {
       ...infoSheetVariables(infoSheet, now, client.timezone),
       prenom: firstName(this.contact.profileName),
+      // « oui » si le contact n'avait pas écrit depuis 12 h (ou jamais) : accueil complet ; sinon version courte.
+      nouvelle_conversation: isNewConversation(this.previousInboundAt, this.input.now) ? "oui" : "non",
       nom_resto: this.input.client.nomResto,
       lien_commande: this.orderUrl() ?? "",
       ...(this.session?.vars ?? {}),

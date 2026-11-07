@@ -62,8 +62,15 @@ describe("variables", () => {
     expect(renderTemplate("Merci !\n\nBonjour {{prenom}} !", {})).toBe("Merci !\n\nBonjour !");
   });
 
-  it("prénom = premier mot du nom de profil", () => {
-    expect(firstName("Jules Pauwels")).toBe("Jules");
+  it("prénom : seulement un nom de profil d'un seul mot fait de lettres", () => {
+    expect(firstName("Jules")).toBe("Jules");
+    expect(firstName("  marie-anne ")).toBe("Marie-anne");
+    expect(firstName("JULES")).toBe("Jules");
+    expect(firstName("Pauwels Jules")).toBe("");
+    expect(firstName("Jules Pauwels")).toBe("");
+    expect(firstName("Jules974")).toBe("");
+    expect(firstName("🍪")).toBe("");
+    expect(firstName("J")).toBe("");
     expect(firstName(undefined)).toBe("");
   });
 });

@@ -175,7 +175,9 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
       },
       flows: bot.flows,
       infoSheet: bot.infoSheet,
-      contact: contact.state,
+      // Autre bot qu'au message précédent (démo ouverte par son mot-clé…) : nouvelle conversation pour lui
+      // (accueil complet), même si le contact vient d'écrire.
+      contact: resetSession ? { ...contact.state, lastInboundAt: undefined } : contact.state,
       session: stored?.session ?? null,
       message: event.message,
       agent: bot.agent,

@@ -146,9 +146,18 @@ describe("boutons et listes", () => {
   it("dans une session, le mot-clé d'un autre flux lance cet autre flux", async () => {
     const ai = fakeAi({ action: "repondre", texte: "?" });
     const r1 = await runEngine(input({ message: { kind: "text", text: "menu" } }));
-    const r2 = await runEngine(next(r1, { message: { kind: "text", text: "il y a de l'agneau ?" } }), { ai: ai.port });
+    const r2 = await runEngine(next(r1, { message: { kind: "text", text: "de l'agneau ?" } }), { ai: ai.port });
     expect(ai.calls).toHaveLength(0);
     expect(r2.events).toContainEqual({ type: "flow_started", flowId: "f_agneau", via: "mot_cle" });
+  });
+
+  it("dans une session, un mot-clé perdu dans une phrase longue ne lance pas son flux : l'IA répond", async () => {
+    const ai = fakeAi({ action: "repondre", texte: "Oui, il y a de l'agneau ce midi." });
+    const r1 = await runEngine(input({ message: { kind: "text", text: "menu" } }));
+    const r2 = await runEngine(next(r1, { message: { kind: "text", text: "est-ce qu'il y a de l'agneau ce midi ?" } }), { ai: ai.port });
+    expect(ai.calls).toHaveLength(1);
+    expect(r2.events).toContainEqual({ type: "keyword_skipped", flowId: "f_agneau", keyword: "agneau" });
+    expect(r2.events).not.toContainEqual(expect.objectContaining({ type: "flow_started", flowId: "f_agneau" }));
   });
 
   it("un ancien bouton reste cliquable après expiration de la session", async () => {
@@ -860,5 +869,61 @@ describe("trace pour le simulateur", () => {
       input({ contact: freshContact({ pause: { reason: "manuel", until: null } }), message: { kind: "start_flow", flowId: "f_agneau" } }),
     );
     expect(paused.outgoing).toEqual([]);
+  });
+});
+
+describe("mode toujours : Accueil seulement pour une salutation ou un premier contact", () => {
+  const withDefault = flows.map((f) =>
+    f.id === "f_accueil" ? { ...f, nodes: f.nodes.map((n) => (n.type === "trigger" ? { ...n, data: { ...n.data, isDefault: true } } : n)) } : f,
+  ) as typeof flows;
+  const known: ReturnType<typeof freshContact> = { ...freshContact(), lastInboundAt: addMinutes(NOW, -60).toISOString() };
+  const base = (text: string, contact = known) =>
+    input({ channel: { ...channel, triggerMode: "toujours" }, flows: withDefault, contact, message: { kind: "text", text } });
+
+  it("une vraie question va à l'IA, pas à l'Accueil", async () => {
+    const ai = fakeAi({ action: "repondre", texte: "Le cookie triple chocolat !" });
+    const r = await runEngine(base("c'est quoi votre meilleur cookie ?"), { ai: ai.port });
+    expect(ai.calls).toHaveLength(1);
+    expect(texts(r)).toEqual(["Le cookie triple chocolat !"]);
+    expect(r.events).not.toContainEqual(expect.objectContaining({ type: "flow_started", flowId: "f_accueil" }));
+  });
+
+  it("une salutation lance l'Accueil (flux par défaut), sans IA", async () => {
+    const ai = fakeAi({ action: "repondre", texte: "?" });
+    for (const text of ["Bonsoir", "salut ça va ?", "Bonjou", "coucou madame"]) {
+      const r = await runEngine(base(text), { ai: ai.port });
+      expect(r.events).toContainEqual({ type: "flow_started", flowId: "f_accueil", via: "defaut" });
+    }
+    expect(ai.calls).toHaveLength(0);
+  });
+
+  it("premier contact très court (« ok », emoji) : Accueil ; premier contact avec une question : IA", async () => {
+    const ai = fakeAi({ action: "repondre", texte: "Oui !" });
+    const r1 = await runEngine(base("👍", freshContact()), { ai: ai.port });
+    expect(r1.events).toContainEqual({ type: "flow_started", flowId: "f_accueil", via: "defaut" });
+    const r2 = await runEngine(base("vous livrez à Baie-Mahault ce soir ?", freshContact()), { ai: ai.port });
+    expect(ai.calls).toHaveLength(1);
+    expect(texts(r2)).toEqual(["Oui !"]);
+  });
+
+  it("sans IA : l'Accueil reste le filet de sécurité", async () => {
+    const r = await runEngine(base("c'est quoi votre meilleur cookie ?"));
+    expect(r.events).toContainEqual({ type: "flow_started", flowId: "f_accueil", via: "defaut" });
+  });
+
+  it("variable nouvelle_conversation : oui au premier message ou après 12 h sans message, sinon non", async () => {
+    const flow = {
+      id: "f_v",
+      name: "V",
+      nodes: [
+        { id: "t", type: "trigger", position: { x: 0, y: 0 }, data: { keywords: ["test"] } },
+        { id: "m", type: "message", position: { x: 0, y: 0 }, data: { bubbles: [{ id: "b", text: "nouvelle={{nouvelle_conversation}}", buttons: [] }] } },
+      ],
+      edges: [{ id: "e", source: "t", target: "m" }],
+    } as unknown as (typeof flows)[number];
+    const run = (lastInboundAt?: string) => runEngine(input({ flows: [flow], contact: { ...freshContact(), lastInboundAt }, message: { kind: "text", text: "test" } }));
+    expect(texts(await run())).toEqual(["nouvelle=oui"]);
+    expect(texts(await run(addMinutes(NOW, -13 * 60).toISOString()))).toEqual(["nouvelle=oui"]);
+    expect(texts(await run(addMinutes(NOW, -60).toISOString()))).toEqual(["nouvelle=non"]);
   });
 });

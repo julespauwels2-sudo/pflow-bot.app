@@ -150,8 +150,8 @@ export interface AccessStep {
 
 /**
  * Test de l'accès du token (page État) : lectures seules, aucun message envoyé.
- * Numéro, compte WhatsApp (avec son portefeuille propriétaire), numéros du compte, apps abonnées, puis
- * compte de messagerie (séparé du WABA : il doit lui aussi être attribué à l'utilisateur système).
+ * Numéro, compte WhatsApp (WABA), compte de messagerie (séparé du WABA : il doit lui aussi être attribué à
+ * l'utilisateur système), numéros et apps abonnées (sur le compte qui répond).
  */
 export async function checkWhatsAppAccess(config: GraphConfig, phoneNumberId: string, wabaId?: string, messagingAccountId?: string): Promise<AccessStep[]> {
   const doFetch = config.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
@@ -171,35 +171,45 @@ export async function checkWhatsAppAccess(config: GraphConfig, phoneNumberId: st
     }
   };
   const id = encodeURIComponent;
-  const steps = [
+  const steps: AccessStep[] = [
     await get("Numéro WhatsApp", `${id(phoneNumberId)}?fields=display_phone_number,verified_name,quality_rating`, (j) =>
       [j.display_phone_number, j.verified_name, j.quality_rating ? `qualité ${j.quality_rating}` : ""].filter(Boolean).join(" · ")),
   ];
-  if (!wabaId) steps.push({ etape: "Compte WhatsApp (WABA)", ok: false, detail: "Aucun ID de compte WhatsApp (waba_id) sur ce canal." });
-  else
-    steps.push(
-      await get("Compte WhatsApp (WABA)", `${id(wabaId)}?fields=id,name,owner_business_info`, (j) => {
-        const owner = j.owner_business_info as { id?: string; name?: string } | undefined;
-        return `${j.name ?? j.id} · portefeuille propriétaire : ${owner ? `${owner.name ?? "?"} (${owner.id ?? "?"})` : "non communiqué"}`;
-      }),
-      await get("Numéros du compte WhatsApp", `${id(wabaId)}/phone_numbers?fields=id,display_phone_number`, (j) => {
-        const list = (j.data as { id?: string; display_phone_number?: string }[] | undefined) ?? [];
-        const here = list.some((n) => n.id === phoneNumberId);
-        return `${list.map((n) => n.display_phone_number ?? n.id).join(", ") || "aucun"}${here ? "" : " ⚠️ le numéro du canal n'est pas dans ce compte"}`;
-      }),
-      await get("Apps abonnées au compte WhatsApp", `${id(wabaId)}/subscribed_apps`, (j) => {
-        const list = (j.data as { whatsapp_business_api_data?: { name?: string; id?: string } }[] | undefined) ?? [];
-        return list.map((a) => a.whatsapp_business_api_data?.name ?? a.whatsapp_business_api_data?.id ?? "?").join(", ") || "aucune";
-      }),
-    );
-  // Compte de messagerie (paie les messages) : lecture simple de l'objet, champs par défaut de Meta.
-  if (!messagingAccountId) {
-    steps.push({ etape: "Compte de messagerie", ok: false, detail: "Non renseigné sur ce canal (messaging_account_id) : Meta choisit lui-même à l'envoi." });
-  } else {
-    steps.push(
-      await get("Compte de messagerie", id(messagingAccountId), (j) =>
-        [j.name, j.id].filter(Boolean).join(" · ") || "accessible"),
-    );
-  }
+  // Lecture simple de chaque compte, sans liste de champs : Meta refuse certains champs (« Invalid parameter »,
+  // sous-code 2388339) sur les comptes du nouveau modèle.
+  const describe = (j: Record<string, unknown>) => [j.name, j.id].filter(Boolean).join(" · ") || "accessible";
+  steps.push(
+    wabaId
+      ? await get("Compte WhatsApp (WABA)", id(wabaId), describe)
+      : { etape: "Compte WhatsApp (WABA)", ok: false, detail: "Aucun ID de compte WhatsApp (waba_id) sur ce canal." },
+    messagingAccountId
+      ? await get("Compte de messagerie", id(messagingAccountId), describe)
+      : { etape: "Compte de messagerie", ok: false, detail: "Non renseigné sur ce canal (messaging_account_id) : Meta choisit lui-même à l'envoi." },
+  );
+  // Numéros et apps abonnées : selon le modèle de comptes, ces listes répondent sur le compte de messagerie
+  // (ancien ID du WABA) ou sur le WABA. On essaie les deux et on dit lequel a répondu.
+  const owners = [...new Set([messagingAccountId, wabaId].filter((v): v is string => Boolean(v)))];
+  const label = (owner: string) => (owner === messagingAccountId ? "compte de messagerie" : "WABA");
+  const firstOk = async (etape: string, edge: string, show: (json: Record<string, unknown>) => string): Promise<AccessStep> => {
+    if (!owners.length) return { etape, ok: false, detail: "Aucun compte renseigné sur ce canal." };
+    const errors: string[] = [];
+    for (const owner of owners) {
+      const step = await get(etape, `${id(owner)}/${edge}`, show);
+      if (step.ok) return { ...step, detail: `${step.detail} (via le ${label(owner)})` };
+      errors.push(`${label(owner)} : ${step.detail}`);
+    }
+    return { etape, ok: false, detail: errors.join(" | ") };
+  };
+  steps.push(
+    await firstOk("Numéros du compte", "phone_numbers", (j) => {
+      const list = (j.data as { id?: string; display_phone_number?: string }[] | undefined) ?? [];
+      const here = list.some((n) => n.id === phoneNumberId);
+      return `${list.map((n) => n.display_phone_number ?? n.id).join(", ") || "aucun"}${here ? "" : " ⚠️ le numéro du canal n'est pas dans ce compte"}`;
+    }),
+    await firstOk("Apps abonnées (webhook)", "subscribed_apps", (j) => {
+      const list = (j.data as { whatsapp_business_api_data?: { name?: string; id?: string } }[] | undefined) ?? [];
+      return list.map((a) => a.whatsapp_business_api_data?.name ?? a.whatsapp_business_api_data?.id ?? "?").join(", ") || "aucune";
+    }),
+  );
   return steps;
 }

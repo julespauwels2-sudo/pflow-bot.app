@@ -40,10 +40,16 @@ const ifVariable = (id: string, x: number, y: number, variable: string, value: s
 
 // --- Principales PFlow Order ---------------------------------------------------
 
+/** Version courte de l'Accueil (contact qui a déjà écrit dans les 12 dernières heures). */
+export const SHORT_WELCOME_TEXT = "Que puis-je faire pour vous ? 👇";
+
 const accueil: FlowGraph = {
   nodes: [
-    trigger(["bonjour", "salut", "hello", "menu", "commander"], { isDefault: true }),
-    message("m", 340, 40, [
+    // « commander » lance « CTA - Commander », plus l'Accueil. Flux par défaut : salutations et premier contact.
+    trigger(["bonjour", "bonsoir", "salut", "hello", "coucou", "menu"], { isDefault: true }),
+    // Accueil complet une fois par conversation (rien reçu du contact depuis 12 h), sinon version courte.
+    ifVariable("c_nouv", 240, 80, "nouvelle_conversation", "oui"),
+    message("m", 560, -40, [
       {
         text: "👋 Hello {{prenom}} ! Bienvenue chez {{nom_resto}} 🍔 Une petite faim ? Composez votre commande en quelques clics 👇",
         buttons: [orderButton("cmd", "Commander")],
@@ -53,13 +59,22 @@ const accueil: FlowGraph = {
         buttons: [reply("conseil", "⭐ Me conseiller"), reply("infos", "ℹ️ Infos pratiques")],
       },
     ]),
-    goto("g_reco", 720, 20),
-    goto("g_infos", 720, 220),
+    message("m_court", 560, 260, [
+      { text: SHORT_WELCOME_TEXT, buttons: [reply("commander", "🛒 Commander"), reply("conseil", "⭐ Me conseiller"), reply("infos", "ℹ️ Infos pratiques")] },
+    ]),
+    goto("g_reco", 940, 20),
+    goto("g_infos", 940, 220),
+    goto("g_cta", 940, 400),
   ],
   edges: [
-    { id: "e1", source: "t", target: "m" },
+    { id: "e1", source: "t", target: "c_nouv" },
+    { id: "e1v", source: "c_nouv", sourceHandle: "vrai", target: "m" },
+    { id: "e1f", source: "c_nouv", sourceHandle: "faux", target: "m_court" },
     { id: "e2", source: "m", sourceHandle: "conseil", target: "g_reco" },
     { id: "e3", source: "m", sourceHandle: "infos", target: "g_infos" },
+    { id: "e4", source: "m_court", sourceHandle: "commander", target: "g_cta" },
+    { id: "e5", source: "m_court", sourceHandle: "conseil", target: "g_reco" },
+    { id: "e6", source: "m_court", sourceHandle: "infos", target: "g_infos" },
   ],
 };
 
@@ -90,7 +105,8 @@ const infosPratiques: FlowGraph = {
 
 const ctaCommander: FlowGraph = {
   nodes: [
-    trigger([]),
+    // Intention de commander (message court) : bouton « Je commande ». Pas « commande » seul (« ma commande est où ? »).
+    trigger(["commander", "je commande", "passer commande", "passer une commande"]),
     message("m", 340, 60, [
       { text: "Ça vous tente ? 😋 Vous pouvez passer votre commande directement ici 👇", buttons: [orderButton("cmd", "😋 Je commande")] },
     ]),
@@ -262,7 +278,7 @@ interface SeedFlow {
 }
 
 export const SEED_FLOWS: SeedFlow[] = [
-  { name: "Accueil", description: "Accueil, lien de commande et aide", folder: "Principales PFlow Order", graph: accueil, gotos: { g_reco: "IA - Recommandation", g_infos: "Infos pratiques" } },
+  { name: "Accueil", description: "Accueil, lien de commande et aide", folder: "Principales PFlow Order", graph: accueil, gotos: { g_reco: "IA - Recommandation", g_infos: "Infos pratiques", g_cta: "CTA - Commander" } },
   { name: "Infos pratiques", description: "Horaires, livraison, points de vente, paiement", folder: "Principales PFlow Order", graph: infosPratiques, gotos: { g_cta: "CTA - Commander" } },
   { name: "CTA - Commander", description: "Invite à commander (bouton Je commande)", folder: "Principales PFlow Order", graph: ctaCommander },
   { name: "IA - Lancer commande", description: "Le client veut commander : bouton Je commande", folder: "Fonctions IA", graph: lancerCommande },

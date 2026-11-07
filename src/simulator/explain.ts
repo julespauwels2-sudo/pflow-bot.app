@@ -48,7 +48,7 @@ export function describeIncoming(message: EngineInput["message"]): string {
 
 const VIA: Record<string, string> = {
   mot_cle: "mot-clé reconnu",
-  defaut: "aucun mot-clé : flux par défaut",
+  defaut: "salutation ou premier contact : flux par défaut",
   ia: "choisi par l'IA",
   aller_au_flux: "« Aller à un flux »",
   bouton: "clic sur un bouton d'un message précédent",
@@ -81,6 +81,9 @@ export function explainTurn(input: EngineInput, result: EngineResult): JournalLi
     switch (e.type) {
       case "keyword_matched":
         lines.push({ tone: "ok", text: `Mot-clé « ${e.keyword} » reconnu → flux « ${flowName(e.flowId)} »` });
+        break;
+      case "keyword_skipped":
+        lines.push({ tone: "info", text: `Mot-clé « ${e.keyword} » dans une phrase longue : pas de flux « ${flowName(e.flowId)} », l'IA répond` });
         break;
       case "flow_started":
         if (e.via !== "mot_cle") lines.push({ tone: "ok", text: `Flux « ${flowName(e.flowId)} » lancé (${VIA[e.via] ?? e.via})` });

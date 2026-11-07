@@ -128,7 +128,7 @@ export const flows = [accueil, agneau, reservation, aide];
 export function freshContact(overrides: Partial<ContactState> = {}): ContactState {
   return {
     id: "+590690000000",
-    profileName: "Jules Pauwels",
+    profileName: "Jules",
     pause: null,
     aiUsage: { day: "", calls: 0 },
     ...overrides,
