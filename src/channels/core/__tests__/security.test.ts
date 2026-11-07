@@ -3,7 +3,8 @@ import { tooManyRequests } from "@/lib/request-limit";
 import { createMemoryChannelStore } from "../memory-store";
 import { maskId } from "../privacy";
 import { rateLimit } from "../rate-limit";
-import { retentionCutoff, runRetention } from "../retention";
+import { cronAuthorized } from "@/lib/cron-auth";
+import { eventsCutoff, purgeEnabled, retentionCutoff, runRetention } from "../retention";
 import type { Canal } from "../types";
 
 const canal: Canal = {
@@ -32,15 +33,46 @@ describe("sécurité", () => {
     expect(maskId("+33612345678")).toBe("+336•••78");
   });
 
-  it("purge des messages après 12 mois : préparée, ne supprime rien tant qu'elle n'est pas activée", async () => {
-    const store = createMemoryChannelStore([canal]);
+  it("suppression automatique : conversations après 12 mois, journal technique après 30 jours", async () => {
+    let clock = new Date("2026-12-01T00:00:00Z");
+    const store = createMemoryChannelStore([canal], { now: () => clock });
     const contact = await store.getOrCreateContact("c1", "590690000001");
+    await store.claimEvent("whatsapp", "vieux", {});
     await store.addMessage({ canalId: "c1", contactId: contact.id, sens: "entrant", type: "text", contenu: { texte: "vieux" }, statut: "recu" });
+    await store.addTransfert({ canalId: "c1", contactId: contact.id, source: "bloc", gerantPrevenu: false });
+    clock = new Date("2027-11-15T00:00:00Z");
+    await store.claimEvent("whatsapp", "recent", {});
+    await store.addMessage({ canalId: "c1", contactId: contact.id, sens: "entrant", type: "text", contenu: { texte: "récent" }, statut: "recu" });
+
     const now = new Date("2028-01-01T00:00:00Z");
     expect(retentionCutoff(now).toISOString()).toBe("2027-01-01T00:00:00.000Z");
-    expect(await runRetention(store, now, false)).toEqual({ active: false, cutoff: "2027-01-01T00:00:00.000Z", messagesSupprimes: 0 });
-    expect(await store.listMessages(contact.id)).toHaveLength(1);
-    expect((await runRetention(store, now, true)).messagesSupprimes).toBe(1);
-    expect(await store.listMessages(contact.id)).toHaveLength(0);
+    expect(eventsCutoff(now).toISOString()).toBe("2027-12-02T00:00:00.000Z");
+    // Interrupteur d'urgence : rien n'est supprimé.
+    expect((await runRetention(store, now, false)).supprimes).toEqual({ messages: 0, transferts: 0, sessions: 0, appelsIa: 0, evenements: 0 });
+    expect(await store.listMessages(contact.id)).toHaveLength(2);
+
+    const report = await runRetention(store, now, true);
+    expect(report.supprimes).toMatchObject({ messages: 1, transferts: 1, evenements: 2 });
+    const restants = await store.listMessages(contact.id);
+    expect(restants.map((m) => m.contenu)).toEqual([{ texte: "récent" }]);
+    expect(await store.getContact(contact.id)).not.toBeNull(); // la fiche (et un éventuel STOP) est gardée
+  });
+
+  it("suppression automatique : active par défaut, suspendue par PURGE_ACTIVE=non", () => {
+    const before = process.env.PURGE_ACTIVE;
+    delete process.env.PURGE_ACTIVE;
+    expect(purgeEnabled()).toBe(true);
+    process.env.PURGE_ACTIVE = "non";
+    expect(purgeEnabled()).toBe(false);
+    if (before === undefined) delete process.env.PURGE_ACTIVE;
+    else process.env.PURGE_ACTIVE = before;
+  });
+
+  it("tâche planifiée : seul l'appel de Vercel avec CRON_SECRET passe", () => {
+    expect(cronAuthorized("Bearer secret-long", undefined)).toBe("not_configured");
+    expect(cronAuthorized("Bearer secret-long", "  ")).toBe("not_configured");
+    expect(cronAuthorized(null, "secret-long")).toBe("deny");
+    expect(cronAuthorized("Bearer autre", "secret-long")).toBe("deny");
+    expect(cronAuthorized("Bearer secret-long", "secret-long")).toBe("allow");
   });
 });

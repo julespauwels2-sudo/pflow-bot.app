@@ -41,11 +41,33 @@ export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: 
         .reverse()
         .map((e) => ({ source: e.source as "whatsapp", key: e.key, at: e.at, ...(e.error ? { error: e.error } : {}) }));
     },
-    async purgeMessagesBefore(before) {
-      const keep = messages.filter((m) => Date.parse(m.at) >= before.getTime());
-      const removed = messages.length - keep.length;
-      messages.splice(0, messages.length, ...keep);
-      return removed;
+    async purgeOlderThan({ conversations, evenements }) {
+      const before = (at: string | undefined, limit: Date) => Boolean(at) && Date.parse(at!) < limit.getTime();
+      const drop = <T>(list: T[], old: (item: T) => boolean) => {
+        const keep = list.filter((item) => !old(item));
+        const removed = list.length - keep.length;
+        list.splice(0, list.length, ...keep);
+        return removed;
+      };
+      let sessionsRemoved = 0;
+      for (const [id, s] of sessions) {
+        if (!before(s.session.expiresAt, conversations)) continue;
+        sessions.delete(id);
+        sessionsRemoved++;
+      }
+      let eventsRemoved = 0;
+      for (const [k, e] of events) {
+        if (!before(e.at, evenements)) continue;
+        events.delete(k);
+        eventsRemoved++;
+      }
+      return {
+        messages: drop(messages, (m) => before(m.at, conversations)),
+        transferts: drop(transferts, (t) => before(t.at, conversations)),
+        sessions: sessionsRemoved,
+        appelsIa: 0,
+        evenements: eventsRemoved,
+      };
     },
     async listCanaux() {
       return clone(canalList);

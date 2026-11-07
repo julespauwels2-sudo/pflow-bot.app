@@ -121,12 +121,17 @@ export function createSupabaseChannelStore(db: Db, newId: () => string = () => c
         ...(r.erreur ? { error: String(r.erreur) } : {}),
       }));
     },
-    async purgeMessagesBefore(before) {
-      // Préparé, NON activé : rien n'appelle cette fonction tant que Jules ne l'a pas décidé (docs/securite.md).
-      const old = await db.select("bot_messages", "id, cree_le", { order: { column: "cree_le", ascending: true }, limit: 1000 });
-      const ids = old.filter((r) => Date.parse(String(r.cree_le)) < before.getTime()).map((r) => String(r.id));
-      if (ids.length) await db.remove("bot_messages", "id", ids);
-      return ids.length;
+    async purgeOlderThan({ conversations, evenements }) {
+      if (!db.removeOlderThan) throw new Error("Suppression par date non disponible");
+      const c = conversations.toISOString();
+      // Uniquement des tables bot_ (assertBotTable) ; aucune clé étrangère vers ces tables.
+      return {
+        messages: await db.removeOlderThan("bot_messages", "cree_le", c),
+        transferts: await db.removeOlderThan("bot_transferts", "cree_le", c),
+        sessions: await db.removeOlderThan("bot_sessions", "expire_le", c),
+        appelsIa: await db.removeOlderThan("bot_appels_ia", "cree_le", c),
+        evenements: await db.removeOlderThan("bot_webhook_evenements", "recu_le", evenements.toISOString()),
+      };
     },
     async listCanaux() {
       return (await db.select("bot_canaux", "*")).map(rowToCanal);

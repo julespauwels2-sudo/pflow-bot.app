@@ -16,7 +16,7 @@ Aucune écriture dans la base : les vérifications Supabase ont été faites en 
 | Webhooks | ✅ signature obligatoire, taille et débit limités | — |
 | Données personnelles dans les journaux | ✅ numéros masqués, aucun message en clair | — |
 | En-têtes de sécurité du navigateur | ⚠️ absents | ✅ ajoutés |
-| Purge des messages après 12 mois | ⚠️ manquante | ✅ préparée, **non activée** |
+| Purge des messages après 12 mois | ⚠️ manquante | ✅ **active** (Vercel Cron quotidien, dès que `CRON_SECRET` est défini) |
 
 ## 1. Accès aux pages
 
@@ -80,9 +80,11 @@ vers une adresse interne, plafond 10 Mo.
   identifiants masqués (`5906•••56`), jamais le texte des messages. Test automatique.
 - **Base** : numéros, messages, transcriptions des vocaux, accessibles aux seuls admins. L'audio des
   vocaux n'est jamais stocké. Les messages envoyés à l'IA sont gardés dans `bot_appels_ia.message`.
-- **Purge après 12 mois** : `src/channels/core/retention.ts` (préparée, testée, **non activée** : rien
-  ne l'appelle, et même appelée elle ne supprime rien sans `PURGE_ACTIVE=oui`). Pour l'activer plus
-  tard : une tâche planifiée Vercel (Cron) qui l'appelle une fois par jour.
+- **Suppression automatique** (activée le 7 novembre 2026) : `src/channels/core/retention.ts`, lancée chaque
+  jour à 07 h 17 UTC (± 1 h sur l'offre gratuite) par Vercel Cron (`vercel.json`) via `/api/cron/purge`.
+  Conversations (`bot_messages`, `bot_transferts`, `bot_sessions`) et `bot_appels_ia` : 12 mois ;
+  `bot_webhook_evenements` : 30 jours. Les fiches de contact (`bot_contacts`, dont le « STOP ») sont gardées.
+  La route n'accepte que l'appel de Vercel (`CRON_SECRET`, refus sans lui) ; `PURGE_ACTIVE=non` la suspend.
 - SQL équivalent, **à ne lancer qu'après ton accord** (pour mémoire) :
 
 ```sql
@@ -108,7 +110,7 @@ delete from public.bot_appels_ia where cree_le < now() - interval '12 months';
 
 | # | Point | Pourquoi | Proposition |
 |---|---|---|---|
-| 1 | Activer la purge (12 mois / 30 jours) | RGPD : ne pas garder les conversations sans fin | Vercel Cron quotidien + `PURGE_ACTIVE=oui`, après la migration C |
+| 1 | ~~Activer la purge (12 mois / 30 jours)~~ | Fait le 7 novembre 2026 | Reste : `CRON_SECRET` dans Vercel |
 | 2 | Politique de confidentialité publique | Obligatoire pour la validation Meta (WhatsApp et Instagram) et le RGPD | Page sur pflow.fr : données gardées, durée, finalité, contact |
 | 3 | Accord de traitement avec chaque resto | PFlow traite les données des clients du resto (sous-traitant RGPD) | Une clause dans le contrat client |
 | 4 | Limite de débit partagée entre serveurs | Sur Vercel, chaque instance a son compteur | Règle « rate limit » du pare-feu Vercel sur `/api/webhooks/*` et `/api/ai` |

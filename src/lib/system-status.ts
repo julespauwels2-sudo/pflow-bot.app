@@ -27,6 +27,7 @@ const KEYS: { name: string; role: string }[] = [
   { name: "PFLOW_BOTS_SECRET", role: "Lien avec PFlow Order (jeton de contact)" },
   { name: "TRANSCRIPTION_PROVIDER", role: "Messages vocaux : service" },
   { name: "TRANSCRIPTION_API_KEY", role: "Messages vocaux : clé" },
+  { name: "CRON_SECRET", role: "Suppression automatique quotidienne (12 mois / 30 jours)" },
   { name: "BASIC_AUTH_PASSWORD", role: "Mot de passe provisoire du site" },
 ];
 

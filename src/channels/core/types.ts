@@ -93,6 +93,22 @@ export interface Transfert {
   resoluLe?: string;
 }
 
+/** Dates limites de conservation : tout ce qui est plus ancien est supprimé. */
+export interface PurgeCutoffs {
+  /** Conversations : messages, transferts, sessions (historique IA), appels à l'IA. */
+  conversations: Date;
+  /** Journal technique des notifications reçues (contient le texte des messages). */
+  evenements: Date;
+}
+
+export interface PurgeCounts {
+  messages: number;
+  transferts: number;
+  sessions: number;
+  appelsIa: number;
+  evenements: number;
+}
+
 /** Stockage du canal : Supabase (tables de la migration C) ou mémoire (tests, démo locale). */
 export interface ChannelStore {
   /** Note un événement reçu. Faux s'il a déjà été reçu (renvoi de Meta) : il n'est pas retraité. */
@@ -101,8 +117,8 @@ export interface ChannelStore {
   canalByAccount(plateforme: Plateforme, accountId: string): Promise<Canal | null>;
   /** Derniers événements reçus (page « État du système »). */
   recentEvents(limit?: number): Promise<{ source: EventSource; key: string; at: string; error?: string }[]>;
-  /** Purge des messages plus anciens que la date (préparée, non activée : voir docs/securite.md). */
-  purgeMessagesBefore(before: Date): Promise<number>;
+  /** Suppression automatique (durées de la politique de confidentialité : voir retention.ts). */
+  purgeOlderThan(cutoffs: PurgeCutoffs): Promise<PurgeCounts>;
   listCanaux(): Promise<Canal[]>;
   getOrCreateContact(canalId: string, waId: string, profileName?: string): Promise<ChannelContact>;
   getContact(contactId: string): Promise<ChannelContact | null>;

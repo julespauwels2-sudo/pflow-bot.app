@@ -38,6 +38,8 @@ export interface Db extends DbReader {
   insert?(table: string, row: Row): Promise<{ conflict: boolean }>;
   upsert(table: string, rows: Row[], onConflict: string): Promise<void>;
   remove(table: string, column: string, values: string[]): Promise<void>;
+  /** Supprime les lignes d'une table bot_ dont la colonne date est antérieure à `before` ; renvoie le nombre. */
+  removeOlderThan?(table: string, column: string, before: string): Promise<number>;
 }
 
 export class ReadOnlyTableError extends Error {}
@@ -91,6 +93,12 @@ export function supabaseDb(sb: SupabaseClient): Db {
         const { error } = await sb.from(table).upsert(part, { onConflict });
         fail(table, error);
       }
+    },
+    async removeOlderThan(table, column, before) {
+      assertBotTable(table);
+      const { error, count } = await sb.from(table).delete({ count: "exact" }).lt(column, before);
+      fail(table, error);
+      return count ?? 0;
     },
     async remove(table, column, values) {
       assertBotTable(table);

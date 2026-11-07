@@ -20,7 +20,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Tout est protégé, sauf les fichiers statiques et le futur webhook WhatsApp
-  // (Meta doit pouvoir l'appeler ; il sera protégé par la signature X-Hub-Signature-256).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/webhooks/).*)"],
+  // Tout est protégé, sauf les fichiers statiques, les webhooks de Meta (protégés par la signature
+  // X-Hub-Signature-256) et la tâche planifiée de Vercel (protégée par CRON_SECRET).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/webhooks/|api/cron/).*)"],
 };

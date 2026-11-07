@@ -21,8 +21,8 @@ servent de base de travail.
 Ces documents promettent des choses qui ne sont pas encore en place. Il faut soit les faire, soit
 corriger le texte :
 
-1. **Suppression automatique après 12 mois / 30 jours** : préparée dans le code mais **pas activée**
-   (`docs/securite.md`, § 5). À activer avant la mise en service du premier client.
+1. ~~Suppression automatique après 12 mois / 30 jours~~ : **active** depuis le 7 novembre 2026 (Vercel Cron
+   quotidien, `docs/securite.md` § 5), dès que `CRON_SECRET` est défini dans Vercel.
 2. **Région Vercel** : aucune région n'est réglée dans le projet, les fonctions serveur tournent donc
    probablement aux **États-Unis** (région par défaut de Vercel). Proposition : régler la région sur
    l'Europe (Dublin `dub1`, à côté de la base Supabase en Irlande, ou Paris `cdg1`). C'est une ligne de

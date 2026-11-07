@@ -39,8 +39,12 @@ La nouvelle version garde tout ce qui était juste (site, cookies, prospects, cl
    petit outil d'effacement par numéro si tu veux).
 2. **« SUPPRIMER » sur Instagram** : déjà géré par le CRM pour @pflow.gp (tâche + notification). Je n'ai
    **pas** proposé « SUPPRIMER » sur WhatsApp : le bot ne le traite pas.
-3. **Purge à 12 mois** : promise ici, préparée dans le code mais **pas encore activée** (déjà noté dans
-   `docs/legal/README.md`).
+3. **Purge à 12 mois** : active depuis le 7 novembre 2026 (tâche quotidienne Vercel Cron, une fois
+   `CRON_SECRET` défini dans Vercel).
+3 bis. **Conversations avec @pflow.gp** : la page disait « 12 mois après le dernier message », mais le CRM
+   ne les supprime pas automatiquement (`qg_motcle_messages`, aucune tâche de suppression). Phrase alignée
+   sur la règle des prospects (3 ans après le dernier échange, comme l'ancienne page). Pour revenir à
+   12 mois, il faudrait une suppression côté CRM (à décider par Jules).
 4. **Ton autre app Meta** (mots-clés Instagram) utilise `order.pflow.fr/politique-de-confidentialite`.
    La nouvelle page couvre aussi ce cas : tu pourras plus tard faire pointer les deux apps vers
    `pflow.fr/confidentialite`. Je ne touche à rien de ce côté.
