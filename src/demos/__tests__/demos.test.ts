@@ -54,6 +54,13 @@ describe("aiguillage du numéro PFlow", () => {
     expect(route("Bonjour Byron")).toEqual({ kind: "demo", clientId: "b", entered: true });
     expect(route("démo mexico")).toEqual({ kind: "demo", clientId: "m", entered: true });
   });
+  it("nom de démo en plusieurs mots : casse, accents, espaces et ponctuation ignorés (bug du 7 novembre)", () => {
+    const gwada = [demo("g", "Gwada food")];
+    const r = (t: string) => routePflowMessage({ message: text(t), demos: gwada, current: undefined, now: NOW, sessionMinutes: 30 });
+    for (const t of ["gwada food", "GWADA FOOD", "  Gwada   Food ! ", "Gwadà Food", "Démo Gwada Food", "Bonjour gwada food"]) {
+      expect(r(t), t).toEqual({ kind: "demo", clientId: "g", entered: true });
+    }
+  });
   it("la conversation reste dans la démo jusqu'à la fin de la session, ou un autre mot-clé", () => {
     const current = { clientId: "b", lastAt: "2026-11-10T14:50:00Z", visited: ["b"] };
     expect(route("vous livrez où ?", current)).toEqual({ kind: "demo", clientId: "b", entered: false });

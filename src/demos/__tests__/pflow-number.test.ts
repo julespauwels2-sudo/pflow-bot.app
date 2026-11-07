@@ -116,4 +116,41 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(texts(from).join()).toContain("Ici *PFlow*");
     expect((await store.listContacts("pflow"))[0].demo?.visited).toEqual([byron.id, mexico.id]);
   });
+
+  it("démo d'un resto sans bot publié (pas relié au modèle, brouillon seulement) : le modèle maître, à son nom, sans bouton Commander (bug du 7 novembre)", async () => {
+    const repos = createLocalRepositories(createMemoryStore(), { now: () => new Date("2026-11-07T15:00:00Z") });
+    await createMasterTemplate(repos);
+    const gwada = await repos.clients.create({ nomResto: "Gwada food", orderSlug: "gwada-vrai-slug" });
+    // Comme en production : un brouillon « Acceuil » jamais publié, aucun lien au modèle.
+    await repos.flows.create({ ownerKind: "client", ownerId: gwada.id, name: "Acceuil", draft: { nodes: [], edges: [] } });
+    await repos.demos.start(gwada.id, { days: 5 });
+    const data = await repos.workspace.exportAll();
+    expect(loadBotFromWorkspace(data, gwada.id)).toBeNull(); // hors démo : pas de bot (inchangé)
+    const demoBot = loadBotFromWorkspace(data, gwada.id, { demo: true })!;
+    expect(demoBot.client).toMatchObject({ nomResto: "Gwada food", orderSlug: "" });
+    expect(demoBot.client.orderUrl).toBeUndefined();
+    expect(demoBot.agent?.functions.length).toBeGreaterThan(0);
+
+    const canal: Canal = {
+      id: "pflow", role: "pflow", restaurantId: "", plateforme: "whatsapp", accountId: PFLOW_PHONE, triggerMode: "toujours",
+      coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "test", testNumeros: [PROSPECT],
+    };
+    const store = createMemoryChannelStore([canal]);
+    const deps = {
+      store,
+      graph: createGraphClient({ token: "t", base, version: "v24.0" }),
+      loadBot: async (id: string, options?: { demo?: boolean }) => loadBotFromWorkspace(data, id, options),
+      loadDemos: async () => demoDirectory(data),
+      now: () => new Date("2026-11-07T21:29:24Z"),
+      sleep: async () => {},
+    };
+    const from = sent.length;
+    expect((await processWebhookPayload(text("gwada food"), deps)).errors).toEqual([]);
+    const msgs = texts(from).join();
+    expect(msgs).toContain("Bienvenue chez Gwada food");
+    expect(msgs).not.toContain("Ici *PFlow*");
+    expect(msgs).not.toContain("gwada-vrai-slug");
+    expect(sent.slice(from).some((m) => m.type === "interactive" && (m.interactive as { type: string }).type === "cta_url")).toBe(false);
+    expect((await store.listContacts("pflow"))[0].demo).toMatchObject({ clientId: gwada.id });
+  });
 });
