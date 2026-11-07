@@ -572,3 +572,13 @@ faux Meta (`scripts/e2e/numero-pflow.js`) ; WhatsApp et boîte de réception tou
   `WHATSAPP_TOKEN` n'a pas accès au compte WhatsApp de test. Correction côté Meta (Jules) : attribuer le compte
   WhatsApp à l'utilisateur système `pflow-bots-serveur` (contrôle total), régénérer le token, le mettre dans
   Vercel, redéployer. Guide : `guide-meta.md` §6 « Dépannage ».
+
+### Erreur (#10) persistante avec le nouveau token (7 novembre 2026, 05 h 39 UTC)
+
+- Token régénéré (05 h 34 UTC), compte de test attribué en accès total, débogueur : « Applies to all objects ».
+  Test de 05 h 39 sur un déploiement postérieur au token (`dpl_EBGs…`, prêt à 05 h 39 min 08 s) : **toujours #10**.
+- Piste (modèle de comptes de Meta en évolution, cf. PR Chatwoot 16477) : un numéro peut avoir plusieurs
+  « comptes de messagerie » ; sans `messaging_account_id`, Meta choisit lui-même. **Ajouté** : chaque envoi
+  WhatsApp porte `messaging_account_id` = WABA du canal. Erreurs Meta plus complètes (sous-code, détail, trace).
+- **Bouton « Tester l'accès du token »** sur la page État : lectures seules (numéro, compte et portefeuille
+  propriétaire, numéros du compte, apps abonnées), aucun envoi.
