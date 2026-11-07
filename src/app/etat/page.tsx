@@ -267,6 +267,10 @@ const TEST_EVENTS = [
   { value: "commande_validee", label: "🧾 Commande validée" },
   { value: "commande_en_preparation", label: "👨‍🍳 En préparation" },
   { value: "commande_prete", label: "✅ Prête" },
+  { value: "commande_annulee", label: "❌ Annulée" },
+  { value: "commande_remboursee", label: "💸 Remboursée" },
+  { value: "annulation_refusee", label: "🚫 Annulation refusée" },
+  { value: "rappel_commande_prete", label: "⏰ Rappel : commande prête" },
   { value: "panier_abandonne", label: "🛒 Panier abandonné" },
 ];
 

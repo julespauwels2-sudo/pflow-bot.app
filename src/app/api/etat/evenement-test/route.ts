@@ -14,7 +14,15 @@ import { checkBotAdmin } from "@/lib/server-auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const TO_PFLOW_ORDER = { commande_validee: "commande", commande_en_preparation: "en_preparation", commande_prete: "prete" } as const;
+const TO_PFLOW_ORDER = {
+  commande_validee: "commande",
+  commande_en_preparation: "en_preparation",
+  commande_prete: "prete",
+  commande_annulee: "annulee",
+  commande_remboursee: "remboursee",
+  annulation_refusee: "annulation_refusee",
+  rappel_commande_prete: "rappel",
+} as const;
 
 export async function POST(request: Request) {
   const caller = await checkBotAdmin(request.headers.get("authorization"));
@@ -43,7 +51,9 @@ export async function POST(request: Request) {
             ...data,
             commande_mode: body.mode === "livraison" ? "livraison" : "retrait",
             paiement_mode: body.paiement === "en_ligne" ? "en_ligne" : "sur_place",
-            commande_statut: body.event === "commande_prete" ? "prete" : body.event === "commande_en_preparation" ? "en_preparation" : "recue",
+            commande_statut: body.event === "commande_prete" || body.event === "rappel_commande_prete" ? "prete" : body.event === "commande_en_preparation" ? "en_preparation" : "recue",
+            // Annulation : remboursée intégralement si payée en ligne (exemple), sinon sans remboursement.
+            ...(body.event === "commande_annulee" ? { remboursement: body.paiement === "en_ligne" ? "total" : "", montant_rembourse: data.montant_rembourse ?? "" } : {}),
           },
           simulation: true,
         };

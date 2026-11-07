@@ -113,17 +113,44 @@ describe("PFlow Order → PFlow Bots : canal actif", () => {
     expect(jamais.sent.length + ferme.sent.length).toBe(0);
   });
 
-  it("prête (livraison), relance de panier ; événement pas encore géré (annulée) : ignoré, expliqué", async () => {
+  it("prête (livraison), relance de panier ; événement inconnu : ignoré, expliqué", async () => {
     const { sent, deps } = await setup(canal("actif"));
     await handleOrderEvent(commande({ commande_id: "c2", evenements: [{ pflow_order: "prete" }], variables: { client_nom: "Léa", commande_numero: "43", commande_mode: "livraison" } }), deps);
     expect(texts(sent)[0]).toContain("part en livraison");
     const relance = await handleOrderEvent({ type: "option", option: "relance", restaurant_id: RESTO, client_tel: TEL, client_nom: "Léa", panier: { recap: "2 x Tout choco", total: "8 €", lien: "https://order.pflow.fr/c/cookies-an-nou?reprise=abc&via=wa" } }, deps);
     expect(relance).toMatchObject({ pris: true, envois: { relance: { etat: "ok" } } });
     expect(sent.some((s) => s.message.kind === "link" && s.message.url === "https://order.pflow.fr/c/cookies-an-nou?reprise=abc&via=wa")).toBe(true);
-    expect(await handleOrderEvent(commande({ commande_id: "c3", evenements: [{ pflow_order: "annulee" }] }), deps)).toEqual({
+    expect(await handleOrderEvent(commande({ commande_id: "c3", evenements: [{ pflow_order: "inconnu" }] }), deps)).toEqual({
       pris: true,
-      envois: { annulee: { etat: "ignore", detail: "événement « annulee » pas encore géré par PFlow Bots" } },
+      envois: { inconnu: { etat: "ignore", detail: "événement « inconnu » pas encore géré par PFlow Bots" } },
     });
+  });
+
+  it("annulée (remboursée intégralement / sans paiement), remboursée, annulation refusée, rappel", async () => {
+    const { sent, deps } = await setup(canal("actif"));
+    const send = async (id: string, evt: string, variables: Record<string, string>) => {
+      const from = sent.length;
+      const r = await handleOrderEvent(commande({ commande_id: id, evenements: [{ pflow_order: evt }], variables: { client_nom: "Léa", commande_numero: "42", ...variables } }), deps);
+      expect(r).toMatchObject({ pris: true, envois: { [evt]: { etat: "ok" } } });
+      return texts(sent.slice(from)).join("\n");
+    };
+    expect(await send("a1", "annulee", { remboursement: "total", montant_rembourse: "8 €" })).toContain("remboursée intégralement* (8 €)");
+    expect(await send("a2", "annulee", { remboursement: "partiel", montant_rembourse: "3 €" })).toContain("Un remboursement de 3 €");
+    const simple = await send("a3", "annulee", { remboursement: "" });
+    expect(simple).toContain("a été annulée.");
+    expect(simple).not.toContain("rembours");
+    expect(await send("a4", "remboursee", { remboursement: "partiel", montant_rembourse: "3 €" })).toContain("a été remboursée (3 €)");
+    expect(await send("a5", "annulation_refusee", {})).toContain("Annulation impossible");
+    expect(await send("a6", "rappel", {})).toContain("vous attend");
+  });
+
+  it("événements envoyés même si le bot est en pause (transfert humain), jamais fenêtre fermée", async () => {
+    const { store, sent, deps } = await setup(canal("actif"));
+    const contact = (await store.listContacts("c-actif"))[0];
+    await store.saveContact({ ...contact, state: { ...contact.state, pause: { reason: "transfert_humain", until: null } } });
+    expect(await handleOrderEvent(commande({ commande_id: "p1", evenements: [{ pflow_order: "annulee" }], variables: { commande_numero: "42" } }), deps)).toMatchObject({ pris: true, envois: { annulee: { etat: "ok" } } });
+    expect(sent).toHaveLength(1);
+    expect((await store.getContact(contact.id))?.state.pause).toEqual({ reason: "transfert_humain", until: null });
   });
 });
 

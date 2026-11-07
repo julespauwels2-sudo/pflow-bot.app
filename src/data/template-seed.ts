@@ -244,6 +244,68 @@ const prete: FlowGraph = {
   ],
 };
 
+/** Annulation : remboursée intégralement, en partie, ou sans paiement en ligne (textes repris du CRM). */
+const annulee: FlowGraph = {
+  nodes: [
+    eventTrigger("commande_annulee"),
+    ifVariable("c_total", 340, 60, "remboursement", "total"),
+    message("total", 700, -80, [
+      {
+        text: "❌ *Commande annulée*\n\nVotre commande #{{commande_numero}} a été annulée et *remboursée intégralement* ({{montant_rembourse}}). Le remboursement apparaît sur votre compte sous 5 à 10 jours.\n\nUne question ? Écrivez-nous ici 🙏",
+      },
+    ]),
+    ifVariable("c_partiel", 700, 160, "remboursement", "partiel"),
+    message("partiel", 1060, 80, [
+      {
+        text: "❌ *Commande annulée*\n\nVotre commande #{{commande_numero}} a été annulée. Un remboursement de {{montant_rembourse}} a été fait : il apparaît sur votre compte sous 5 à 10 jours.\n\nUne question ? Écrivez-nous ici 🙏",
+      },
+    ]),
+    message("simple", 1060, 300, [
+      { text: "❌ *Commande annulée*\n\nVotre commande #{{commande_numero}} a été annulée.\n\nUne question ? Écrivez-nous ici, on vous répond 🙏" },
+    ]),
+  ],
+  edges: [
+    { id: "e1", source: "t", target: "c_total" },
+    { id: "e2", source: "c_total", sourceHandle: "vrai", target: "total" },
+    { id: "e3", source: "c_total", sourceHandle: "faux", target: "c_partiel" },
+    { id: "e4", source: "c_partiel", sourceHandle: "vrai", target: "partiel" },
+    { id: "e5", source: "c_partiel", sourceHandle: "faux", target: "simple" },
+  ],
+};
+
+const remboursee: FlowGraph = {
+  nodes: [
+    eventTrigger("commande_remboursee"),
+    message("m", 340, 60, [
+      { text: "💸 *Remboursement effectué*\n\nVotre commande #{{commande_numero}} a été remboursée ({{montant_rembourse}}). Le remboursement apparaît sur votre compte sous 5 à 10 jours." },
+    ]),
+  ],
+  edges: [{ id: "e1", source: "t", target: "m" }],
+};
+
+const annulationRefusee: FlowGraph = {
+  nodes: [
+    eventTrigger("annulation_refusee"),
+    message("m", 340, 60, [
+      {
+        text: "🚫 *Annulation impossible*\n\nDésolé {{client_nom}}, votre commande #{{commande_numero}} est déjà en cours : le restaurant n'a pas pu l'annuler.\n\nÉcrivez-nous ici si besoin, on vous répond 🙏",
+      },
+    ]),
+  ],
+  edges: [{ id: "e1", source: "t", target: "m" }],
+};
+
+/** Envoyé par PFlow Order seulement si le rappel est réglé pour ce resto (délai dans PFlow Order). */
+const rappelPrete: FlowGraph = {
+  nodes: [
+    eventTrigger("rappel_commande_prete"),
+    message("m", 340, 60, [
+      { text: "⏰ *Votre commande vous attend !*\n\n{{client_nom}}, votre commande #{{commande_numero}} est prête et vous attend au restaurant 😊" },
+    ]),
+  ],
+  edges: [{ id: "e1", source: "t", target: "m" }],
+};
+
 /** Deux bulles : WhatsApp ne mélange pas bouton lien et bouton de réponse dans un même message. */
 const panierAbandonne: FlowGraph = {
   nodes: [
@@ -289,6 +351,10 @@ export const SEED_FLOWS: SeedFlow[] = [
   { name: "Statut - En préparation", description: "La commande passe en préparation", folder: "Commande", graph: enPreparation },
   { name: "Statut - Prête", description: "La commande est prête (retrait ou livraison)", folder: "Commande", graph: prete },
   { name: "Panier abandonné", description: "Relance 20 min après un panier non validé (envoyé par PFlow Order)", folder: "Commande", graph: panierAbandonne },
+  { name: "Statut - Annulée", description: "La commande est annulée (remboursée ou non)", folder: "Commande", graph: annulee },
+  { name: "Statut - Remboursée", description: "Remboursement d'une commande payée en ligne", folder: "Commande", graph: remboursee },
+  { name: "Statut - Annulation refusée", description: "Le client a demandé l'annulation, la commande est déjà en cours", folder: "Commande", graph: annulationRefusee },
+  { name: "Rappel - Commande prête", description: "Commande prête pas encore récupérée (si le rappel est réglé dans PFlow Order)", folder: "Commande", graph: rappelPrete },
 ];
 
 /** Flux de la trame absents du modèle (comparaison par nom). */

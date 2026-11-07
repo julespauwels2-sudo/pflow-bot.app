@@ -184,7 +184,7 @@ describe("écritures : uniquement dans les tables bot_, jamais dans le CRM", () 
     expect(writes.every((t) => t.startsWith("bot_"))).toBe(true);
     expect(CRM_TABLES.map((t) => tables[t])).toEqual(crmBefore);
     expect(tables.bot_modeles).toHaveLength(1);
-    expect(tables.bot_flux).toHaveLength(11);
+    expect(tables.bot_flux).toHaveLength(15);
     expect(tables.bot_dossiers).toHaveLength(3);
     expect(tables.bot_clients.find((c) => c.restaurant_id === R1)).toMatchObject({ mode_declenchement: "toujours", modele_id: template.id });
     expect(tables.bot_fiches).toEqual([expect.objectContaining({ restaurant_id: R1, donnees: { faq: "Vous faites des box ? Oui.", livraisonMode: "planning" } })]);
@@ -197,7 +197,7 @@ describe("écritures : uniquement dans les tables bot_, jamais dans le CRM", () 
     expect(reread.horaires).toHaveLength(2);
     expect(reread.tournees?.[0]).toMatchObject({ date: "2026-11-12", de: "11:00", a: "13:00", lieux: "Jarry" });
     expect((await other.clients.get(R1))?.template?.templateId).toBe(template.id);
-    expect((await other.flows.listByOwner(template.id)).length).toBe(11);
+    expect((await other.flows.listByOwner(template.id)).length).toBe(15);
   });
 
   it("nom, slug, fuseau et options payantes se modifient dans le CRM ; pas de création de client", async () => {
@@ -296,7 +296,7 @@ describe("création automatique des bots", () => {
     const r1 = (await other.clients.get(R1))!;
     expect(r1.template).toBeUndefined();
     expect(r1.botDisabledAt).toBeUndefined();
-    expect((await other.flows.listByOwner(R1)).length).toBe(11);
+    expect((await other.flows.listByOwner(R1)).length).toBe(15);
   });
 });
 

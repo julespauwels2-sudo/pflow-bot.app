@@ -27,6 +27,10 @@ export const PFLOW_ORDER_EVENTS: Record<string, OrderEvent | undefined> = {
   paiement: "commande_validee",
   en_preparation: "commande_en_preparation",
   prete: "commande_prete",
+  annulee: "commande_annulee",
+  remboursee: "commande_remboursee",
+  annulation_refusee: "annulation_refusee",
+  rappel: "rappel_commande_prete",
 };
 
 const text = (max: number) => z.string().max(max);

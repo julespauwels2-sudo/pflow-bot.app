@@ -12,7 +12,7 @@ function setup() {
 }
 
 describe("modèle maître", () => {
-  it("crée la trame : 3 dossiers dans l'ordre, 11 flux publiés", async () => {
+  it("crée la trame : 3 dossiers dans l'ordre, 15 flux publiés", async () => {
     const repos = setup();
     const template = await createMasterTemplate(repos);
     expect(template.name).toBe(MASTER_TEMPLATE_NAME);
@@ -23,8 +23,17 @@ describe("modèle maître", () => {
       flows.filter((f) => f.folderId === folders.find((d) => d.name === name)!.id).map((f) => f.name).sort();
     expect(byFolder("Principales PFlow Order")).toEqual(["Accueil", "CTA - Commander", "Infos pratiques"]);
     expect(byFolder("Fonctions IA")).toEqual(["IA - Lancer commande", "IA - Parler équipe", "IA - Proposer commande", "IA - Recommandation"]);
-    expect(byFolder("Commande")).toEqual(["Commande - Paiement validé", "Panier abandonné", "Statut - En préparation", "Statut - Prête"]);
-    expect(flows).toHaveLength(11);
+    expect(byFolder("Commande")).toEqual([
+      "Commande - Paiement validé",
+      "Panier abandonné",
+      "Rappel - Commande prête",
+      "Statut - Annulation refusée",
+      "Statut - Annulée",
+      "Statut - En préparation",
+      "Statut - Prête",
+      "Statut - Remboursée",
+    ]);
+    expect(flows).toHaveLength(15);
     expect(flows.every((f) => f.ownerKind === "template" && f.version === 1)).toBe(true);
   });
 
@@ -215,15 +224,24 @@ describe("modèle maître", () => {
     const template = await createMasterTemplate(repos);
     const flows = await repos.flows.listByOwner(template.id);
     // Comme un modèle créé en M3b : sans les flux de commande, et un flux déjà modifié.
-    for (const f of flows.filter((f) => f.name.startsWith("Statut") || f.name.startsWith("Commande") || f.name === "Panier abandonné")) {
+    for (const f of flows.filter((f) => f.name.startsWith("Statut") || f.name.startsWith("Commande") || f.name.startsWith("Rappel") || f.name === "Panier abandonné")) {
       await repos.flows.delete(f.id);
     }
     const accueil = flows.find((f) => f.name === "Accueil")!;
     await repos.flows.update(accueil.id, { description: "Ma version" });
     const { completeMasterTemplate, missingSeedFlows } = await import("../template-seed");
-    expect(missingSeedFlows((await repos.flows.listByOwner(template.id)).map((f) => f.name))).toHaveLength(4);
+    expect(missingSeedFlows((await repos.flows.listByOwner(template.id)).map((f) => f.name))).toHaveLength(8);
     const added = await completeMasterTemplate(repos, template.id);
-    expect(added.sort()).toEqual(["Commande - Paiement validé", "Panier abandonné", "Statut - En préparation", "Statut - Prête"]);
+    expect(added.sort()).toEqual([
+      "Commande - Paiement validé",
+      "Panier abandonné",
+      "Rappel - Commande prête",
+      "Statut - Annulation refusée",
+      "Statut - Annulée",
+      "Statut - En préparation",
+      "Statut - Prête",
+      "Statut - Remboursée",
+    ]);
     expect((await repos.flows.get(accueil.id))?.description).toBe("Ma version");
     expect(await completeMasterTemplate(repos, template.id)).toEqual([]);
   });

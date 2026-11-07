@@ -5,7 +5,15 @@
  * Règle : pas de templates Meta. Le bot n'envoie rien si la fenêtre de 24 h est fermée
  * (client arrivé directement sur le mini-site sans avoir écrit au bot).
  */
-export type OrderEvent = "commande_validee" | "commande_en_preparation" | "commande_prete" | "panier_abandonne";
+export type OrderEvent =
+  | "commande_validee"
+  | "commande_en_preparation"
+  | "commande_prete"
+  | "panier_abandonne"
+  | "commande_annulee"
+  | "commande_remboursee"
+  | "annulation_refusee"
+  | "rappel_commande_prete";
 
 export interface EventVariable {
   name: string;
@@ -50,6 +58,41 @@ export const ORDER_EVENTS: Record<OrderEvent, OrderEventInfo> = {
     label: "Commande prête",
     description: "La commande est prête (à récupérer ou en livraison).",
     icon: "✅",
+    variables: [clientNom, numero, mode],
+  },
+  commande_annulee: {
+    label: "Commande annulée",
+    description: "La commande est annulée (par le resto ou à la demande du client), remboursée ou non.",
+    icon: "❌",
+    variables: [
+      clientNom,
+      numero,
+      mode,
+      { name: "remboursement", label: "« total », « partiel » ou vide (pas de remboursement)", example: "total" },
+      { name: "montant_rembourse", label: "Montant remboursé", example: "32 €" },
+    ],
+  },
+  commande_remboursee: {
+    label: "Commande remboursée",
+    description: "Un remboursement (total ou partiel) est fait sur une commande payée en ligne.",
+    icon: "💸",
+    variables: [
+      clientNom,
+      numero,
+      { name: "remboursement", label: "« total » ou « partiel »", example: "partiel" },
+      { name: "montant_rembourse", label: "Montant remboursé", example: "8 €" },
+    ],
+  },
+  annulation_refusee: {
+    label: "Annulation refusée",
+    description: "Le client a demandé l'annulation, mais la commande est déjà en cours : le resto refuse.",
+    icon: "🚫",
+    variables: [clientNom, numero, mode],
+  },
+  rappel_commande_prete: {
+    label: "Rappel : commande prête",
+    description: "La commande est prête depuis un moment et n'a pas été récupérée (délai réglé dans PFlow Order).",
+    icon: "⏰",
     variables: [clientNom, numero, mode],
   },
   panier_abandonne: {
