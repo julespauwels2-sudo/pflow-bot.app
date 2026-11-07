@@ -594,3 +594,25 @@ faux Meta (`scripts/e2e/numero-pflow.js`) ; WhatsApp et boîte de réception tou
 - **Migration C2 appliquée** (OK de Jules) : `supabase/migrations/20261107010000_bot_canaux_compte_messagerie.sql` (colonne
   `messaging_account_id` ; numéro de test : 1511896410913657).
 - `guide-meta.md` : « Deux éléments à attribuer par numéro ».
+
+### Premier vrai échange WhatsApp (7 novembre 2026, 05 h 55 UTC) et corrections du bot
+
+Le bot répond sur le numéro de test (premier message à 01 h 55, heure de Guadeloupe). Corrections après les
+tests de Jules :
+1. **IA jamais appelée** : en mode « toujours », tout message sans session ni mot-clé lançait l'Accueil (flux
+   par défaut). Désormais : salutation (« bonjour », « salut ça va », « bonswa »…) ou premier contact très court
+   (≤ 2 mots, emoji) → Accueil ; tout autre message → l'IA, qui répond et peut lancer un flux (proposer_commande…) ;
+   sans IA → Accueil comme avant.
+2. **Accueil répété** : accueil complet seulement si le contact n'avait rien écrit depuis 12 h (variable
+   `{{nouvelle_conversation}}`), sinon version courte « Que puis-je faire pour vous ? » (3 boutons : Commander,
+   Me conseiller, Infos pratiques). « commander » retiré de l'Accueil, ajouté à « CTA - Commander » (avec « je
+   commande », « passer commande », « passer une commande » ; pas « commande » seul, à cause de « ma commande est
+   où ? »). Un mot-clé ne lance son flux que dans un message de 4 mots maximum ; au-delà, l'IA répond.
+3. **Jours de livraison** : non enregistrés. `bot_fiches` est vide (aucune fiche bot, pour aucun resto) et le CRM
+   (`qg_zones_livraison`) ne connaît que nom, frais et minimum des zones. Le code les lit bien quand ils existent
+   (tests) : il faut les saisir dans la fiche de Cookies An Nou (PFlow Bots → Clients → Cookies An Nou → Fiche
+   d'infos → Jours de livraison par zone).
+4. **Prénom** : seulement si le profil WhatsApp est un seul mot de lettres (« Jules ») ; sinon « Hello ! ».
+5. **Test d'accès** : `?fields=…` refusé sur le WABA du nouveau modèle (« Invalid parameter », sous-code 2388339) →
+   lecture simple des deux comptes ; numéros et apps abonnées lus sur le compte qui répond.
+Vérifié : 353 tests, et `scripts/e2e/accueil-ia.js` dans le simulateur (8 étapes vertes).
