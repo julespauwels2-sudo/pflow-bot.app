@@ -516,3 +516,18 @@ faux Meta (`scripts/e2e/numero-pflow.js`) ; WhatsApp et boîte de réception tou
   1024 × 1024 dans `docs/etape-c/meta/`). Pas nécessaire pour le test ; le sera pour les vrais numéros.
 - **Publication sans effet** sur les numéros UChat (autre app Meta) et sur les autres apps de Jules (chaque
   app a son propre mode).
+
+### Migration C appliquée (7 novembre 2026, OK de Jules)
+
+- **Partie A** (tables) appliquée sur Supabase : migration versionnée `supabase/migrations/20261107000000_bot_canaux.sql`
+  (même SQL que `docs/etape-c/migration-c.sql`, vérifié ligne à ligne). Uniquement des créations de tables `bot_` ;
+  aucune table ni donnée du CRM touchée.
+- **Partie B** : ligne `bot_canaux` du numéro de test (Phone number ID 1482722121584900, Cookies An Nou, mode
+  « toujours », état « test », seul destinataire autorisé +590 690 93 81 08).
+- **Vérifié** : les 7 tables existent (`bot_canaux`, `bot_contacts`, `bot_sessions`, `bot_messages`,
+  `bot_transferts`, `bot_webhook_evenements`, `bot_demos`), RLS activé avec sa politique sur chacune ;
+  `bot_appels_ia` accepte la source `instagram`. Conseiller sécurité Supabase : aucune alerte sur ces tables
+  (les alertes `bot_*` restantes visent les anciennes fonctions du pont UChat, déjà suivies dans
+  `docs/securite-crm.md`).
+- Suite : Jules réécrit « Bonjour » au numéro de test. Mode Live avant le premier client (pages légales publiées
+  par Jules lui-même).

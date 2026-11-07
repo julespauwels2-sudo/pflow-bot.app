@@ -3,8 +3,9 @@
 -- identifiant au lieu de wa_id.
 -- Révisée en novembre 2026 (démos sur le numéro PFlow) : bot_canaux.role (+ restaurant_id facultatif
 -- pour le numéro PFlow), bot_contacts.demo, nouvelle table bot_demos.
--- PROPOSITION, NON APPLIQUÉE. Rangée dans docs/ (et non dans supabase/migrations/) pour ne jamais être
--- jouée par erreur. Elle y sera déplacée après validation de Jules.
+-- VALIDÉE PAR JULES ET APPLIQUÉE LE 7 NOVEMBRE 2026 (étape C1). Copie de référence : la version
+-- jouée est supabase/migrations/20261107000000_bot_canaux.sql. Ne plus modifier ce fichier :
+-- toute évolution passe par une nouvelle migration.
 --
 -- Mêmes règles que bot_init :
 -- * uniquement des tables préfixées bot_ (créations, plus une contrainte élargie sur bot_appels_ia) ;
