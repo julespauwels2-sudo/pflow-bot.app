@@ -11,7 +11,12 @@ Préparés le 5 novembre 2026 sur une **copie** du code de PFlow Order (dépôt 
 | `04-pre-remplissage.diff` | `repo/api/bot-contact.js` (nouveau), `repo/js/commande.js`, `repo/tests/pflow-bots-contact.test.js` | Jeton chiffré `?wa=` du bouton « Commander » → prénom et téléphone WhatsApp pré-remplis |
 | `05-paiement-offre-de-base.diff` | `repo/sql/qg64-paiement-offre-de-base.sql` (nouveau), `repo/js/paiement.js`, `repo/js/resto.js`, `repo/js/atelier.js`, `repo/js/supervision.js`, `repo/api/paiement.js`, `repo/tests/qg64-paiement-base.test.js` | Le paiement en ligne fait partie de l'offre de base : l'ancienne « option vendue » (`paiement_restos.module`) ne bloque plus rien (voir plus bas) |
 | `06-pont-cle-transition.diff` | `repo/api/pont.js`, `repo/tests/pont-cle-ancienne.test.js` | **Mis de côté** (décision de Jules : la clé n'a jamais fui, pas de changement avant l'arrêt d'UChat). `PONT_CLE_ANCIENNE` acceptée pendant un changement de clé |
+| `08-garde-fou-canal-actif.patch` (C4) | `repo/sql/qg66-pflow-bots-canal-actif.sql` (nouveau), `repo/api/_bot.js`, `repo/tests/pflow-bots*.test.js`, `repo/tests/qg66-pflow-bots-canal-actif.test.js` | **Garde-fou absolu** : PFlow Order n'appelle PFlow Bots que si le resto a un canal WhatsApp **« actif »** (fonction `pflow_bots_canal_actif`). Canal en test, coupé ou absent, fonction absente, base injoignable : UChat. Variables des flux (`{{commande_mode}}`…) tirées de la commande |
 | `07-option-paiement-retiree.diff` | `repo/sql/qg65-paiement-inclus.sql` (nouveau), `repo/js/app.js`, `repo/js/facturation.js`, `repo/js/resto.js`, `repo/js/dashboard-demo.js`, `repo/js/paiement.js`, `repo/guide-paiement-en-ligne.html`, `repo/tests/qg65-paiement-inclus.test.js` | Retrait de l'option « Paiement en ligne » à 79 € : catalogue, MRR, boutons « +79 € », Dashboard, guide. **À appliquer après le 05** |
+
+**C4 (7 novembre 2026)** : 01 à 05 et 07 appliqués (un commit chacun) sur `6ca596b` (dernière version de
+`main`), plus le garde-fou 08 ; **pull request ouverte, non fusionnée** (branche `pflow-bots-c4`). Le 06 reste
+de côté. Côté PFlow Bots : route `/api/webhooks/pflow-order` (même règle du canal « actif », double barrière).
 
 **Sans les variables `PFLOW_BOTS_URL` et `PFLOW_BOTS_SECRET` dans Vercel (projet PFlow Order), aucun
 comportement ne change.** Retirer les variables = retour immédiat à la situation actuelle.
@@ -125,5 +130,8 @@ du code, `repo/sql/qg64-paiement-offre-de-base.sql` **puis** `repo/sql/qg65-paie
 - Le texte « ✅ Commande n° 42 passée » ne déclenche ni l'accueil ni l'IA (`ORDER_RETURN_PATTERN`).
 - Le bouton « Commander » envoyé sur WhatsApp porte `?via=wa` et, si `PFLOW_BOTS_SECRET` est défini, le
   jeton `wa=` (jamais dans le simulateur).
-- **Reste à faire en C4** : la route `/api/webhooks/pflow-order` qui reçoit ces appels (vérification de la
-  signature, routage vers le bon contact, réponse `pris`). Elle dépend des tables de la migration C.
+- **Fait en C4** : la route `/api/webhooks/pflow-order` (`src/channels/pflow-order/order-events.ts`) :
+  signature et horodatage, canal « actif » seulement (simulation de la page État : canal en test, numéro de
+  test), contact existant seulement (pas de contact créé), idempotence par commande et événement.
+  **Pas encore gérés** (ignorés, expliqués dans le journal du CRM, aucun message) : `annulee`, `remboursee`,
+  `annulation_refusee`, `rappel`. À ajouter (flux + événements) avant de basculer un resto qui en a besoin.

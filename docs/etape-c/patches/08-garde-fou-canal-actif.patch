@@ -1,0 +1,349 @@
+From a9ede405f67fc03408ba66e4d9513ad7140a7c57 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 7 Nov 2026 06:27:24 +0000
+Subject: [PATCH] =?UTF-8?q?PFlow=20Bots=20(C4)=20:=20garde-fou=20absolu,?=
+ =?UTF-8?q?=20PFlow=20Bots=20seulement=20pour=20un=20canal=20=C2=AB=20acti?=
+ =?UTF-8?q?f=20=C2=BB=20(qg66)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- pflow_bots_canal_actif(p_cle, rid) : true seulement si bot_canaux a un canal WhatsApp « actif » pour le
+  resto ; canal en test (numéro de test Meta) ou coupé, aucun canal, table absente, mauvaise clé : false
+- api/_bot.js : PFlow Bots n'est appelé que si cette fonction répond true (sinon UChat, comme avant) ;
+  vaut aussi pour la relance de panier (api/_options.js)
+- Variables des flux PFlow Bots ({{commande_mode}}, {{paiement_mode}}…) tirées de la commande
+- Tests : garde-fou (canal en test → aucun appel, UChat), fonction absente, base injoignable, relance ;
+  qg66 sur PGlite (actif / test / coupé / Instagram / mauvaise clé, rejouable)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01HMGR77ZJVTw2W5VjXHoNSi
+---
+ repo/api/_bot.js                              | 36 ++++++++-
+ repo/sql/qg66-pflow-bots-canal-actif.sql      | 27 +++++++
+ repo/tests/pflow-bots-relance.test.js         | 16 +++-
+ repo/tests/pflow-bots.test.js                 | 81 +++++++++++++++++--
+ .../tests/qg66-pflow-bots-canal-actif.test.js | 44 ++++++++++
+ 5 files changed, 195 insertions(+), 9 deletions(-)
+ create mode 100644 repo/sql/qg66-pflow-bots-canal-actif.sql
+ create mode 100644 repo/tests/qg66-pflow-bots-canal-actif.test.js
+
+diff --git a/repo/api/_bot.js b/repo/api/_bot.js
+index 145ba2d..4c3bee8 100644
+--- a/repo/api/_bot.js
++++ b/repo/api/_bot.js
+@@ -81,9 +81,21 @@ function signerPflowBots(corps, secret, horodatage) {
+   return "sha256=" + crypto.createHmac("sha256", secret).update(String(horodatage) + "." + corps, "utf8").digest("hex");
+ }
+ 
++/* GARDE-FOU ABSOLU (C4) : PFlow Order n'envoie un evenement a PFlow Bots QUE si le resto a un canal
++   PFlow Bots en etat « actif » (table bot_canaux, lue par la fonction pflow_bots_canal_actif, qg66).
++   Canal « test » (numero de test Meta), aucun canal, fonction absente, base injoignable, reponse
++   inattendue : on n'appelle pas PFlow Bots, UChat gere la commande exactement comme avant. */
++async function canalPflowBotsActif(restaurantId) {
++  if (!restaurantId) return false;
++  var E = env();
++  var r = await sbRpc("pflow_bots_canal_actif", { p_cle: E.CLE, rid: restaurantId });
++  return !!(r && r.okHttp && r.donnees === true);
++}
++
+ async function appelerPflowBots(objet) {
+   var E = env();
+   if (!E.BOTS_URL || !E.BOTS_SECRET) return { pris: false, raison: "non_configure" };
++  if (!(await canalPflowBotsActif(objet && objet.restaurant_id))) return { pris: false, raison: "canal_pas_actif" };
+   var corps = JSON.stringify(objet);
+   var horodatage = String(Math.floor(Date.now() / 1000));
+   try {
+@@ -110,6 +122,25 @@ function etatPflowBots(x) {
+   return "echec";
+ }
+ 
++/* Variables des flux de PFlow Bots ({{commande_numero}}, {{commande_mode}}…), tirees directement de la
++   commande : jamais des libelles propres a UChat (payment_method peut etre renomme dans les reglages). */
++var STATUTS_PFLOW_BOTS = { nouvelle: "recue", attente_paiement: "recue", en_preparation: "en_preparation", prete: "prete", terminee: "terminee", annulee: "annulee" };
++function variablesPflowBots(c, resto) {
++  var pm = c.payment_method || (c.paiement_statut === "paye" ? "en_ligne" : "sur_place");
++  var tz = resto && resto.fuseau;
++  return {
++    client_nom: String(c.client_nom || "").slice(0, 80),
++    commande_numero: String(c.numero == null ? "" : c.numero),
++    commande_mode: c.mode === "livraison" ? "livraison" : "retrait",
++    commande_recap: resume(c.articles),
++    commande_total: eur(c.total || 0),
++    paiement_mode: pm === "en_ligne" ? "en_ligne" : "sur_place",
++    commande_statut: STATUTS_PFLOW_BOTS[c.statut] || String(c.statut || ""),
++    commande_creneau: creneauAffiche(c, tz),
++    commande_delai: delaiAffiche(c, tz)
++  };
++}
++
+ function champsEnObjet(liste) {
+   var o = {};
+   liste.forEach(function (x) { o[x.name] = x.value; });
+@@ -421,6 +452,7 @@ async function synchroniser(cible, source) {
+       client_tel: numeroInternational(c.client_tel),
+       commande_id: c.id,
+       evenements: evts.map(function (e) { return { pflow_order: e, pflow_bots: EVENEMENTS_PFLOW_BOTS[e] || e }; }),
++      variables: variablesPflowBots(c, resto),
+       champs: champsEnObjet(champsDe(c, reg && reg.valeurs, resto))
+     });
+     trace.pflow_bots = pb.pris ? "pris" : pb.raison;
+@@ -620,9 +652,11 @@ module.exports = {
+   clientUchat: clientUchat,              /* S8 : la supervision sonde les bots et previent Jules */
+   numeroInternational: numeroInternational,
+   appelerPflowBots: appelerPflowBots,     /* etape C : aussi utilise par api/_options.js (relance) */
++  canalPflowBotsActif: canalPflowBotsActif, /* C4 : garde-fou, canal PFlow Bots « actif » seulement */
+   EVENEMENTS: EVENEMENTS,
+   LIBELLES: LIBELLES,
+   _interne: { champsDe: champsDe, texteRepli: texteRepli, numeroInternational: numeroInternational, libelleStatut: libelleStatut,
+     creneauAffiche: creneauAffiche, delaiAffiche: delaiAffiche, remplirChamps: remplirChamps,
+-    signerPflowBots: signerPflowBots, etatPflowBots: etatPflowBots, EVENEMENTS_PFLOW_BOTS: EVENEMENTS_PFLOW_BOTS }
++    signerPflowBots: signerPflowBots, etatPflowBots: etatPflowBots, EVENEMENTS_PFLOW_BOTS: EVENEMENTS_PFLOW_BOTS,
++    variablesPflowBots: variablesPflowBots }
+ };
+diff --git a/repo/sql/qg66-pflow-bots-canal-actif.sql b/repo/sql/qg66-pflow-bots-canal-actif.sql
+new file mode 100644
+index 0000000..b45d200
+--- /dev/null
++++ b/repo/sql/qg66-pflow-bots-canal-actif.sql
+@@ -0,0 +1,27 @@
++-- qg66 (C4, PFlow Bots) : le resto a-t-il un canal PFlow Bots ACTIF ?
++-- Garde-fou absolu : PFlow Order (api/_bot.js, api/_options.js) n'envoie un evenement de commande a
++-- PFlow Bots que si cette fonction repond true. Un canal en etat « test » (numero de test Meta) ou
++-- « coupe » ne detourne JAMAIS les evenements des vraies commandes : UChat les gere comme avant.
++-- Lecture seule de bot_canaux (table de PFlow Bots, migration C) ; ne modifie rien.
++-- Rejouable. Sans la table bot_canaux : repond false (UChat).
++create or replace function public.pflow_bots_canal_actif(p_cle text, rid uuid)
++returns boolean
++language plpgsql
++stable
++security definer
++set search_path to 'public'
++as $$
++begin
++  if rid is null or not public.pont_cle_valide(p_cle) then return false; end if;
++  return exists (
++    select 1 from public.bot_canaux
++     where restaurant_id = rid and role = 'resto' and plateforme = 'whatsapp' and etat = 'actif'
++  );
++exception when undefined_table or undefined_column then
++  return false;
++end $$;
++
++-- Meme modele que les autres fonctions du pont (bot_reglages_serveur…) : appelee par l'API avec la cle
++-- publique, protegee par PONT_CLE. Ne renvoie qu'un oui / non.
++revoke all on function public.pflow_bots_canal_actif(text, uuid) from public;
++grant execute on function public.pflow_bots_canal_actif(text, uuid) to anon, authenticated, service_role;
+diff --git a/repo/tests/pflow-bots-relance.test.js b/repo/tests/pflow-bots-relance.test.js
+index 604f65d..7f500b1 100644
+--- a/repo/tests/pflow-bots-relance.test.js
++++ b/repo/tests/pflow-bots-relance.test.js
+@@ -9,9 +9,15 @@ test("relance : PFlow Bots reçoit le panier et son lien de reprise ; sinon chem
+   var s = http.createServer(function (req, res) {
+     var corps = "";
+     req.on("data", function (c) { corps += c; });
+-    req.on("end", function () { recus.push(JSON.parse(corps)); res.setHeader("Content-Type", "application/json"); res.end(JSON.stringify(reponse)); });
++    req.on("end", function () {
++      res.setHeader("Content-Type", "application/json");
++      /* Fausse base : garde-fou qg66, seul le resto « r1 » a un canal PFlow Bots actif. */
++      if (req.url === "/rest/v1/rpc/pflow_bots_canal_actif") return res.end(JSON.stringify(JSON.parse(corps).rid === "r1"));
++      recus.push(JSON.parse(corps)); res.end(JSON.stringify(reponse));
++    });
+   });
+   await new Promise(function (ok) { s.listen(0, "127.0.0.1", ok); });
++  process.env.SUPABASE_URL = "http://127.0.0.1:" + s.address().port; process.env.SUPABASE_ANON_KEY = "anon-test"; process.env.PONT_CLE = "cle-pont";
+   process.env.PFLOW_BOTS_URL = "http://127.0.0.1:" + s.address().port;
+   process.env.PFLOW_BOTS_SECRET = "secret-test";
+   delete require.cache[require.resolve("../api/_bot.js")];
+@@ -35,6 +41,14 @@ test("relance : PFlow Bots reçoit le panier et son lien de reprise ; sinon chem
+     var r3 = await OPT._interne.envoyerUn(e, "https://order.pflow.fr", false);
+     assert.equal(r3.etat, "echec");
+     assert.match(r3.raison, /clé UChat/);
++
++    /* GARDE-FOU : resto avec un canal PFlow Bots en TEST → PFlow Bots ne reçoit rien, UChat gère. */
++    var avant = recus.length;
++    reponse = { pris: true, envois: { relance: { etat: "ok" } } };
++    var r4 = await OPT._interne.envoyerUn(Object.assign({}, e, { resto: { id: "r-test", slug: "cookies-an-nou" } }), "https://order.pflow.fr", false);
++    assert.equal(recus.length, avant, "aucun appel à PFlow Bots pour un canal en test");
++    assert.equal(r4.etat, "echec");
++    assert.match(r4.raison, /clé UChat/);
+   } finally {
+     await new Promise(function (ok) { s.close(ok); });
+     delete process.env.PFLOW_BOTS_URL; delete process.env.PFLOW_BOTS_SECRET;
+diff --git a/repo/tests/pflow-bots.test.js b/repo/tests/pflow-bots.test.js
+index ee962fc..7383ee3 100644
+--- a/repo/tests/pflow-bots.test.js
++++ b/repo/tests/pflow-bots.test.js
+@@ -9,12 +9,24 @@ function charger() {
+   return require("../api/_bot.js");
+ }
+ 
++/* Etats des canaux PFlow Bots vus par la fausse base (fonction pflow_bots_canal_actif, qg66). */
++var CANAUX = { "r-actif": "actif", "r-test": "test" };
++
+ async function serveur(repondre) {
+   var recus = [];
++  var rpc = [];
+   var s = http.createServer(function (req, res) {
+     var corps = "";
+     req.on("data", function (c) { corps += c; });
+     req.on("end", function () {
++      if (req.url.indexOf("/rest/v1/rpc/") === 0) {
++        /* Fausse base Supabase : seule la fonction du garde-fou est connue. */
++        var args = JSON.parse(corps || "{}");
++        rpc.push({ url: req.url, args: args });
++        res.setHeader("Content-Type", "application/json");
++        if (req.url !== "/rest/v1/rpc/pflow_bots_canal_actif") { res.statusCode = 404; return res.end(JSON.stringify({ code: "PGRST202" })); }
++        return res.end(JSON.stringify(args.p_cle === "cle-pont" && CANAUX[args.rid] === "actif"));
++      }
+       recus.push({ url: req.url, headers: req.headers, corps: corps });
+       var r = repondre(JSON.parse(corps || "{}"));
+       res.statusCode = r.statut || 200;
+@@ -23,7 +35,9 @@ async function serveur(repondre) {
+     });
+   });
+   await new Promise(function (ok) { s.listen(0, "127.0.0.1", ok); });
+-  return { url: "http://127.0.0.1:" + s.address().port, recus: recus, fermer: function () { return new Promise(function (ok) { s.close(ok); }); } };
++  var url = "http://127.0.0.1:" + s.address().port;
++  process.env.SUPABASE_URL = url; process.env.SUPABASE_ANON_KEY = "anon-test"; process.env.PONT_CLE = "cle-pont";
++  return { url: url, recus: recus, rpc: rpc, fermer: function () { return new Promise(function (ok) { s.close(ok); }); } };
+ }
+ 
+ test("sans PFLOW_BOTS_URL : aucun appel, chemin UChat", async function () {
+@@ -37,7 +51,7 @@ test("PFlow Bots prend l'événement : appel signé, réponse lue", async functi
+   process.env.PFLOW_BOTS_URL = srv.url; process.env.PFLOW_BOTS_SECRET = "secret-test";
+   try {
+     var BOT = charger();
+-    var r = await BOT.appelerPflowBots({ type: "commande", evenements: [{ pflow_order: "prete", pflow_bots: "commande_prete" }] });
++    var r = await BOT.appelerPflowBots({ type: "commande", restaurant_id: "r-actif", evenements: [{ pflow_order: "prete", pflow_bots: "commande_prete" }] });
+     assert.equal(r.pris, true);
+     assert.equal(r.envois.prete.etat, "ok");
+     var recu = srv.recus[0];
+@@ -53,16 +67,69 @@ test("resto pas sur PFlow Bots, erreur ou serveur injoignable : pris false (UCha
+   process.env.PFLOW_BOTS_URL = srv.url; process.env.PFLOW_BOTS_SECRET = "secret-test";
+   try {
+     var BOT = charger();
+-    assert.deepEqual(await BOT.appelerPflowBots({ type: "commande" }), { pris: false, raison: "pas_sur_pflow_bots" });
+-    assert.deepEqual(await BOT.appelerPflowBots({ type: "erreur" }), { pris: false, raison: "http_500" });
++    assert.deepEqual(await BOT.appelerPflowBots({ type: "commande", restaurant_id: "r-actif" }), { pris: false, raison: "pas_sur_pflow_bots" });
++    assert.deepEqual(await BOT.appelerPflowBots({ type: "erreur", restaurant_id: "r-actif" }), { pris: false, raison: "http_500" });
++    /* PFlow Bots injoignable (la base, elle, répond) */
++    process.env.PFLOW_BOTS_URL = "http://127.0.0.1:9";
++    var BOT2 = charger();
++    assert.deepEqual(await BOT2.appelerPflowBots({ type: "commande", restaurant_id: "r-actif" }), { pris: false, raison: "injoignable" });
++  } finally { await srv.fermer(); delete process.env.PFLOW_BOTS_URL; delete process.env.PFLOW_BOTS_SECRET; }
++});
++
++test("GARDE-FOU : canal en test, aucun canal ou base muette → PFlow Bots n'est JAMAIS appelé (UChat)", async function () {
++  var srv = await serveur(function () { return { json: { pris: true, envois: {} } }; });
++  process.env.PFLOW_BOTS_URL = srv.url; process.env.PFLOW_BOTS_SECRET = "secret-test";
++  try {
++    var BOT = charger();
++    var evt = { type: "commande", evenements: [{ pflow_order: "commande", pflow_bots: "commande_validee" }] };
++    /* Canal « test » (Cookies An Nou sur le numéro de test Meta) : la vraie commande reste à UChat. */
++    assert.deepEqual(await BOT.appelerPflowBots(Object.assign({ restaurant_id: "r-test" }, evt)), { pris: false, raison: "canal_pas_actif" });
++    /* Aucun canal PFlow Bots, ou pas d'identifiant de resto. */
++    assert.deepEqual(await BOT.appelerPflowBots(Object.assign({ restaurant_id: "r-inconnu" }, evt)), { pris: false, raison: "canal_pas_actif" });
++    assert.deepEqual(await BOT.appelerPflowBots(evt), { pris: false, raison: "canal_pas_actif" });
++    /* Mauvaise clé du pont : la base répond false. */
++    process.env.PONT_CLE = "autre-cle";
++    assert.deepEqual(await charger().appelerPflowBots(Object.assign({ restaurant_id: "r-actif" }, evt)), { pris: false, raison: "canal_pas_actif" });
++    process.env.PONT_CLE = "cle-pont";
++    assert.equal(srv.recus.length, 0, "PFlow Bots ne doit recevoir aucun appel");
++    assert.equal(srv.rpc[0].args.rid, "r-test");
++    /* Canal actif : là seulement, PFlow Bots est appelé. */
++    assert.equal((await BOT.appelerPflowBots(Object.assign({ restaurant_id: "r-actif" }, evt))).pris, true);
++    assert.equal(srv.recus.length, 1);
+   } finally { await srv.fermer(); }
+-  process.env.PFLOW_BOTS_URL = "http://127.0.0.1:9";
++  /* Base injoignable : UChat. */
++  process.env.SUPABASE_URL = "http://127.0.0.1:9";
+   try {
+-    var BOT2 = charger();
+-    assert.deepEqual(await BOT2.appelerPflowBots({ type: "commande" }), { pris: false, raison: "injoignable" });
++    assert.deepEqual(await charger().appelerPflowBots({ type: "commande", restaurant_id: "r-actif" }), { pris: false, raison: "canal_pas_actif" });
+   } finally { delete process.env.PFLOW_BOTS_URL; delete process.env.PFLOW_BOTS_SECRET; }
+ });
+ 
++test("GARDE-FOU : fonction pflow_bots_canal_actif absente (qg66 pas joué) → UChat", async function () {
++  var srv = await serveur(function () { return { json: { pris: true, envois: {} } }; });
++  process.env.PFLOW_BOTS_URL = srv.url; process.env.PFLOW_BOTS_SECRET = "secret-test";
++  /* Fonction inconnue de la base (PostgREST : 404) : on vise une adresse où elle n'existe pas. */
++  var BOT = charger();
++  try {
++    process.env.SUPABASE_URL = srv.url + "/absente";
++    assert.deepEqual(await BOT.appelerPflowBots({ type: "commande", restaurant_id: "r-actif" }), { pris: false, raison: "canal_pas_actif" });
++    assert.equal(srv.recus.filter(function (r) { return r.url === "/api/webhooks/pflow-order"; }).length, 0);
++  } finally { await srv.fermer(); delete process.env.PFLOW_BOTS_URL; delete process.env.PFLOW_BOTS_SECRET; }
++});
++
++test("variables des flux PFlow Bots : tirées de la commande, jamais des libellés UChat", function () {
++  var I = charger()._interne;
++  var v = I.variablesPflowBots({ numero: 42, mode: "livraison", statut: "nouvelle", payment_method: "en_ligne", total: 8, client_nom: "Léa",
++    articles: [{ nom: "Tout choco", qte: 2 }] }, { fuseau: "America/Guadeloupe" });
++  assert.equal(v.commande_numero, "42");
++  assert.equal(v.commande_mode, "livraison");
++  assert.equal(v.paiement_mode, "en_ligne");
++  assert.equal(v.commande_statut, "recue");
++  assert.match(v.commande_total, /^8\s€$/);
++  assert.equal(v.client_nom, "Léa");
++  assert.match(v.commande_recap, /2 x Tout choco/);
++  assert.equal(I.variablesPflowBots({ mode: "emporter", statut: "prete", paiement_statut: "a_payer" }, null).commande_mode, "retrait");
++});
++
+ test("correspondance des événements et des états", function () {
+   var I = charger()._interne;
+   assert.equal(I.EVENEMENTS_PFLOW_BOTS.paiement, "commande_validee");
+diff --git a/repo/tests/qg66-pflow-bots-canal-actif.test.js b/repo/tests/qg66-pflow-bots-canal-actif.test.js
+new file mode 100644
+index 0000000..9119b91
+--- /dev/null
++++ b/repo/tests/qg66-pflow-bots-canal-actif.test.js
+@@ -0,0 +1,44 @@
++/* qg66 (C4) : garde-fou de PFlow Bots. pflow_bots_canal_actif ne répond true QUE pour un resto qui a un
++   canal PFlow Bots (bot_canaux) en état « actif ». Canal « test » ou « coupe », aucun canal, table absente
++   ou mauvaise clé du pont : false → PFlow Order ne détourne rien, UChat gère la commande. */
++var test = require("node:test");
++var assert = require("node:assert/strict");
++var B = require("./aide-banc");
++
++var ACTIF = "66666666-0000-0000-0000-000000000001";
++var TEST = "66666666-0000-0000-0000-000000000002";
++var COUPE = "66666666-0000-0000-0000-000000000003";
++var SANS = "66666666-0000-0000-0000-000000000004";
++var banc = null;
++async function b() {
++  if (!banc) banc = await B.creerBanc();
++  return banc;
++}
++async function actif(cle, rid) {
++  return (await (await b()).db.query("select public.pflow_bots_canal_actif($1, $2) v", [cle, rid])).rows[0].v;
++}
++
++test("qg66 : sans la table bot_canaux (migration C de PFlow Bots absente) → false", async function () {
++  assert.equal(await actif(B.CLE, ACTIF), false);
++});
++
++test("qg66 : true seulement pour un canal WhatsApp « actif » ; test, coupé, aucun canal, mauvaise clé → false", async function () {
++  var db = (await b()).db;
++  /* Colonnes utiles de bot_canaux (migration C de PFlow Bots). */
++  await db.exec("create table if not exists public.bot_canaux (id uuid primary key default gen_random_uuid(), restaurant_id uuid, role text not null default 'resto', plateforme text not null default 'whatsapp', compte_id text, etat text not null default 'test');");
++  await db.query("insert into public.bot_canaux (restaurant_id, compte_id, etat) values ($1, '1', 'actif'), ($2, '2', 'test'), ($3, '3', 'coupe')", [ACTIF, TEST, COUPE]);
++  /* Un compte Instagram actif ne compte pas pour les événements WhatsApp. */
++  await db.query("insert into public.bot_canaux (restaurant_id, plateforme, compte_id, etat) values ($1, 'instagram', '4', 'actif')", [TEST]);
++  assert.equal(await actif(B.CLE, ACTIF), true);
++  assert.equal(await actif(B.CLE, TEST), false, "canal en test : JAMAIS les vraies commandes");
++  assert.equal(await actif(B.CLE, COUPE), false);
++  assert.equal(await actif(B.CLE, SANS), false);
++  assert.equal(await actif("mauvaise-cle", ACTIF), false);
++  assert.equal(await actif(B.CLE, null), false);
++});
++
++test("qg66 : rejouable", async function () {
++  var fs = require("fs"), path = require("path");
++  await (await b()).db.exec(fs.readFileSync(path.join(__dirname, "..", "sql", "qg66-pflow-bots-canal-actif.sql"), "utf8"));
++  assert.equal(await actif(B.CLE, ACTIF), true);
++});
+-- 
+2.43.0
+

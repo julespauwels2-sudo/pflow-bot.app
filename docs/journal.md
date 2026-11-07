@@ -616,3 +616,15 @@ tests de Jules :
 5. **Test d'accès** : `?fields=…` refusé sur le WABA du nouveau modèle (« Invalid parameter », sous-code 2388339) →
    lecture simple des deux comptes ; numéros et apps abonnées lus sur le compte qui répond.
 Vérifié : 353 tests, et `scripts/e2e/accueil-ia.js` dans le simulateur (8 étapes vertes).
+
+### C4 — PFlow Order branché (7 novembre 2026), en attente de Jules
+
+- **Garde-fou absolu, double barrière** : PFlow Order n'appelle PFlow Bots que si `pflow_bots_canal_actif`
+  (qg66) répond vrai — canal WhatsApp « actif » du resto dans `bot_canaux` ; PFlow Bots ne prend un
+  événement réel que pour un canal « actif ». Canal « test » (Cookies An Nou aujourd'hui) : UChat, comme avant.
+- Patches 01–05 et 07 rejoués sur `6ca596b` (dernière version de `main`), un commit chacun, + garde-fou 08.
+  Branche `pflow-bots-c4` de Pflow-Crm, PR non fusionnée. Le 06 reste de côté.
+- PFlow Bots : route `/api/webhooks/pflow-order`, bouton « Événement de commande de test » sur la page État
+  (simulation signée vers le numéro de test, aucune commande créée). Interopérabilité de la signature vérifiée
+  (signature du CRM acceptée par PFlow Bots).
+- Pas encore gérés côté PFlow Bots : annulée, remboursée, annulation refusée, rappel (ignorés, expliqués).
