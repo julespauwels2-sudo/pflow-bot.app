@@ -49,7 +49,7 @@ describe("import des données du navigateur", () => {
     const { data, done, warnings } = planImport(local, remote, { mapping: { [localClient.id]: RID }, locked: { [RID]: ["horaires"] } });
 
     expect(data.templates).toHaveLength(1);
-    expect(data.flows.filter((f) => f.ownerKind === "template")).toHaveLength(15);
+    expect(data.flows.filter((f) => f.ownerKind === "template")).toHaveLength(17);
     const own = data.flows.filter((f) => f.ownerId === RID);
     expect(own.map((f) => f.name).sort()).toEqual(["Accueil", "Spécial Noël"]);
     const accueil = data.flows.find((f) => f.ownerKind === "template" && f.name === "Accueil")!;

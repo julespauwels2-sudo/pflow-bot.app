@@ -33,16 +33,50 @@ export const DEFAULT_FUNCTIONS: (Omit<TemplateAgentFunction, "flowId"> & { flowN
     flowName: "IA - Proposer commande",
     aiText: "variable",
     description:
-      "Tu viens de répondre à une question (horaires, livraison, paiement, produits, carte, prix) et commander est une suite naturelle. Mets ta réponse complète dans « texte » : le flux l'affiche, puis propose de commander. Pas pour une intention directe de commande (lancer_commande), ni pour une allergie, un problème ou une réclamation.",
+      "Tu recommandes un ou plusieurs produits, le client montre de l'intérêt pour un produit (« ça a l'air bon », « c'est combien ? », « vous avez quoi au chocolat ? »), ou tu viens de répondre à une question (horaires, livraison, paiement, produits, carte, prix) et commander est une suite naturelle. Mets ta réponse complète dans « texte » : le flux l'affiche, puis le bouton « Je commande ». Pas pour une intention directe de commande (lancer_commande), ni pour une allergie, un problème ou une réclamation.",
   },
   {
     name: "parler_equipe",
     flowName: "IA - Parler équipe",
     aiText: "silence",
     description:
-      "Le client demande une personne, ou la situation demande l'équipe : réclamation, problème avec une commande, suivi ou annulation d'une commande, allergie grave, information introuvable. Le bot se met en pause et l'équipe reprend. Ne génère aucun texte.",
+      "Le client demande une personne, ou la situation demande l'équipe : réclamation, problème avec une commande reçue (erreur, produit manquant, qualité), allergie grave, information introuvable. Le bot se met en pause et l'équipe reprend. Ne génère aucun texte.",
+  },
+  {
+    name: "suivre_commande",
+    flowName: "IA - Suivre commande",
+    aiText: "silence",
+    description:
+      "Le client demande où en est sa commande (« elle arrive quand ? », « c'est prêt ? », « vous avez bien reçu ma commande ? »). PFlow Order répond avec l'état réel de sa dernière commande. Ne génère aucun texte.",
+  },
+  {
+    name: "annuler_commande",
+    flowName: "IA - Annuler commande",
+    aiText: "silence",
+    description:
+      "Le client veut annuler sa commande. Le flux lui demande de confirmer, puis PFlow Order annule (remboursée si payée) ou explique pourquoi c'est impossible. Ne génère aucun texte et ne confirme jamais une annulation toi-même.",
   },
 ];
+
+/**
+ * Textes par défaut des versions précédentes (empreinte FNV-1a et longueur) : un modèle qui les a gardés
+ * tels quels est mis à niveau automatiquement (« Compléter le modèle »). Un texte modifié par Jules
+ * n'est jamais remplacé.
+ */
+export const PREVIOUS_DEFAULTS = {
+  consigne: ["d48c88eb:4709"],
+  functions: { proposer_commande: ["de13b120:332"], parler_equipe: ["bc01880c:251"] } as Record<string, string[]>,
+};
+
+/** Empreinte courte d'un texte (FNV-1a 32 bits + longueur), identique côté serveur et navigateur. */
+export function textFingerprint(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `${h.toString(16).padStart(8, "0")}:${text.length}`;
+}
 
 /** Consigne générale par défaut : persona et règles de Jules, sans rien de propre à un client. */
 export const DEFAULT_CONSIGNE = `Tu es l'assistant WhatsApp officiel de {{nom_resto}}.
@@ -60,6 +94,7 @@ Tu utilises le prénom du client quand il est connu et que c'est naturel, sans l
 # Commandes
 - Le client commande sur la page de commande PFlow Order (bouton « Je commande »). Ne prends jamais la commande dans la conversation.
 - Intention claire de commander (« je veux commander », « j'ai faim », « je voudrais manger », « je veux voir la carte », « qu'est-ce que vous avez ? ») : utilise lancer_commande, jamais proposer_commande.
+- Quand tu recommandes un ou plusieurs produits, ou que le client montre de l'intérêt pour un produit (« ça a l'air bon », « c'est combien le … ? », « vous avez quoi au chocolat ? ») : utilise proposer_commande avec ta réponse complète dans « texte ». Le client reçoit ta réponse, puis le bouton « Je commande ».
 - Après une réponse sur les horaires, la livraison, le retrait, le paiement, les produits, la carte ou les prix : utilise proposer_commande si commander est une suite naturelle. Pas à chaque réponse.
 - Pour une allergie, un problème, une réclamation, une annulation ou une demande sensible : aide d'abord le client, sans proposer de commander.
 - Ne force jamais commercialement une commande quand le contexte ne s'y prête pas.
@@ -67,11 +102,13 @@ Tu utilises le prénom du client quand il est connu et que c'est naturel, sans l
 - La page de commande fait foi pour la disponibilité des produits et les délais : ne garantis jamais qu'un produit est disponible et n'annonce jamais de délai précis.
 
 # Après commande
-- Suivi ou annulation d'une commande : utilise parler_equipe (l'équipe s'en occupe). Ne confirme jamais une annulation toi-même.
+- Le client demande où en est sa commande (« elle arrive quand ? », « c'est prêt ? ») : utilise suivre_commande, sans texte. PFlow Order répond avec l'état réel.
+- Le client veut annuler sa commande : utilise annuler_commande, sans texte. Le flux lui demande de confirmer. Ne confirme jamais une annulation toi-même.
+- Problème avec une commande reçue (erreur, produit manquant, qualité) : utilise parler_equipe.
 - Si le client demande une personne, ou si la situation demande l'équipe : utilise parler_equipe.
 
 # Appels de fonctions (règle prioritaire)
-Quand une fonction lance un flux qui répond lui-même (lancer_commande, parler_equipe), n'écris AUCUN texte. N'annonce jamais « je regarde », « je vérifie », « un instant » ou « je m'en occupe ».
+Quand une fonction lance un flux qui répond lui-même (lancer_commande, parler_equipe, suivre_commande, annuler_commande), n'écris AUCUN texte. N'annonce jamais « je regarde », « je vérifie », « un instant » ou « je m'en occupe ».
 
 # Produits et carte (règle prioritaire)
 - La carte et la base de connaissances sont les seules sources de vérité. N'invente jamais un produit, une recette, un parfum, un accompagnement, une boisson, un prix ou une disponibilité.
@@ -102,6 +139,37 @@ Exemple de bonne réponse :
 Nous sommes ouverts *du mardi au vendredi, de 8h à 12h*.
 
 Une petite faim ? 😋`;
+
+/**
+ * Met un agent existant à niveau (« Compléter le modèle ») : ajoute les fonctions par défaut qui manquent
+ * (reliées aux flux du même nom), et remplace la consigne et les descriptions restées identiques à une
+ * version précédente par défaut. Ce que Jules a modifié n'est jamais touché. Renvoie null si rien ne change.
+ */
+export function upgradeAgent(agent: TemplateAgent, templateFlows: Pick<StoredFlow, "id" | "name">[]): { agent: TemplateAgent; changes: string[] } | null {
+  const changes: string[] = [];
+  const idByName = new Map(templateFlows.map((f) => [f.name.trim().toLowerCase(), f.id]));
+  let consigne = agent.consigne;
+  if (consigne && PREVIOUS_DEFAULTS.consigne.includes(textFingerprint(consigne))) {
+    consigne = DEFAULT_CONSIGNE;
+    changes.push("consigne par défaut mise à jour");
+  }
+  const functions = (agent.functions ?? []).map((f) => {
+    const def = DEFAULT_FUNCTIONS.find((d) => d.name === f.name);
+    if (def && PREVIOUS_DEFAULTS.functions[f.name]?.includes(textFingerprint(f.description))) {
+      changes.push(`description de ${f.name} mise à jour`);
+      return { ...f, description: def.description };
+    }
+    return f;
+  });
+  for (const { flowName, ...def } of DEFAULT_FUNCTIONS) {
+    if (functions.some((f) => f.name === def.name)) continue;
+    const flowId = idByName.get(flowName.toLowerCase());
+    if (!flowId) continue;
+    functions.push({ ...def, flowId });
+    changes.push(`fonction ${def.name} ajoutée`);
+  }
+  return changes.length ? { agent: { ...agent, consigne, functions }, changes } : null;
+}
 
 /** Agent proposé par défaut : fonctions reliées aux flux du modèle qui portent le bon nom. */
 export function defaultAgent(templateFlows: Pick<StoredFlow, "id" | "name">[]): TemplateAgent {

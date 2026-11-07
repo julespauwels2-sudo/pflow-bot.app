@@ -12,7 +12,7 @@ function setup() {
 }
 
 describe("modèle maître", () => {
-  it("crée la trame : 3 dossiers dans l'ordre, 15 flux publiés", async () => {
+  it("crée la trame : 3 dossiers dans l'ordre, 17 flux publiés", async () => {
     const repos = setup();
     const template = await createMasterTemplate(repos);
     expect(template.name).toBe(MASTER_TEMPLATE_NAME);
@@ -22,7 +22,14 @@ describe("modèle maître", () => {
     const byFolder = (name: string) =>
       flows.filter((f) => f.folderId === folders.find((d) => d.name === name)!.id).map((f) => f.name).sort();
     expect(byFolder("Principales PFlow Order")).toEqual(["Accueil", "CTA - Commander", "Infos pratiques"]);
-    expect(byFolder("Fonctions IA")).toEqual(["IA - Lancer commande", "IA - Parler équipe", "IA - Proposer commande", "IA - Recommandation"]);
+    expect(byFolder("Fonctions IA")).toEqual([
+      "IA - Annuler commande",
+      "IA - Lancer commande",
+      "IA - Parler équipe",
+      "IA - Proposer commande",
+      "IA - Recommandation",
+      "IA - Suivre commande",
+    ]);
     expect(byFolder("Commande")).toEqual([
       "Commande - Paiement validé",
       "Panier abandonné",
@@ -33,7 +40,7 @@ describe("modèle maître", () => {
       "Statut - Prête",
       "Statut - Remboursée",
     ]);
-    expect(flows).toHaveLength(15);
+    expect(flows).toHaveLength(17);
     expect(flows.every((f) => f.ownerKind === "template" && f.version === 1)).toBe(true);
   });
 

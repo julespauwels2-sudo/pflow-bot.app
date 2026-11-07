@@ -11,11 +11,18 @@ import {
   type EngineResult,
   type Flow,
   type InfoSheet,
+  type OrderBridge,
   type OutgoingMessage,
   type Session,
   type TriggerMode,
 } from "@/engine";
 import { explainTurn, describeIncoming, type JournalLine } from "./explain";
+
+/** Pont PFlow Order du simulateur : réponses d'exemple, clairement marquées. */
+export const simulatedOrderBridge: OrderBridge = async ({ action }) =>
+  action === "suivi"
+    ? { ok: true, code: "OK", texte: "🧪 (Simulation) Votre commande n° 1042 (32 €) est en préparation." }
+    : { ok: true, code: "ANNULATION_ANNULEE", texte: "🧪 (Simulation) Votre commande n° 1042 est annulée. Vous êtes remboursé intégralement, sous 5 à 10 jours sur votre compte." };
 
 export type ChatEntry =
   | { id: string; from: "client"; text: string; at: string }
@@ -99,7 +106,8 @@ export async function playTurn(
     message,
     agent: bot.agent,
   };
-  const result = await runEngine(input, deps);
+  // Bloc Commande (suivi, annulation) : réponses d'exemple, jamais d'appel à PFlow Order depuis le simulateur.
+  const result = await runEngine(input, { orderBridge: simulatedOrderBridge, ...deps });
   const at = state.now;
   const chat = [...state.chat];
   const clientEntry = pendingClientEntry(state, message, chatText);

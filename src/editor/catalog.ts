@@ -19,6 +19,7 @@ export const BLOCKS: Record<NodeType, BlockInfo> = {
   condition: { label: "Condition", description: "Selon une variable, l'heure ou le jour", accent: "bg-navy-2", hex: "#1B2A6B", icon: "🔀" },
   ai: { label: "Agent IA", description: "L'IA répond, lance une fonction ou passe la main", accent: "bg-pink-2", hex: "#FF7CCB", icon: "✨" },
   handoff: { label: "Transfert humain", description: "Met le bot en pause, prévient le gérant", accent: "bg-coral", hex: "#FF6B6B", icon: "🙋" },
+  commande: { label: "Commande", description: "Suivi ou annulation de la commande du client (PFlow Order)", accent: "bg-cyan", hex: "#74DDFB", icon: "🧾" },
   goto_flow: { label: "Aller à un flux", description: "Saute vers un autre flux", accent: "bg-navy", hex: "#101B4D", icon: "↪️" },
   end: { label: "Fin", description: "Termine la conversation", accent: "bg-muted", hex: "#5E6690", icon: "🏁" },
   delay: { label: "Délai", description: "Pause avec « en train d'écrire »", accent: "bg-cyan", hex: "#74DDFB", icon: "⏳" },
@@ -34,6 +35,7 @@ export const PALETTE: NodeType[] = [
   "condition",
   "ai",
   "handoff",
+  "commande",
   "goto_flow",
   "end",
 ];
@@ -54,6 +56,7 @@ export function defaultData<T extends NodeType>(type: T): NodeDataMap[T] {
     condition: { rules: [{ kind: "jour", jours: [6, 7] }], match: "toutes" },
     ai: { intro: "Posez-moi votre question 🙂" },
     handoff: {},
+    commande: { action: "suivi" },
     goto_flow: { flowId: "" },
     end: {},
     delay: { mode: "intelligent" },
@@ -80,6 +83,7 @@ export function nodeOutputs(node: FlowNode): Output[] {
       ];
     case "trigger":
     case "delay":
+    case "commande":
       return [{ id: "next", label: "Suite" }];
     case "list":
       return node.data.items.map((i) => ({ id: i.id, label: i.title }));

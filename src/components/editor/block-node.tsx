@@ -287,6 +287,14 @@ function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
         </div>
       );
 
+    case "commande":
+      return (
+        <div className="space-y-1.5">
+          <p className="text-[13px] font-semibold">{node.data.action === "annulation" ? "Annuler sa dernière commande" : "Suivi de sa dernière commande"}</p>
+          <p className="text-[11px] text-muted">Réponse de PFlow Order envoyée au client</p>
+        </div>
+      );
+
     case "goto_flow": {
       const target = flows.find((f) => f.id === node.data.flowId);
       return <p className="text-[13px] font-semibold">→ {target ? target.name : <span className="text-coral">Flux à choisir</span>}</p>;

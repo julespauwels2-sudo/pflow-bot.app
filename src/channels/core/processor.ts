@@ -2,7 +2,7 @@
  * Traitement d'une notification du webhook : pour chaque message reçu, le moteur décide, puis les
  * réponses partent par l'API Graph. Aucune dépendance à Next.js (testable seul, déplaçable).
  */
-import { runEngine, type AiPort, type AiRequest, type AiResult, type EngineResult } from "@/engine";
+import { runEngine, type AiPort, type OrderBridge, type AiRequest, type AiResult, type EngineResult } from "@/engine";
 import { createContactToken } from "@/channels/pflow-order/contact-token";
 import type { LoadedBot } from "./bot-loader";
 import { parseWebhook } from "../whatsapp/parse";
@@ -39,6 +39,8 @@ export interface ProcessorDeps {
   loadDemos?(): Promise<DemoDirectoryEntry[]>;
   /** Transcription des messages vocaux (absente : le bot demande d'écrire, comme avant). */
   transcriber?: Transcriber | null;
+  /** Pont PFlow Order (suivi, annulation : étape C5). Absent : le bloc Commande répond un texte de repli. */
+  orderBridge?: OrderBridge;
 }
 
 export interface ProcessReport {
@@ -185,7 +187,8 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
       // Jamais pour une démo ni le numéro PFlow : page de démonstration, aucune commande réelle.
       ...(canal.role === "pflow" ? {} : { orderLinkQuery: orderLinkQuery(bot, event, deps.pflowBotsSecret) }),
     },
-    { ai },
+    // Numéro PFlow (démos) : jamais de vraie commande à suivre ou annuler.
+    { ai, ...(canal.role === "pflow" ? {} : { orderBridge: deps.orderBridge }) },
   );
 
   // Accusé de lecture + « en train d'écrire », seulement si le bot répond : un message laissé au gérant

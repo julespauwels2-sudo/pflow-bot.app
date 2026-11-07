@@ -185,7 +185,7 @@ describe("bot lié au modèle", () => {
     const after = await load();
     expect(after.client.template).toBeUndefined();
     const own = after.clientFlows;
-    expect(own).toHaveLength(15);
+    expect(own).toHaveLength(17);
     expect(own.every((f) => !f.overridesTemplateFlowId && f.version === 1)).toBe(true);
     const ownIds = new Set(own.map((f) => f.id));
     for (const f of own) {
@@ -201,7 +201,7 @@ describe("bot lié au modèle", () => {
     const { flows } = resolveBot(after);
     expect((await say(flows, "salut")).outgoing[0]).toMatchObject({ kind: "link" });
     // Le modèle n'a pas bougé.
-    expect(await repos.flows.listByOwner(template.id)).toHaveLength(15);
+    expect(await repos.flows.listByOwner(template.id)).toHaveLength(17);
   });
 });
 

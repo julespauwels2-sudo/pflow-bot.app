@@ -689,6 +689,19 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
         </Row>
       );
 
+    case "commande":
+      return (
+        <Row
+          label="Action dans PFlow Order"
+          hint="Le bot interroge PFlow Order et envoie sa réponse au client, puis le flux continue. Pour l'annulation, mettez toujours une confirmation (boutons Oui / Non) avant ce bloc."
+        >
+          <select className={inputCls} value={node.data.action} onChange={(e) => set({ action: e.target.value as "suivi" | "annulation" }, "action")}>
+            <option value="suivi">Suivi : où en est sa dernière commande</option>
+            <option value="annulation">Annulation de sa dernière commande (remboursée si payée)</option>
+          </select>
+        </Row>
+      );
+
     case "goto_flow":
       return (
         <Row label="Flux de destination">

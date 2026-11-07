@@ -54,6 +54,8 @@ export const TEXTS = {
   chooseOption: "Merci de choisir une des options ci-dessous 👇",
   orderLink: "Pour commander, c'est par ici 👇",
   orderButton: "Commander",
+  orderBridgeUnavailable:
+    "Je ne peux pas consulter votre commande depuis ici pour le moment 🙏 Appelez directement le restaurant, ou écrivez « équipe » : quelqu'un vous répond.",
   questionError: {
     texte: "Je n'ai pas bien compris, pouvez-vous reformuler ?",
     nombre: "Merci d'indiquer un nombre (par exemple : 2).",
@@ -96,6 +98,8 @@ class EngineRun {
   private steps = 0;
   /** Bloc IA atteint avec un texte d'entrée : l'IA est appelée à la fin du traitement. */
   private pendingAiInput: { flowId: string; nodeId: string; text: string } | null = null;
+  /** Bloc Commande atteint : le pont PFlow Order est appelé à la fin du traitement, puis le flux reprend. */
+  private pendingOrderAction: { flowId: string; nodeId: string } | null = null;
 
   /** Dernier message reçu du contact AVANT celui-ci (nouvelle conversation, premier contact). */
   private readonly previousInboundAt: string | undefined;
@@ -128,6 +132,37 @@ class EngineRun {
       await this.callAi(pending.text, { aiNode: node });
     }
     this.pendingAiInput = null;
+    // Blocs Commande (suivi, annulation) : appel du pont, réponse envoyée, puis suite du flux.
+    for (let i = 0; this.pendingOrderAction && i < MAX_CHAINED_AI_INPUTS; i++) {
+      const pending = this.pendingOrderAction;
+      this.pendingOrderAction = null;
+      const node = this.session?.flowId === pending.flowId ? this.flow(pending.flowId)?.nodes.find((n) => n.id === pending.nodeId) : undefined;
+      if (node?.type !== "commande") continue;
+      await this.runOrderAction(node);
+    }
+    this.pendingOrderAction = null;
+  }
+
+  private async runOrderAction(node: FlowNodeOf<"commande">): Promise<void> {
+    const { action } = node.data;
+    const slug = this.input.client.orderSlug;
+    const bridge = this.deps.orderBridge;
+    if (!bridge || !slug) {
+      this.events.push({ type: "order_action", action, ok: false, fallback: true });
+      this.send({ kind: "text", text: TEXTS.orderBridgeUnavailable });
+    } else {
+      try {
+        const result = await bridge({ action, slug, tel: this.contact.id });
+        this.events.push({ type: "order_action", action, ok: result.ok, ...(result.code ? { code: result.code } : {}) });
+        this.send({ kind: "text", text: result.texte?.trim() || TEXTS.orderBridgeUnavailable });
+        if (this.session && result.code) this.session.vars.commande_resultat = result.code;
+      } catch (error) {
+        this.events.push({ type: "error", message: `PFlow Order : ${errorMessage(error)}` });
+        this.events.push({ type: "order_action", action, ok: false, fallback: true });
+        this.send({ kind: "text", text: TEXTS.orderBridgeUnavailable });
+      }
+    }
+    if (this.session) this.followHandle(node, "next");
   }
 
   private async processMessage(): Promise<void> {
@@ -588,6 +623,11 @@ class EngineRun {
 
         case "handoff":
           this.handoff("bloc", node.data.text);
+          return;
+
+        case "commande":
+          // Le pont est appelé à la fin du traitement (appel réseau), puis le flux reprend depuis ce bloc.
+          this.pendingOrderAction = { flowId: flow.id, nodeId: node.id };
           return;
 
         case "goto_flow": {

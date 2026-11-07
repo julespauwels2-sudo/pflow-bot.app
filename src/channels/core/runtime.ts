@@ -17,6 +17,7 @@ import type { WorkspaceData } from "@/data/types";
 import { createInstagramSender } from "../instagram/send";
 import { createGraphClient } from "../whatsapp/graph";
 import { transcriberFromEnv } from "../voice/transcriber";
+import { orderBridgeFromEnv } from "../pflow-order/pont";
 import { demoDirectory } from "@/demos/lifecycle";
 import { loadBotFromWorkspace } from "./bot-loader";
 import { createMemoryChannelStore } from "./memory-store";
@@ -180,6 +181,7 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
         onAiCall: async (info) => void (await logAiCall(repos, info)),
         pflowBotsSecret: secret,
         transcriber,
+        orderBridge: storeMode() === "memory" ? undefined : orderBridgeFromEnv(),
       };
     },
   };

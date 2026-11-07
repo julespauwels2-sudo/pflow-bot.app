@@ -3,7 +3,7 @@
  * écrite uniquement avec des variables — rien de propre à un client.
  */
 import type { BubbleButton, FlowNode, OrderEvent } from "@/engine";
-import { defaultAgent } from "./agent";
+import { defaultAgent, upgradeAgent } from "./agent";
 import type { Repositories } from "./repositories";
 import type { BotTemplate, FlowGraph } from "./types";
 
@@ -112,6 +112,33 @@ const ctaCommander: FlowGraph = {
     ]),
   ],
   edges: [{ id: "e1", source: "t", target: "m" }],
+};
+
+
+/** C5 : la réponse vient de PFlow Order (pont), le flux ne fait que l'envoyer. */
+const suivreCommande: FlowGraph = {
+  nodes: [trigger([]), { id: "c", type: "commande", position: at(340, 60), data: { action: "suivi" } }],
+  edges: [{ id: "e1", source: "t", target: "c" }],
+};
+
+/** C5 : jamais d'annulation sans confirmation du client (boutons Oui / Non). */
+const annulerCommande: FlowGraph = {
+  nodes: [
+    trigger([]),
+    message("m", 340, 60, [
+      {
+        text: "Vous voulez vraiment annuler votre dernière commande ?\n\nSi elle est payée en ligne et pas encore prête, vous êtes remboursé intégralement.",
+        buttons: [reply("oui", "✅ Oui, annuler"), reply("non", "↩️ Non, la garder")],
+      },
+    ]),
+    { id: "c", type: "commande", position: at(720, -20), data: { action: "annulation" } },
+    message("garde", 720, 180, [{ text: "C'est noté, votre commande continue 😊" }]),
+  ],
+  edges: [
+    { id: "e1", source: "t", target: "m" },
+    { id: "e2", source: "m", sourceHandle: "oui", target: "c" },
+    { id: "e3", source: "m", sourceHandle: "non", target: "garde" },
+  ],
 };
 
 // --- Fonctions IA (lancées par l'agent IA à l'étape A6) ------------------------
@@ -346,6 +373,8 @@ export const SEED_FLOWS: SeedFlow[] = [
   { name: "IA - Lancer commande", description: "Le client veut commander : bouton Je commande", folder: "Fonctions IA", graph: lancerCommande },
   { name: "IA - Proposer commande", description: "Réponse de l'IA puis proposition de commander", folder: "Fonctions IA", graph: proposerCommande },
   { name: "IA - Parler équipe", description: "Le client veut parler à une personne : transfert humain", folder: "Fonctions IA", graph: parlerEquipe },
+  { name: "IA - Suivre commande", description: "Où en est la commande du client (réponse de PFlow Order)", folder: "Fonctions IA", graph: suivreCommande },
+  { name: "IA - Annuler commande", description: "Annulation de la dernière commande, après confirmation (PFlow Order)", folder: "Fonctions IA", graph: annulerCommande },
   { name: "IA - Recommandation", description: "Conseille des produits de la carte selon l'envie du client", folder: "Fonctions IA", graph: recommandation },
   { name: "Commande - Paiement validé", description: "Confirmation de commande (payée en ligne ou à régler)", folder: "Commande", graph: paiementValide, gotos: { g_prep: "Statut - En préparation", g_prete: "Statut - Prête" } },
   { name: "Statut - En préparation", description: "La commande passe en préparation", folder: "Commande", graph: enPreparation },
@@ -405,7 +434,11 @@ export async function completeMasterTemplate(repos: Repositories, templateId: st
     }
     await repos.flows.publish(id);
   }
-  return created.map((c) => c.seed.name);
+  // Agent IA : fonctions par défaut manquantes (ex. suivre_commande) et textes par défaut à jour.
+  const template = (await repos.templates.list()).find((t) => t.id === templateId);
+  const upgrade = template?.agent ? upgradeAgent(template.agent, await repos.flows.listByOwner(templateId)) : null;
+  if (upgrade) await repos.templates.updateAgent(templateId, upgrade.agent);
+  return [...created.map((c) => c.seed.name), ...(upgrade?.changes ?? []).map((c) => `Agent IA : ${c}`)];
 }
 
 /** Crée le modèle maître avec toute la trame (dossiers et flux publiés). */

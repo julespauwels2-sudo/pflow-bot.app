@@ -244,6 +244,7 @@ export function lintFlow(graph: FlowGraph, ctx: LintContext): Issue[] {
 
       case "ai":
       case "handoff":
+      case "commande":
       case "end":
         break;
     }

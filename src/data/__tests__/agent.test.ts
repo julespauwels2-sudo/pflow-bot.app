@@ -14,7 +14,7 @@ function setup() {
 }
 
 describe("agent IA du modèle maître", () => {
-  it("le modèle maître est créé avec la consigne PFlow et les 3 fonctions reliées à leurs flux", async () => {
+  it("le modèle maître est créé avec la consigne PFlow et les 5 fonctions reliées à leurs flux", async () => {
     const repos = setup();
     const template = await createMasterTemplate(repos);
     const flows = await repos.flows.listByOwner(template.id);
@@ -24,6 +24,8 @@ describe("agent IA du modèle maître", () => {
       ["lancer_commande", "IA - Lancer commande", "silence"],
       ["proposer_commande", "IA - Proposer commande", "variable"],
       ["parler_equipe", "IA - Parler équipe", "silence"],
+      ["suivre_commande", "IA - Suivre commande", "silence"],
+      ["annuler_commande", "IA - Annuler commande", "silence"],
     ]);
     expect(checkAgent(template.agent!, flows)).toEqual([]);
   });
@@ -65,10 +67,12 @@ describe("agent IA du modèle maître", () => {
     const templateFlows = await repos.flows.listByOwner(template.id);
     const { flows } = resolveBot({ client: linked, templateFlows, clientFlows: [] });
     const agent = agentConfigFor(template, flows)!;
-    expect(agent.functions.map((f) => f.name)).toEqual(["lancer_commande", "proposer_commande", "parler_equipe"]);
+    expect(agent.functions.map((f) => f.name)).toEqual(["lancer_commande", "proposer_commande", "parler_equipe", "suivre_commande", "annuler_commande"]);
     expect(agentConfigFor(template, flows.filter((f) => f.name !== "IA - Parler équipe"))!.functions.map((f) => f.name)).toEqual([
       "lancer_commande",
       "proposer_commande",
+      "suivre_commande",
+      "annuler_commande",
     ]);
     expect(agentConfigFor(null, flows)).toBeUndefined();
     expect(aiDailyLimit(template)).toBe(20);
@@ -136,5 +140,26 @@ describe("journal des appels IA", () => {
     expect(await repos.aiCalls.listByClient(a.id)).toEqual([]);
     await repos.clients.delete(b.id);
     expect((await repos.workspace.exportAll()).aiCalls).toEqual([]);
+  });
+
+  it("mise à niveau : un agent resté par défaut (version précédente) reçoit les nouvelles fonctions et textes ; un texte modifié n'est jamais touché", async () => {
+    const { upgradeAgent, textFingerprint, PREVIOUS_DEFAULTS } = await import("../agent");
+    const flows = [
+      { id: "f1", name: "IA - Lancer commande" },
+      { id: "f2", name: "IA - Proposer commande" },
+      { id: "f3", name: "IA - Parler équipe" },
+      { id: "f4", name: "IA - Suivre commande" },
+      { id: "f5", name: "IA - Annuler commande" },
+    ];
+    // Empreintes des textes par défaut de la version précédente (ceux de la production le 7 novembre).
+    expect(PREVIOUS_DEFAULTS.consigne).toEqual(["d48c88eb:4709"]);
+    expect(textFingerprint("abc")).toMatch(/^[0-9a-f]{8}:3$/);
+    const old = { consigne: "Ma consigne à moi", functions: [{ name: "parler_equipe", flowId: "f3", description: "Ma description", aiText: "silence" as const }] };
+    const up = upgradeAgent(old, flows)!;
+    expect(up.agent.consigne).toBe("Ma consigne à moi");
+    expect(up.agent.functions![0].description).toBe("Ma description");
+    expect(up.agent.functions!.map((f) => f.name)).toEqual(["parler_equipe", "lancer_commande", "proposer_commande", "suivre_commande", "annuler_commande"]);
+    expect(up.changes).toContain("fonction suivre_commande ajoutée");
+    expect(upgradeAgent(up.agent, flows)).toBeNull();
   });
 });
