@@ -1,5 +1,5 @@
 -- PFlow Bots — compte de messagerie d'un canal WhatsApp (7 novembre 2026).
--- PROPOSITION, NON APPLIQUÉE : à déplacer dans supabase/migrations/ après l'accord de Jules.
+-- APPLIQUÉE le 7 novembre 2026 : supabase/migrations/20261107010000_bot_canaux_compte_messagerie.sql.
 -- Meta distingue désormais le compte WhatsApp (WABA) et le « compte de messagerie » (Messaging Account,
 -- « Paid Message Account ») qui envoie et paie les messages. Le bot l'indique à chaque envoi
 -- (messaging_account_id) pour que Meta ne choisisse pas un compte inaccessible au token.

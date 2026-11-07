@@ -591,6 +591,6 @@ faux Meta (`scripts/e2e/numero-pflow.js`) ; WhatsApp et boîte de réception tou
 - Code : `messaging_account_id` des envois = compte de messagerie du canal (nouvelle colonne), **plus le WABA** ;
   sans valeur, le champ est omis (Meta choisit). Bouton « Tester l'accès du token » : WABA et compte de messagerie
   testés séparément.
-- **Migration proposée, non appliquée** : `docs/etape-c/migration-c2-compte-messagerie.sql` (colonne
-  `messaging_account_id` + valeur du numéro de test). En attente de l'accord de Jules.
+- **Migration C2 appliquée** (OK de Jules) : `supabase/migrations/20261107010000_bot_canaux_compte_messagerie.sql` (colonne
+  `messaging_account_id` ; numéro de test : 1511896410913657).
 - `guide-meta.md` : « Deux éléments à attribuer par numéro ».
