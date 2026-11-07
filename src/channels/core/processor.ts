@@ -7,6 +7,7 @@ import { createContactToken } from "@/channels/pflow-order/contact-token";
 import type { LoadedBot } from "./bot-loader";
 import { parseWebhook } from "../whatsapp/parse";
 import type { ChannelSender, ChannelStore, InboundEvent, StatusEvent } from "./types";
+import { sendOptions } from "./send-options";
 import type { Transcriber } from "../voice/transcriber";
 import { pflowBaseBot, PFLOW_BOT_ID, PFLOW_TEXTS } from "@/demos/pflow-bot";
 import { nextContactDemo, routePflowMessage, type DemoDirectoryEntry } from "@/demos/router";
@@ -120,7 +121,7 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     if (route.kind === "ended") {
       const text = PFLOW_TEXTS.demoEnded(route.nomResto);
       try {
-        const wamid = await graph.send(canal.accountId, event.waId, { kind: "text", text });
+        const wamid = await graph.send(canal.accountId, event.waId, { kind: "text", text }, sendOptions(canal));
         await store.addMessage({ canalId: canal.id, contactId: contact.id, sens: "sortant", auteur: "bot", wamid, type: "text", contenu: { kind: "text", text }, statut: "envoye" });
       } catch (error) {
         report.errors.push(`Envoi à ${event.waId} : ${message(error)}`);
@@ -197,7 +198,7 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
       continue;
     }
     try {
-      const wamid = await graph.send(canal.accountId, event.waId, out);
+      const wamid = await graph.send(canal.accountId, event.waId, out, sendOptions(canal));
       await store.addMessage({ canalId: canal.id, contactId: contact.id, sens: "sortant", auteur: "bot", wamid, type: out.kind, contenu: out, statut: "envoye" });
       sent += 1;
     } catch (error) {
@@ -217,10 +218,12 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     if (canal.telAlerte) {
       // Le gérant n'est prévenu par WhatsApp que si sa propre fenêtre de 24 h est ouverte (sinon Meta refuse).
       try {
-        await graph.send(canal.accountId, canal.telAlerte, {
-          kind: "text",
-          text: `🔔 ${bot.client.nomResto} : un client (${event.profileName ?? event.waId}) attend une réponse. Ouvrez la boîte de réception PFlow Bots.`,
-        });
+        await graph.send(
+          canal.accountId,
+          canal.telAlerte,
+          { kind: "text", text: `🔔 ${bot.client.nomResto} : un client (${event.profileName ?? event.waId}) attend une réponse. Ouvrez la boîte de réception PFlow Bots.` },
+          sendOptions(canal),
+        );
         gerantPrevenu = true;
       } catch {
         gerantPrevenu = false;

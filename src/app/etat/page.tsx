@@ -147,6 +147,8 @@ function ServerCards({ data }: { data: SystemStatus }) {
         )}
       </Card>
 
+      {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && <WhatsAppAccessCard />}
+
       <Card title="Clés détectées" className="lg:col-span-2">
         <ul className="grid gap-x-8 gap-y-1 text-sm md:grid-cols-2" data-testid="etat-cles">
           {data.cles.map((k) => (
@@ -195,5 +197,67 @@ function AiCalls({ calls, empty }: { calls: (AiCallLog & { resto: string })[]; e
         </li>
       ))}
     </ul>
+  );
+}
+
+interface AccessResult {
+  testeLe: string;
+  version: string;
+  resultats: { canal: string; etat: string; etapes: { etape: string; ok: boolean; detail: string }[] }[];
+}
+
+/** Test de l'accès du token WhatsApp : lectures seules chez Meta, aucun message envoyé. */
+function WhatsAppAccessCard() {
+  const [result, setResult] = useState<{ status: "idle" } | { status: "loading" } | { status: "error"; error: string } | { status: "ready"; data: AccessResult }>({ status: "idle" });
+  async function run() {
+    setResult({ status: "loading" });
+    try {
+      const token = await accessToken();
+      const response = await fetch("/api/etat/acces-whatsapp", { method: "POST", headers: token ? { authorization: `Bearer ${token}` } : {} });
+      const body = (await response.json().catch(() => ({}))) as AccessResult & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? `Erreur ${response.status}`);
+      setResult({ status: "ready", data: body });
+    } catch (error) {
+      setResult({ status: "error", error: errorText(error) });
+    }
+  }
+  return (
+    <Card title="Accès du token WhatsApp" className="lg:col-span-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="secondary" onClick={run} disabled={result.status === "loading"}>
+          {result.status === "loading" ? "Test en cours…" : "Tester l'accès du token"}
+        </Button>
+        <span className="text-xs text-muted">Lecture seule chez Meta (numéro, compte WhatsApp, apps abonnées) : aucun message envoyé.</span>
+      </div>
+      {result.status === "error" && (
+        <div className="mt-3">
+          <Notice tone="error">{result.error}</Notice>
+        </div>
+      )}
+      {result.status === "ready" && (
+        <div className="mt-3 space-y-3 text-sm" data-testid="acces-whatsapp">
+          {result.data.resultats.length === 0 && <p className="text-muted">Aucun canal WhatsApp enregistré.</p>}
+          {result.data.resultats.map((r) => (
+            <div key={r.canal}>
+              <p className="font-medium">
+                {r.canal} <Badge>{r.etat}</Badge>
+              </p>
+              <ul className="mt-1 space-y-1">
+                {r.etapes.map((e) => (
+                  <li key={e.etape} className="flex flex-wrap gap-2">
+                    {e.ok ? <Badge tone="success">OK</Badge> : <Badge tone="warning">refusé</Badge>}
+                    <span className="font-medium">{e.etape}</span>
+                    <span className={e.ok ? "text-muted" : "text-coral"}>{e.detail}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          <p className="text-xs text-muted">
+            Testé le {time(result.data.testeLe)} · API Graph {result.data.version}
+          </p>
+        </div>
+      )}
+    </Card>
   );
 }

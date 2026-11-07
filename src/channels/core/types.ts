@@ -9,9 +9,19 @@ export type Plateforme = "whatsapp" | "instagram";
 export type EventSource = Plateforme | "pflow_order";
 
 /** Envoi vers une plateforme (API Graph de WhatsApp, API d'Instagram). */
+/** Options d'envoi (WhatsApp). */
+export interface SendOptions {
+  /**
+   * Compte de messagerie qui envoie (et paie) le message : l'ID du compte WhatsApp (WABA). Sans lui, Meta
+   * choisit lui-même parmi les comptes du numéro, parfois un compte auquel le token n'a pas accès
+   * (erreur « (#10) Viewer cannot access the provided Paid Message Account »).
+   */
+  messagingAccountId?: string;
+}
+
 export interface ChannelSender {
   /** Envoie un message et renvoie son identifiant sur la plateforme. */
-  send(accountId: string, to: string, message: OutgoingMessage): Promise<string | undefined>;
+  send(accountId: string, to: string, message: OutgoingMessage, options?: SendOptions): Promise<string | undefined>;
   /** Accusé de lecture et « en train d'écrire ». */
   markRead(accountId: string, messageId: string, typing: boolean, to?: string): Promise<void>;
   /** Téléchargement d'un média reçu (message vocal). */

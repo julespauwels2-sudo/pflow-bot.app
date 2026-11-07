@@ -5,6 +5,7 @@
 import { canSendFreeform, type ContactState, type OutgoingMessage } from "@/engine";
 import type { WorkspaceData } from "@/data/types";
 import type { ChannelSender, ChannelStore, Plateforme, StoredMessage } from "./types";
+import { sendOptions } from "./send-options";
 
 export interface InboxConversation {
   contactId: string;
@@ -123,7 +124,7 @@ export async function applyInboxAction(
   if (!sender) throw new InboxError(`Envoi ${canal.plateforme === "instagram" ? "Instagram" : "WhatsApp"} non configuré.`);
   let wamid: string | undefined;
   try {
-    wamid = await sender.send(canal.accountId, contact.waId, { kind: "text", text: texte });
+    wamid = await sender.send(canal.accountId, contact.waId, { kind: "text", text: texte }, sendOptions(canal));
   } catch (error) {
     await store.addMessage({ canalId: canal.id, contactId: contact.id, sens: "sortant", auteur: "humain", type: "text", contenu: { kind: "text", text: texte }, statut: "echec", erreur: String(error instanceof Error ? error.message : error) });
     throw new InboxError(error instanceof Error ? error.message : String(error));

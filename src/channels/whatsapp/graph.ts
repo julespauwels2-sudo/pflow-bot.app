@@ -5,7 +5,7 @@
  */
 import type { OutgoingMessage } from "@/engine";
 import { allowedMediaUrl, fetchMedia, MediaError } from "../core/media";
-import type { MediaRef } from "../core/types";
+import type { MediaRef, SendOptions } from "../core/types";
 
 export interface GraphConfig {
   token: string;
@@ -70,6 +70,17 @@ export function toGraphPayload(to: string, message: OutgoingMessage): Record<str
   }
 }
 
+/** Texte d'une erreur de Meta : message, code, sous-code, détail et identifiant de trace (pour le support Meta). */
+export function graphErrorText(json: Record<string, unknown>): string {
+  const error = (json.error ?? {}) as { message?: string; code?: number; error_subcode?: number; error_data?: { details?: string }; fbtrace_id?: string };
+  const extra = [
+    error.error_subcode ? `sous-code ${error.error_subcode}` : "",
+    error.error_data?.details && error.error_data.details !== error.message ? error.error_data.details : "",
+    error.fbtrace_id ? `trace ${error.fbtrace_id}` : "",
+  ].filter(Boolean);
+  return `${error.message ?? "erreur inconnue"}${extra.length ? ` [${extra.join(" ; ")}]` : ""}`;
+}
+
 export function createGraphClient(config: GraphConfig) {
   const doFetch = config.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
   const url = (accountId: string) => `${config.base.replace(/\/$/, "")}/${config.version}/${encodeURIComponent(accountId)}/messages`;
@@ -86,8 +97,7 @@ export function createGraphClient(config: GraphConfig) {
       });
       const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       if (!response.ok) {
-        const error = (json.error ?? {}) as { message?: string };
-        throw new GraphError(`Meta a refusé l'envoi (${response.status}) : ${error.message ?? "erreur inconnue"}`, response.status);
+        throw new GraphError(`Meta a refusé l'envoi (${response.status}) : ${graphErrorText(json)}`, response.status);
       }
       return json;
     } catch (error) {
@@ -100,10 +110,10 @@ export function createGraphClient(config: GraphConfig) {
 
   return {
     /** Envoie un message et renvoie son identifiant WhatsApp (wamid). */
-    async send(accountId: string, to: string, message: OutgoingMessage): Promise<string | undefined> {
+    async send(accountId: string, to: string, message: OutgoingMessage, options: SendOptions = {}): Promise<string | undefined> {
       const payload = toGraphPayload(to, message);
       if (!payload) return undefined;
-      const json = await post(accountId, payload);
+      const json = await post(accountId, options.messagingAccountId ? { ...payload, messaging_account_id: options.messagingAccountId } : payload);
       const first = (json.messages as { id?: string }[] | undefined)?.[0];
       return first?.id;
     },
@@ -130,3 +140,55 @@ export function createGraphClient(config: GraphConfig) {
 }
 
 export type GraphClient = ReturnType<typeof createGraphClient>;
+
+export interface AccessStep {
+  etape: string;
+  ok: boolean;
+  /** Ce que Meta répond (sans le token), ou l'erreur exacte. */
+  detail: string;
+}
+
+/**
+ * Test de l'accès du token (page État) : lectures seules, aucun message envoyé.
+ * Numéro, compte WhatsApp (avec son portefeuille propriétaire), numéros du compte, apps abonnées.
+ */
+export async function checkWhatsAppAccess(config: GraphConfig, phoneNumberId: string, wabaId?: string): Promise<AccessStep[]> {
+  const doFetch = config.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
+  const base = `${config.base.replace(/\/$/, "")}/${config.version}`;
+  const get = async (etape: string, path: string, show: (json: Record<string, unknown>) => string): Promise<AccessStep> => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), config.timeoutMs ?? 10_000);
+    try {
+      const response = await doFetch(`${base}/${path}`, { headers: { authorization: `Bearer ${config.token}` }, signal: controller.signal });
+      const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!response.ok) return { etape, ok: false, detail: `Refus de Meta (${response.status}) : ${graphErrorText(json)}` };
+      return { etape, ok: true, detail: show(json) };
+    } catch (error) {
+      return { etape, ok: false, detail: `Meta injoignable : ${error instanceof Error ? error.message : String(error)}` };
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  const id = encodeURIComponent;
+  const steps = [
+    await get("Numéro WhatsApp", `${id(phoneNumberId)}?fields=display_phone_number,verified_name,quality_rating`, (j) =>
+      [j.display_phone_number, j.verified_name, j.quality_rating ? `qualité ${j.quality_rating}` : ""].filter(Boolean).join(" · ")),
+  ];
+  if (!wabaId) return [...steps, { etape: "Compte WhatsApp", ok: false, detail: "Aucun ID de compte WhatsApp (waba_id) sur ce canal." }];
+  steps.push(
+    await get("Compte WhatsApp (WABA)", `${id(wabaId)}?fields=id,name,owner_business_info`, (j) => {
+      const owner = j.owner_business_info as { id?: string; name?: string } | undefined;
+      return `${j.name ?? j.id} · portefeuille propriétaire : ${owner ? `${owner.name ?? "?"} (${owner.id ?? "?"})` : "non communiqué"}`;
+    }),
+    await get("Numéros du compte", `${id(wabaId)}/phone_numbers?fields=id,display_phone_number`, (j) => {
+      const list = (j.data as { id?: string; display_phone_number?: string }[] | undefined) ?? [];
+      const here = list.some((n) => n.id === phoneNumberId);
+      return `${list.map((n) => n.display_phone_number ?? n.id).join(", ") || "aucun"}${here ? "" : " ⚠️ le numéro du canal n'est pas dans ce compte"}`;
+    }),
+    await get("Apps abonnées au compte", `${id(wabaId)}/subscribed_apps`, (j) => {
+      const list = (j.data as { whatsapp_business_api_data?: { name?: string; id?: string } }[] | undefined) ?? [];
+      return list.map((a) => a.whatsapp_business_api_data?.name ?? a.whatsapp_business_api_data?.id ?? "?").join(", ") || "aucune";
+    }),
+  );
+  return steps;
+}
