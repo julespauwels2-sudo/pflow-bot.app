@@ -1,55 +1,81 @@
 # Passer l'app PFlow Bots en mode « Live »
 
-Préparé le 7 novembre 2026. ⚠️ Écrit sans accès direct à la documentation de Meta (bloquée depuis ma
-session) : à partir de recherches sur les pages officielles. Les intitulés exacts peuvent varier.
+Mis à jour le 7 novembre 2026. ⚠️ Écrit sans accès direct au tableau de bord de Meta (bloqué depuis ma
+session) : les intitulés peuvent légèrement varier (français / anglais entre parenthèses).
 
-## D'abord : est-ce nécessaire maintenant ? Non, pas pour le premier test
+## Pourquoi maintenant
 
-⚠️ **Correction du 7 novembre (04 h 35 UTC)** : les deux appels vus dans les journaux Vercel (04 h 12 et
-04 h 23 UTC) portaient l'identifiant `ABGGFlA5Fpa`, celui du **message d'exemple du bouton « Tester »** de Meta,
-pas un vrai message (un vrai identifiant commence par `wamid.` et n'est jamais répété). Le vrai « Bonjour »
-de 04 h 28 n'a **jamais été envoyé au webhook**. Le webhook répond bien ; c'est un réglage côté Meta (abonnement
-au champ `messages`, ou lien entre l'app et le compte WhatsApp : voir `guide-meta.md` §6, « Dépannage »).
-En principe, Meta envoie les messages du numéro de test même en mode Développement : le Live n'est à tenter
-qu'en dernier recours.
+`subscribed_apps` est correct (PFlow Bots est abonnée au compte de test), mais l'encadré de Meta l'indique :
+**tant que l'app n'est pas publiée, elle ne reçoit que les webhooks de test** (le bouton « Tester »). Les
+deux appels vus le 7 novembre à 04 h 12 et 04 h 23 UTC étaient ce message d'exemple (identifiant
+`ABGGFlA5Fpa`), pas un vrai message. → Passer en Live pour recevoir les vrais messages.
 
-Le mode **Live sera nécessaire plus tard**, pour les vrais numéros des restos (C6) : Meta demande que
-toute app utilisée en production soit en Live. Tout est prêt ci-dessous pour ce jour-là.
+## Étape 0 — avant Meta (≈ 5 min)
 
-## Ce que Meta demande (Paramètres de l'app → Général / « Basic »)
+1. **Fusionner la PR des pages légales** : https://github.com/julespauwels2-sudo/Site-PFlow/pull/3
+   (Vercel publie pflow.fr tout seul).
+2. Ouvrir en **navigation privée** et vérifier que les deux pages s'affichent :
+   - https://www.pflow.fr/confidentialite
+   - https://www.pflow.fr/suppression-donnees
+   Meta vérifie que l'URL de confidentialité répond : si elle ne s'ouvre pas, le passage en Live est refusé.
+3. **Vercel → projet `pflow-bot-app` → Settings → Environment Variables → Add** :
+   - Nom : `CRON_SECRET`
+   - Valeur : une longue phrase aléatoire (gestionnaire de mots de passe, 32 caractères ou plus)
+   - Environnement : **Production** uniquement ; cocher **Sensitive** → **Save**
+   - Puis **Deployments → dernier déploiement → ⋯ → Redeploy**.
+   - Contrôle : la page **État** de PFlow Bots affiche `CRON_SECRET` comme présente. C'est ce qui active la
+     suppression automatique promise par la page de confidentialité (12 mois / 30 jours).
 
-| Champ | Obligatoire ? | Valeur à mettre |
+## Étape 1 — Paramètres de l'app → Général (*App settings → Basic*)
+
+developers.facebook.com → **Mes apps** → **PFlow Bots** → menu de gauche **Paramètres de l'app** →
+**Général**. Les champs, dans l'ordre de la page :
+
+| # | Champ (FR / EN) | Quoi mettre |
 |---|---|---|
-| **URL de la politique de confidentialité** | **Oui** (bloque le passage en Live si vide) | `https://www.pflow.fr/confidentialite` (une fois la nouvelle page en ligne) |
-| **Suppression des données utilisateur** : URL des instructions **ou** URL de rappel (callback) | **Oui**, l'un des deux | **URL des instructions** : `https://www.pflow.fr/suppression-donnees` (pas de callback : il ne sert qu'aux connexions « Facebook Login », que PFlow Bots n'utilise pas) |
-| **Icône de l'app** | **Oui** | `docs/etape-c/meta/icone-pflow-bots-1024.png` (1024 × 1024, PNG, le « P » du site). Agrandie depuis l'icône 512 du site : si tu as l'original en plus grand, prends-le |
-| **Catégorie** | **Oui** | « Entreprises et pages » (*Business and Pages*) ou « Messagerie » (*Messaging*) selon la liste proposée |
-| **E-mail de contact** | Oui (souvent déjà rempli) | `jules.pauwels2@gmail.com` |
-| URL des conditions d'utilisation | Non | `https://www.pflow.fr/cgv` |
-| Domaines de l'app | Non | `pflow.fr` |
-| Vérification de l'entreprise | **Non** pour le mode Live | Nécessaire plus tard pour les vrais numéros (nom affiché, limites d'envoi) : déjà dans la checklist C0 |
+| 1 | **ID de l'app** / **Clé secrète** (*App ID / App secret*) | Ne rien toucher. Ne pas réinitialiser la clé secrète : elle est dans Vercel (`WHATSAPP_APP_SECRET`) |
+| 2 | **Nom d'affichage** (*Display name*) | `PFlow Bots` (déjà rempli) |
+| 3 | **Espace de noms** (*Namespace*) | Laisser vide |
+| 4 | **Domaines de l'app** (*App domains*) | `pflow.fr` (taper puis Entrée : il devient une étiquette) |
+| 5 | **E-mail de contact** (*Contact email*) | `jules.pauwels2@gmail.com` |
+| 6 | **URL de la politique de confidentialité** (*Privacy policy URL*) — **obligatoire** | `https://www.pflow.fr/confidentialite` |
+| 7 | **URL des conditions de service** (*Terms of Service URL*) | `https://www.pflow.fr/cgv` |
+| 8 | **Suppression des données utilisateur** (*User data deletion*) — **obligatoire** | Menu déroulant : **URL des instructions de suppression des données** (*Data deletion instructions URL*), puis `https://www.pflow.fr/suppression-donnees`. Ne pas choisir « URL de rappel » (*callback*) : elle ne sert qu'à Facebook Login |
+| 9 | **Icône de l'app (1024 × 1024)** (*App icon*) — **obligatoire** | Cliquer sur le carré de l'icône → importer `docs/etape-c/meta/icone-pflow-bots-1024.png` (PNG 1024 × 1024, le « P » du site) |
+| 10 | **Catégorie** (*Category*) — **obligatoire** | **Messagerie** (*Messaging*) ; à défaut **Entreprises et pages** (*Business and pages*) |
+| 11 | Sous-catégorie, si Meta en demande une | La plus proche de « messagerie professionnelle / service client » |
+| 12 | **Vérification de l'entreprise** (*Business verification*) | Pas nécessaire pour le Live. Ce sera nécessaire plus tard pour les vrais numéros (checklist C0) |
 
-**App Review** : en principe **pas nécessaire**. Les autorisations WhatsApp (`whatsapp_business_messaging`,
-`whatsapp_business_management`) en accès **standard** suffisent pour tes propres comptes WhatsApp (ton
-portefeuille). ⚠️ Vérifie dans **Examen de l'app → Autorisations et fonctionnalités** : si Meta exige
-l'accès avancé avant le passage en Live, arrête-toi et dis-le-moi.
+→ En bas de la page : **Enregistrer les modifications** (*Save changes*). S'il reste un champ en rouge, Meta
+l'indique en haut de la page.
 
-## Les étapes, le jour J (≈ 10 min)
+## Étape 2 — Autorisations (à vérifier, normalement rien à faire)
 
-1. Publier les deux pages sur pflow.fr (`docs/legal/site/`) et vérifier qu'elles s'ouvrent en navigation privée.
-2. developers.facebook.com → **PFlow Bots** → **Paramètres de l'app** → **Général** : remplir le tableau ci-dessus → **Enregistrer**.
-3. En haut de la page de l'app : **Mode de l'app : Développement → Live** (ou bouton **Publier**). Confirmer.
-4. Vérifier : page **État** de PFlow Bots (webhook actif) et un « Bonjour » au numéro de test.
+Menu **Examen de l'app** → **Autorisations et fonctionnalités** (*App Review → Permissions and Features*) :
+`whatsapp_business_messaging` et `whatsapp_business_management` en **accès standard** suffisent pour tes
+propres comptes WhatsApp. ⚠️ Si Meta exige l'**accès avancé** (*Advanced access*) ou un **examen**
+avant le passage en Live, **arrête-toi et dis-le-moi**.
+
+## Étape 3 — Publier
+
+1. Menu de gauche **Publier** (*Publish*), ou en haut de la page **Mode de l'app : Développement → Live**
+   (*App mode: Development → Live*).
+2. Meta affiche la liste de ce qui manque. Si tout est vert : **Publier** / **Passer en Live** → confirmer.
+3. Si Meta demande la **vérification des données** (*Data Use Checkup*) : répondre que les données servent
+   uniquement à répondre aux clients qui écrivent au resto (pas de publicité, pas de revente) et confirmer.
+
+## Étape 4 — Vérifier (≈ 2 min)
+
+1. Écrire **« Bonjour »** au **+1 555 186 2679** depuis le +590 690 93 81 08.
+2. Me prévenir tout de suite : je lis les journaux Vercel. Ils ne sont gardés qu'une heure sur l'offre
+   gratuite. On doit y voir `[whatsapp] reçu : 1 message(s) ; traités : 1`.
+3. Page **État** : un événement reçu ; **Boîte de réception** : la conversation.
 
 ## Ce que la publication change, et ne change pas
 
-- **Change** : l'app PFlow Bots peut être utilisée « pour de vrai » et recevoir les messages réels des comptes
-  qui lui sont reliés. Aujourd'hui, elle n'est reliée qu'au **Test WhatsApp Account** (ton utilisateur système
-  `pflow-bots-serveur` n'a accès qu'à l'app PFlow Bots et à ce compte de test). Donc en pratique : rien de plus
-  que le numéro de test.
-- **Ne change rien pour les numéros de tes clients sur UChat** : ils sont reliés à UChat (sa propre app Meta et ses
-  comptes WhatsApp), pas à PFlow Bots. Le mode d'une app ne concerne que cette app.
-- **Ne change rien pour tes autres apps Meta** (dont l'app des mots-clés Instagram et son examen en cours) :
-  chaque app a son propre mode, ses propres réglages et ses propres autorisations.
-- **Réversible** : tu peux repasser l'app en Développement à tout moment (le webhook et les réglages restent).
-- Les données créées en mode Développement (messages de test) restent visibles ; rien n'est publié nulle part.
+- **Change** : l'app PFlow Bots reçoit les vrais messages des comptes qui lui sont reliés. Aujourd'hui,
+  seulement le **Test WhatsApp Account** (l'utilisateur système `pflow-bots-serveur` n'a accès qu'à lui).
+- **Ne change rien pour les numéros des clients sur UChat** : ils sont reliés à l'app Meta d'UChat, pas à
+  PFlow Bots. Le mode d'une app ne concerne que cette app.
+- **Ne change rien pour tes autres apps Meta** (dont l'app des mots-clés Instagram et son examen en cours).
+- **Réversible** : on peut repasser l'app en Développement à tout moment (webhook et réglages conservés).

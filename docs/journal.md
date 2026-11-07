@@ -546,3 +546,20 @@ faux Meta (`scripts/e2e/numero-pflow.js`) ; WhatsApp et boîte de réception tou
   du bouton « Tester ». Test `webhook-summary.test.ts`.
 - **À faire par Jules (Meta)** : vérifier l'abonnement au champ `messages` puis le lien app ↔ compte WhatsApp
   (`subscribed_apps`), guide pas à pas dans `guide-meta.md` §6 « Dépannage ».
+
+### Passage en Live préparé (7 novembre 2026)
+
+- **Cause du silence confirmée par Jules** : `subscribed_apps` correct ; l'app en mode Développement ne reçoit
+  que les webhooks de test. → Passage en Live.
+- **Suppression automatique activée** (demande de Jules) : Vercel Cron quotidien (`vercel.json`,
+  `/api/cron/purge`, protégé par `CRON_SECRET`, refus sans lui). Conversations (`bot_messages`, `bot_transferts`,
+  `bot_sessions`) et `bot_appels_ia` : 12 mois ; `bot_webhook_evenements` : 30 jours. Fiches de contact gardées
+  (STOP). `PURGE_ACTIVE=non` suspend la suppression. Colonnes vérifiées sur la base réelle. **Reste : `CRON_SECRET`
+  dans Vercel (Jules).**
+- **Page de confidentialité** : « @pflow.gp : 12 mois » était inexact (le CRM ne supprime pas
+  `qg_motcle_messages`, vérifié en lecture seule) → aligné sur la règle des prospects (3 ans). Pour revenir à
+  12 mois, il faudrait une suppression côté CRM (décision de Jules).
+- **PR Site-PFlow** : https://github.com/julespauwels2-sudo/Site-PFlow/pull/3 (branche `pages-legales-bots`,
+  non fusionnée, à fusionner par Jules).
+- **Checklist Live pas à pas** : `docs/etape-c/checklist-live.md` (étape 0 avant Meta, champs dans l'ordre de
+  la page « Général », autorisations, publication, vérification).
