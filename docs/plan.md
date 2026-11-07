@@ -39,6 +39,11 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - Suppression des démos expirées : aujourd'hui au chargement de l'app ; à passer en tâche planifiée
   (Vercel Cron) avec l'étape C.
 
+- **Passage en actif de PFlow Démo : bloqué tant que la démo permanente n'existe pas** (décision de Jules,
+  8 novembre 2026). Démo « Mint Burger » sur la vraie page de commande et le vrai Dashboard du CRM, en mémoire :
+  proposition dans `docs/etape-c/demo-permanente.md`, à valider avant les 2 PR (CRM, PFlow Bots). Bloqué aussi
+  par l'étape de facturation de `docs/etape-c/bascule-pflow-demo.md`.
+
 ### Étape B
 - **Options payantes** (ex. relance panier abandonné) : lues dans le CRM (modules du resto). **Les
   seules options payantes côté bot sont celles du CRM.** Le **paiement en ligne n'en est pas une** : il

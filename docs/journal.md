@@ -725,3 +725,21 @@ Tests : PFlow Bots 372 (vitest) ; simulateur `accueil-ia.js`, `agent-ia.js`, `co
    « Commander » n'apparaît pas (voulu).
 5. **plan.md** : Smart Link reste pendant les bascules ; son retrait est la toute dernière étape, après l'arrêt
    complet d'UChat.
+
+
+## 8 novembre 2026 — tests réels sur PFlow Démo : mot-clé de démo, démo permanente
+
+1. **Problème 1 : « gwada food » ne lançait pas la démo.** Le mot-clé était bien reconnu (`src/demos/router.ts`),
+   mais le resto Gwada food n'a **aucun bot publié** (pas de modèle relié, brouillon seulement) :
+   `loadBotFromWorkspace` (`src/channels/core/bot-loader.ts`) renvoyait `null`, et `src/channels/core/processor.ts`
+   (vers la ligne 152, `if (!bot)`) retombait sur le bot PFlow de base. Correctif : en démo, un resto sans flux
+   publié prend le **modèle maître** (Accueil, IA) avec son nom ; sans lien de démo dans le CRM, pas de bouton
+   « Commander » (voulu). Tests : nom en plusieurs mots, majuscules, accents, espaces, « Démo … », « Bonjour … ».
+   PR sans fusion : https://github.com/julespauwels2-sudo/pflow-bot.app/pull/2
+2. **Problème 2 : démo permanente.** Inventaire du CRM : la page de commande (`/demo/commande`) et le Dashboard
+   (`/demo`) de démo existent déjà, en mémoire (aucun appel `/api/…` réel, faux Supabase), reliés par le
+   navigateur. Le resto fictif n'a donc **besoin d'aucune ligne en base ni d'aucun SQL**. Resto choisi par
+   Jules : **Mint Burger** (burgers au matcha). Proposition (parcours WhatsApp, carte de 7 produits, 2 options,
+   palette matcha + PFlow, isolation, ce qui manque) : `docs/etape-c/demo-permanente.md`. **Rien de codé** avant
+   l'accord de Jules.
+3. **plan.md** : le passage en actif de PFlow Démo est bloqué tant que la démo permanente n'existe pas.
