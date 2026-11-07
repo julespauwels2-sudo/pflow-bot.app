@@ -5,11 +5,13 @@ session) : à partir de recherches sur les pages officielles. Les intitulés exa
 
 ## D'abord : est-ce nécessaire maintenant ? Non, pas pour le premier test
 
-Les journaux Vercel montrent que **Meta a bien envoyé ton message au webhook** (POST
-`/api/webhooks/whatsapp` le 7 novembre à 04 h 12 UTC). Le traitement a échoué uniquement parce que la
-**migration C n'est pas appliquée** (« Could not find the table public.bot_webhook_evenements »).
-En mode Développement, Meta envoie bien les messages du numéro de test aux destinataires de test.
-→ Pour le test, il suffit d'appliquer la migration C (en attente de ton OK) puis de réécrire « Bonjour ».
+⚠️ **Correction du 7 novembre (04 h 35 UTC)** : les deux appels vus dans les journaux Vercel (04 h 12 et
+04 h 23 UTC) portaient l'identifiant `ABGGFlA5Fpa`, celui du **message d'exemple du bouton « Tester »** de Meta,
+pas un vrai message (un vrai identifiant commence par `wamid.` et n'est jamais répété). Le vrai « Bonjour »
+de 04 h 28 n'a **jamais été envoyé au webhook**. Le webhook répond bien ; c'est un réglage côté Meta (abonnement
+au champ `messages`, ou lien entre l'app et le compte WhatsApp : voir `guide-meta.md` §6, « Dépannage »).
+En principe, Meta envoie les messages du numéro de test même en mode Développement : le Live n'est à tenter
+qu'en dernier recours.
 
 Le mode **Live sera nécessaire plus tard**, pour les vrais numéros des restos (C6) : Meta demande que
 toute app utilisée en production soit en Live. Tout est prêt ci-dessous pour ce jour-là.

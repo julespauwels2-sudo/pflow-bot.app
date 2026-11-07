@@ -531,3 +531,18 @@ faux Meta (`scripts/e2e/numero-pflow.js`) ; WhatsApp et boîte de réception tou
   `docs/securite-crm.md`).
 - Suite : Jules réécrit « Bonjour » au numéro de test. Mode Live avant le premier client (pages légales publiées
   par Jules lui-même).
+
+### Test « Bonjour » sans réponse (7 novembre 2026, 04 h 28 UTC) : diagnostic
+
+- **Meta n'a pas envoyé le vrai message** : aucun appel du webhook après 04 h 23, aucune ligne dans
+  `bot_webhook_evenements`, `bot_contacts`, `bot_sessions` ni `bot_messages`.
+- **Correction du diagnostic précédent** : les appels de 04 h 12 et 04 h 23 UTC étaient le **message d'exemple
+  du bouton « Tester »** de Meta (identifiant `ABGGFlA5Fpa`, le même deux fois), pas le « Bonjour » de Jules.
+  `checklist-live.md` corrigé.
+- Côté PFlow Bots, tout répond : adresse du webhook active (vérification refusée avec un faux jeton, comme prévu),
+  variables Vercel inchangées depuis la vérification, signature acceptée lors des appels de test.
+- **Ajout** : une ligne de journal par appel de Meta (« reçu : N message(s) … traités / ignorés + raison /
+  erreurs », sans numéro ni texte), un avertissement en cas de signature invalide, et la mention du faux message
+  du bouton « Tester ». Test `webhook-summary.test.ts`.
+- **À faire par Jules (Meta)** : vérifier l'abonnement au champ `messages` puis le lien app ↔ compte WhatsApp
+  (`subscribed_apps`), guide pas à pas dans `guide-meta.md` §6 « Dépannage ».

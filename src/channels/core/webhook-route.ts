@@ -39,6 +39,8 @@ export async function webhookPost(
   const raw = await request.text();
   if (raw.length > MAX_WEBHOOK_BYTES) return NextResponse.json({ error: "Corps trop gros" }, { status: 413 });
   if (!verifySignature(raw, request.headers.get("x-hub-signature-256"), config.appSecret)) {
+    // Visible dans les journaux Vercel : un mauvais secret d'app (WHATSAPP_APP_SECRET) se voit tout de suite.
+    console.warn(`[${plateforme}] appel refusé : signature invalide (vérifier le secret de l'app Meta).`);
     return NextResponse.json({ error: "Signature invalide" }, { status: 401 });
   }
   let payload: unknown;
@@ -52,7 +54,10 @@ export async function webhookPost(
       const runtime = await getChannelsRuntime();
       const deps = runtime.deps(plateforme);
       if (!deps) return;
-      const report = await processEvents(parse(payload), deps);
+      const events = parse(payload);
+      const report = await processEvents(events, deps);
+      // Une ligne par appel de Meta (sans numéro ni texte) : on voit tout de suite si un message est arrivé.
+      console.log(`[${plateforme}] ${summarize(events, report)}`);
       // Jamais de numéro ni de message en clair dans les journaux.
       if (report.errors.length) console.error(`[${plateforme}]`, report.errors.map(maskId).join(" | "));
     } catch (error) {
@@ -61,3 +66,22 @@ export async function webhookPost(
   });
   return NextResponse.json({ ok: true });
 }
+
+/**
+ * Résumé d'un appel pour les journaux : nombre de messages et de statuts, messages traités, ignorés
+ * (avec la raison) et en erreur. L'exemple du bouton « Tester » de Meta est signalé comme tel.
+ */
+export function summarize(
+  events: { inbound: InboundEvent[]; statuses: StatusEvent[] },
+  report: { handled: unknown[]; skipped: { reason: string }[]; errors: string[] },
+): string {
+  const parts = [`reçu : ${events.inbound.length} message(s), ${events.statuses.length} statut(s)`];
+  if (report.handled.length) parts.push(`traités : ${report.handled.length}`);
+  if (report.skipped.length) parts.push(`ignorés : ${report.skipped.map((s) => s.reason).join(", ")}`);
+  if (report.errors.length) parts.push(`erreurs : ${report.errors.length}`);
+  if (events.inbound.some((e) => e.wamid === META_SAMPLE_ID)) parts.push("(exemple du bouton « Tester » de Meta, pas un vrai message)");
+  return maskId(parts.join(" ; "));
+}
+
+/** Identifiant du message d'exemple envoyé par le bouton « Tester » du tableau de bord de Meta. */
+export const META_SAMPLE_ID = "ABGGFlA5Fpa";

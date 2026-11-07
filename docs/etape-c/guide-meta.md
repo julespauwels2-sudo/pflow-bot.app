@@ -96,6 +96,21 @@ Je te préviendrai : il faut que l'adresse réponde avant de la donner à Meta.
    ci-dessus ; sinon je te donnerai la commande exacte à lancer (elle utilise le token, donc tu la lances
    toi-même).
 
+### Dépannage : le message arrive sur WhatsApp mais le bot ne répond pas
+
+- Le bouton **« Tester »** à côté d'un champ envoie un **faux** message (identifiant `ABGGFlA5Fpa`, numéro
+  fictif) : il prouve seulement que l'adresse répond. Dans les journaux Vercel, il apparaît comme
+  « exemple du bouton « Tester » de Meta ». Un vrai message apparaît comme « reçu : 1 message(s) ».
+- Aucune ligne `[whatsapp] reçu` dans les journaux après un vrai message = Meta n'envoie rien. Vérifier :
+  1. **Champs du webhook** : la ligne `messages` est bien **abonnée** (interrupteur activé, pas seulement testée).
+  2. **Lien app ↔ compte WhatsApp** : outil **Graph API Explorer** (developers.facebook.com/tools/explorer),
+     app **PFlow Bots**, `GET <WABA ID>/subscribed_apps`. Si la liste est vide : `POST <WABA ID>/subscribed_apps`,
+     puis refaire le `GET` (PFlow Bots doit apparaître).
+- « reçu : 1 message(s) ; ignorés : canal en test : numéro hors liste » = le numéro qui écrit n'est pas dans
+  `test_numeros` du canal.
+- « erreurs : 1 » avec « Envoi à … » = réponse calculée mais refusée par l'API Graph (le détail de l'erreur
+  Meta suit sur la ligne d'erreur).
+
 ## 7. Passer l'app en mode « Live » (avant les vrais numéros, C6)
 
 1. Vérifier : politique de confidentialité, icône, catégorie, e-mail de contact.
