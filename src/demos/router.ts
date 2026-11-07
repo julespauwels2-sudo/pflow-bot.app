@@ -15,7 +15,7 @@ import { isDemoActive } from "./lifecycle";
 import { PFLOW_FLOW_PREFIX } from "./pflow-bot";
 
 /** Écrits pendant une démo, ces messages reviennent au bot PFlow de base (comme ses boutons). */
-const PFLOW_ESCAPE_TEXTS = ["obtenir ma demo"];
+const PFLOW_ESCAPE_TEXTS = ["obtenir ma demo", "tester la demo", "je veux le mien"];
 
 /** Bouton du bot PFlow de base (ex. « Obtenir ma démo » sous une réponse de démo) ou son texte. */
 function isPflowAction(message: IncomingMessage): boolean {

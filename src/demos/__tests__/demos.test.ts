@@ -100,7 +100,7 @@ describe("bot PFlow de base (figé)", () => {
     const first = await runEngine({ ...base, contact: contact(), session: null, message: text("salut") }, {});
     expect(first.outgoing.some((m) => m.kind === "text" && m.text.includes("Ici *PFlow*"))).toBe(true);
     const buttons = first.outgoing.find((m) => m.kind === "buttons");
-    expect(buttons?.kind === "buttons" && buttons.buttons.map((b) => b.title)).toEqual(["🍔 Découvrir PFlow", "🎁 Obtenir ma démo"]);
+    expect(buttons?.kind === "buttons" && buttons.buttons.map((b) => b.title)).toEqual(["😋 Tester la démo", "🍔 Découvrir PFlow", "🎁 Obtenir ma démo"]);
     const ask = await runEngine({ ...base, contact: first.contact, session: first.session, message: { kind: "button_reply", id: "demo", title: "🎁 Obtenir ma démo" } }, {});
     expect(ask.outgoing.some((m) => m.kind === "text" && m.text === PFLOW_TEXTS.demoRequest)).toBe(true);
     expect(ask.events.some((e) => e.type === "handoff")).toBe(true);
