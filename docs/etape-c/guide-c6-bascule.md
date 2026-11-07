@@ -23,6 +23,9 @@ arrière est un clic : **« Repasser en test »** sur la page État.
 
 ## 1. Diagnostic du vrai numéro (5 min, lecture seule)
 
+**Détail pas à pas (écrans et requêtes de l'explorateur de l'API Graph, sans afficher de token) :
+`diagnostic-numeros.md`.**
+
 Dans **WhatsApp Manager** (business.facebook.com → Comptes WhatsApp) :
 
 1. Le numéro de Cookies An Nou est-il dans **ton** portefeuille ? Note : **ID du numéro** (Phone number ID),

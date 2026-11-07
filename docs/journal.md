@@ -684,3 +684,17 @@ Tests : PFlow Bots 372 (vitest) ; simulateur `accueil-ia.js`, `agent-ia.js`, `co
 | 11 | Prochaine vraie commande Cookies | Rien à faire | Le client reçoit le message d'UChat comme avant (canal en test) | — |
 | 12 | `docs/etape-c/guide-c6-bascule.md` | Faire le **diagnostic** (partie 1) du vrai numéro de Cookies et de PFlow Démo | Me dire le cas (A, B ou C) | 10 min |
 | 13 | `docs/hebergement.md` | Lire, décider | Vercel Pro avant le premier canal actif | 3 min |
+
+
+## 8 novembre 2026 — après les tests de Jules (tout OK sur le numéro de test)
+
+- **Annulation sans commande** : le flux « IA - Annuler commande » vérifie d'abord (suivi du pont) qu'une
+  commande peut être annulée. Aucune commande, déjà annulée, terminée ou prête → la raison tout de suite,
+  sans confirmation. Sinon : « Vous voulez vraiment annuler votre commande n° 42 ? ». Modèle maître mis à
+  jour en base (flux v2 ; la v1 n'avait pas été modifiée). Tests + simulateur verts.
+- **Vercel Pro** : vérifié (équipe « Pflow » : pflow-crm, pflow-site-v7, pflow-bot-app ; journaux lisibles
+  au-delà d'une heure). Mentions de la limite de 12 fonctions retirées (docs PFlow Bots ; CRM : PR n° 77).
+- **Confidentialité** : un message pour un numéro sans canal (autre numéro du même compte WhatsApp, ex.
+  numéro perso) n'est plus enregistré du tout.
+- **Diagnostic C6** : `docs/etape-c/diagnostic-numeros.md` (écrans Meta + 5 requêtes de l'explorateur,
+  lecture des cas A/B/C, ordre : PFlow Démo → Cookies An Nou → Mexico et ag pizza ; numéro perso jamais).
