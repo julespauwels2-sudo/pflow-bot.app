@@ -25,6 +25,11 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - Buckets publics listables (point 1 de `docs/securite-crm.md`) : à corriger **avant le prochain
   questionnaire d'onboarding envoyé à un client**.
 
+### Numérotation des scripts SQL du CRM (règle de Jules, 8 novembre 2026)
+- Livraison : **qg88 à qg149**. PFlow Bots et le reste du CRM : **à partir de qg150**.
+- Avant de créer un script : vérifier `main` de Pflow-Crm, `repo/sql/NUMEROTATION.md` et les branches ouvertes ;
+  ajouter la ligne du script dans ce fichier, dans la même PR (PR n° 78 de Pflow-Crm pour le fichier).
+
 ### Sortie d'UChat (décision de Jules, 8 novembre 2026)
 - Bascule numéro par numéro : **pause du bot UChat** pour le contact de test pendant les essais, puis
   **désactivation du bot UChat** du numéro à la bascule. Le partenaire **Smart Link** (prestataire d'UChat,
