@@ -206,12 +206,23 @@ describe("de bout en bout contre un faux serveur Meta", () => {
 
   it("canal en test : seuls les numéros de test reçoivent une réponse ; canal inconnu ignoré", async () => {
     received.length = 0;
-    const { deps } = await setup({ etat: "test", testNumeros: ["590690000002"] });
+    const { store, deps } = await setup({ etat: "test", testNumeros: ["590690000002"] });
     const report = await processWebhookPayload(payload([text("bonjour")]), deps);
-    expect(report.skipped[0].reason).toContain("test");
+    expect(report.skipped[0].reason).toBe("canal en test, numéro hors liste : rien enregistré");
     expect(sentMessages()).toEqual([]);
+    // Vrai client pendant la bascule : ni événement, ni contact, ni message (boîte de réception vide).
+    expect(store.events.size).toBe(0);
+    expect(await store.listContacts("canal1")).toEqual([]);
     const other = await processWebhookPayload({ ...payload([text("bonjour")]), entry: [{ changes: [{ field: "messages", value: { metadata: { phone_number_id: "999" }, messages: [text("x")] } }] }] }, deps);
     expect(other.skipped[0].reason).toContain("numéro inconnu");
+  });
+
+  it("canal coupé : rien n'est enregistré", async () => {
+    const { store, deps } = await setup({ etat: "coupe" });
+    const report = await processWebhookPayload(payload([text("bonjour")]), deps);
+    expect(report.skipped[0].reason).toBe("canal coupé : rien enregistré");
+    expect(store.events.size).toBe(0);
+    expect(await store.listContacts("canal1")).toEqual([]);
   });
 
   it("autre numéro du même compte (sans canal, ex. numéro perso) : rien n'est enregistré, ni message ni événement", async () => {

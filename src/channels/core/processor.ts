@@ -94,13 +94,22 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     report.skipped.push({ wamid: event.wamid, reason: "numéro inconnu (aucun canal) : rien enregistré" });
     return;
   }
+  // Canal coupé, ou canal en test et client hors de la liste de test (un vrai client, servi par UChat
+  // pendant la bascule) : ignoré SANS RIEN ENREGISTRER (ni événement, ni contact, ni message). Il ne reste
+  // que la ligne de journal du webhook, sans numéro (« ignorés : … »), qui sert de compteur.
+  if (canal.etat === "coupe") {
+    report.skipped.push({ wamid: event.wamid, reason: "canal coupé : rien enregistré" });
+    return;
+  }
+  if (canal.etat === "test" && !canal.testNumeros.includes(event.waId)) {
+    report.skipped.push({ wamid: event.wamid, reason: "canal en test, numéro hors liste : rien enregistré" });
+    return;
+  }
   // Idempotence : un message renvoyé par Meta n'est jamais retraité.
   if (!(await store.claimEvent(event.plateforme, event.wamid, event))) {
     report.skipped.push({ wamid: event.wamid, reason: "déjà reçu" });
     return;
   }
-  if (canal.etat === "coupe") return skip("canal coupé");
-  if (canal.etat === "test" && !canal.testNumeros.includes(event.waId)) return skip("canal en test : numéro hors liste");
 
   const contact = await store.getOrCreateContact(canal.id, event.waId, event.profileName);
   event = await transcribeVoice(event, deps, report);
