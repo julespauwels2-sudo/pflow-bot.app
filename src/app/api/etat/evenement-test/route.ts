@@ -29,11 +29,11 @@ export async function POST(request: Request) {
   if (!caller.ok) return NextResponse.json({ error: caller.error }, { status: caller.status });
   const secret = process.env.PFLOW_BOTS_SECRET?.trim();
   if (!secret) return NextResponse.json({ error: "PFLOW_BOTS_SECRET n'est pas défini dans Vercel." }, { status: 503 });
-  const body = (await request.json().catch(() => ({}))) as { event?: string; mode?: string; paiement?: string };
+  const body = (await request.json().catch(() => ({}))) as { event?: string; mode?: string; paiement?: string; canal?: string };
   if (!isOrderEvent(body.event)) return NextResponse.json({ error: "Événement inconnu." }, { status: 400 });
 
   const canaux = (await (await getChannelsRuntime()).store.listCanaux()).filter((c) => c.plateforme === "whatsapp" && c.etat === "test" && (c.role ?? "resto") === "resto");
-  const canal = canaux.find((c) => c.testNumeros.length && c.restaurantId);
+  const canal = canaux.find((c) => c.testNumeros.length && c.restaurantId && (!body.canal || c.id === body.canal));
   if (!canal) return NextResponse.json({ error: "Aucun canal WhatsApp en test avec un numéro de test." }, { status: 404 });
   const tel = canal.testNumeros[0];
 

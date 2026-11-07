@@ -138,6 +138,11 @@ export function createSupabaseChannelStore(db: Db, newId: () => string = () => c
     async listCanaux() {
       return (await db.select("bot_canaux", "*")).map(rowToCanal);
     },
+    async setCanalEtat(canalId, etat) {
+      const [row] = await db.select("bot_canaux", "*", eq("id", canalId));
+      if (!row) throw new Error("Canal introuvable");
+      await db.upsert("bot_canaux", [{ ...row, etat, maj_le: new Date().toISOString() }], "id");
+    },
     async getOrCreateContact(canalId, waId, profileName) {
       const existing = (await db.select("bot_contacts", "*", eq("canal_id", canalId))).find((r) => String(r.identifiant) === waId);
       if (existing) {

@@ -72,6 +72,11 @@ export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: 
     async listCanaux() {
       return clone(canalList);
     },
+    async setCanalEtat(canalId, etat) {
+      const canal = canalList.find((c) => c.id === canalId);
+      if (!canal) throw new Error("Canal introuvable");
+      canal.etat = etat;
+    },
     async getOrCreateContact(canalId, waId, profileName) {
       let contact = [...contacts.values()].find((c) => c.canalId === canalId && c.waId === waId);
       if (!contact) {

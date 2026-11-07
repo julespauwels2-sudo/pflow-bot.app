@@ -11,7 +11,7 @@ interface SystemStatus {
   cles: { name: string; role: string; present: boolean }[];
   canaux: { plateforme: "whatsapp" | "instagram"; configure: boolean; missing: string[]; webhook: string }[];
   services: { stockage: "supabase" | "memory"; ia: { active: boolean; modele: string }; transcription: { active: boolean; service?: string }; deploiement: string };
-  comptes: { plateforme: string; etat: string }[];
+  comptes: { id: string; plateforme: string; etat: string; numero: string; role: string; resto: string; testNumeros: number }[];
   evenements: { source: string; cle: string; at: string; erreur?: string }[];
   erreurCanaux?: string;
 }
@@ -147,8 +147,9 @@ function ServerCards({ data }: { data: SystemStatus }) {
         )}
       </Card>
 
+      {data.comptes.length > 0 && <CanauxCard comptes={data.comptes} />}
       {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && <WhatsAppAccessCard />}
-      {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && data.comptes.some((c) => c.plateforme === "whatsapp" && c.etat === "test") && <OrderEventTestCard />}
+      {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && data.comptes.some((c) => c.plateforme === "whatsapp" && c.etat === "test") && <OrderEventTestCard canaux={data.comptes.filter((c) => c.plateforme === "whatsapp" && c.etat === "test" && c.role === "resto" && c.testNumeros > 0)} />}
 
       <Card title="Clés détectées" className="lg:col-span-2">
         <ul className="grid gap-x-8 gap-y-1 text-sm md:grid-cols-2" data-testid="etat-cles">
@@ -278,7 +279,8 @@ const TEST_EVENTS = [
  * Événement de commande simulé (aucune commande créée) : passe par la vraie route signée, vers le canal
  * WhatsApp en test et son numéro de test seulement.
  */
-function OrderEventTestCard() {
+function OrderEventTestCard({ canaux }: { canaux: SystemStatus["comptes"] }) {
+  const [canal, setCanal] = useState(canaux[0]?.id ?? "");
   const [event, setEvent] = useState("commande_validee");
   const [mode, setMode] = useState("retrait");
   const [paiement, setPaiement] = useState("sur_place");
@@ -290,7 +292,7 @@ function OrderEventTestCard() {
       const response = await fetch("/api/etat/evenement-test", {
         method: "POST",
         headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ event, mode, paiement }),
+        body: JSON.stringify({ event, mode, paiement, canal }),
       });
       const body = (await response.json().catch(() => ({}))) as { error?: string; canal?: string; destinataire?: string; resultat?: { pris?: boolean; raison?: string; envois?: Record<string, { etat: string; detail: string }> } };
       if (body.error) throw new Error(body.error);
@@ -308,6 +310,15 @@ function OrderEventTestCard() {
         Votre fenêtre de 24 h doit être ouverte (écrivez « Bonjour » au bot avant).
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+        {canaux.length > 1 && (
+          <select aria-label="Canal" className="rounded-lg border border-line px-2 py-1" value={canal} onChange={(e) => setCanal(e.target.value)}>
+            {canaux.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.resto} · {c.numero}
+              </option>
+            ))}
+          </select>
+        )}
         <select aria-label="Événement" className="rounded-lg border border-line px-2 py-1" value={event} onChange={(e) => setEvent(e.target.value)}>
           {TEST_EVENTS.map((e) => (
             <option key={e.value} value={e.value}>
@@ -342,6 +353,70 @@ function OrderEventTestCard() {
           {result.text}
         </p>
       )}
+    </Card>
+  );
+}
+
+const ETATS: Record<string, { label: string; confirm: string }> = {
+  actif: {
+    label: "actif",
+    confirm:
+      "Passer ce canal en ACTIF ?\n\n• Le bot répond à TOUS les clients de ce numéro.\n• PFlow Order envoie à PFlow Bots les événements des VRAIES commandes de ce resto (plus UChat).\n\nAvant : le bot UChat de ce numéro doit être coupé (sinon double réponse).",
+  },
+  test: { label: "test", confirm: "Repasser ce canal en TEST ?\n\nLe bot ne répond plus qu'aux numéros de test, et les vraies commandes repartent vers UChat (retour arrière)." },
+  coupe: { label: "coupé", confirm: "COUPER ce canal ?\n\nLe bot ne répond plus du tout sur ce numéro, et les vraies commandes partent vers UChat." },
+};
+
+/** Canaux : état et bascule (test ↔ actif ↔ coupé), avec confirmation. */
+function CanauxCard({ comptes }: { comptes: SystemStatus["comptes"] }) {
+  const [list, setList] = useState(comptes);
+  const [error, setError] = useState("");
+  async function change(id: string, etat: string) {
+    if (!window.confirm(ETATS[etat].confirm)) return;
+    setError("");
+    try {
+      const token = await accessToken();
+      const response = await fetch("/api/etat/canal", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ id, etat }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? `Erreur ${response.status}`);
+      setList((l) => l.map((c) => (c.id === id ? { ...c, etat } : c)));
+    } catch (e) {
+      setError(errorText(e));
+    }
+  }
+  return (
+    <Card title="Canaux (numéros et comptes)" className="lg:col-span-2">
+      <ul className="divide-y divide-rule text-sm" data-testid="canaux">
+        {list.map((c) => (
+          <li key={c.id} className="flex flex-wrap items-center gap-2 py-2">
+            <span className="font-medium">{c.resto}</span>
+            <span className="text-muted">
+              {NAMES[c.plateforme as "whatsapp" | "instagram"] ?? c.plateforme} · {c.numero}
+              {c.etat === "test" ? ` · ${c.testNumeros} numéro(s) de test` : ""}
+            </span>
+            <Badge tone={c.etat === "actif" ? "success" : c.etat === "test" ? "info" : "warning"}>{ETATS[c.etat]?.label ?? c.etat}</Badge>
+            <span className="ml-auto flex gap-1">
+              {Object.keys(ETATS)
+                .filter((e) => e !== c.etat)
+                .map((e) => (
+                  <Button key={e} variant="secondary" onClick={() => change(c.id, e)}>
+                    {e === "actif" ? "Passer en actif" : e === "test" ? "Repasser en test" : "Couper"}
+                  </Button>
+                ))}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {error && (
+        <div className="mt-3">
+          <Notice tone="error">{error}</Notice>
+        </div>
+      )}
+      <p className="mt-2 text-xs text-muted">Un numéro de test Meta (+1 555…) ne passe jamais en actif. Guide de bascule : docs/etape-c/guide-c6-bascule.md.</p>
     </Card>
   );
 }

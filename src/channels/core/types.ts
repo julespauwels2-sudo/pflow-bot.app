@@ -136,6 +136,8 @@ export interface ChannelStore {
   /** Suppression automatique (durées de la politique de confidentialité : voir retention.ts). */
   purgeOlderThan(cutoffs: PurgeCutoffs): Promise<PurgeCounts>;
   listCanaux(): Promise<Canal[]>;
+  /** Change l'état d'un canal (page État : bascule et retour arrière). */
+  setCanalEtat(canalId: string, etat: Canal["etat"]): Promise<void>;
   getOrCreateContact(canalId: string, waId: string, profileName?: string): Promise<ChannelContact>;
   getContact(contactId: string): Promise<ChannelContact | null>;
   saveContact(contact: ChannelContact): Promise<void>;

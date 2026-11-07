@@ -76,3 +76,20 @@ describe("sécurité", () => {
     expect(cronAuthorized("Bearer secret-long", "secret-long")).toBe("allow");
   });
 });
+
+describe("bascule des canaux", () => {
+  it("un numéro de test Meta (+1 555…) est reconnu : il ne passe jamais en actif", async () => {
+    const { isMetaTestNumber } = await import("../canal-rules");
+    expect(isMetaTestNumber("+1 555 186 2679 (numéro de test Meta)")).toBe(true);
+    expect(isMetaTestNumber("15551862679")).toBe(true);
+    expect(isMetaTestNumber("+590 690 12 34 56")).toBe(false);
+    expect(isMetaTestNumber(undefined)).toBe(false);
+  });
+
+  it("changer l'état d'un canal (mémoire)", async () => {
+    const store = createMemoryChannelStore([canal]);
+    await store.setCanalEtat("c1", "test");
+    expect((await store.listCanaux())[0].etat).toBe("test");
+    await expect(store.setCanalEtat("x", "actif")).rejects.toThrow("Canal introuvable");
+  });
+});

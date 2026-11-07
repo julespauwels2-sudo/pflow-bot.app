@@ -303,7 +303,7 @@ Décisions qui t'attendent (aucune n'est bloquante) :
 3. PFlow Order : bouton « Retour sur Instagram » quand `via=ig` ? (tâche 5).
 4. Sécurité : activer la purge, politique de confidentialité, clause RGPD (docs/securite.md § 7).
 
-## À tester par Jules (classé par priorité, chaque point < 5 min)
+## À tester par Jules — ancienne liste (5 novembre, remplacée par celle du 8 novembre en fin de journal)
 
 Sur le site déployé de la branche, connecté avec ton compte.
 
@@ -628,3 +628,59 @@ Vérifié : 353 tests, et `scripts/e2e/accueil-ia.js` dans le simulateur (8 éta
   (simulation signée vers le numéro de test, aucune commande créée). Interopérabilité de la signature vérifiée
   (signature du CRM acceptée par PFlow Bots).
 - Pas encore gérés côté PFlow Bots : annulée, remboursée, annulation refusée, rappel (ignorés, expliqués).
+
+
+## Nuit du 7 au 8 novembre 2026 — session autonome (8 tâches)
+
+Règles : aucune écriture dans la base du CRM, rien chez Meta, aucune fusion ; Pflow-Crm : branches et PR
+seulement. Écritures en base : **aucune** cette nuit (lectures seules pour vérifier les définitions).
+
+1. **Production après la PR n° 74** : la PR n° 74 **n'est pas fusionnée** (GitHub : « open »). La production
+   (`main`, `9e5e11e`) n'a donc rien reçu : rien ne casse. Vérifié : order.pflow.fr/c/cookies-an-nou répond.
+   Si elle avait été fusionnée sans les SQL : rien de cassé côté clients (la page de commande lit
+   `paiement_mode_public`, inchangée tant que le SQL n'est pas joué) ; seul le panneau Paiement de l'Atelier
+   aurait proposé des réglages refusés par la base. **Aucun fichier existant écrasé** (que des ajouts).
+2. **PR n° 76** (remplace la n° 74, à fermer sans fusion) : mêmes changements sur la dernière version de
+   `main`, SQL renumérotés **qg85, qg86, qg87**. Les 9 points de greffe de qg85 vérifiés sur les définitions
+   **en vigueur** en production (lecture seule, après qg84). Test : numéros uniques, après qg84. Suite du
+   CRM : 905 passés, 1 échec déjà présent sur `main` (réels Instagram). Aperçu Vercel : Ready.
+3. **Flux d'événements** : annulée (remboursée intégralement / en partie / sans paiement), remboursée,
+   annulation refusée, rappel. Mêmes règles (24 h, envoyés même en pause). Le rappel n'est envoyé par
+   PFlow Order que si le resto l'a réglé (option du CRM). Variables `remboursement`, `montant_rembourse`
+   ajoutées côté CRM (PR n° 76).
+4. **C5** : bloc « Commande » (suivi / annulation) + fonctions IA `suivre_commande`, `annuler_commande`,
+   par le pont existant `/api/pont` (header `x-pflow-cle`). Annulation **toujours confirmée** (Oui / Non).
+   Variable : **`PFLOW_ORDER_PONT_CLE`** (= `PONT_CLE` du CRM, à copier par Jules ; jamais lue par moi).
+   Testé contre un faux pont ; simulateur : réponses d'exemple marquées « Simulation ».
+5. **proposer_commande** après une recommandation ou un intérêt pour un produit : consigne et description
+   par défaut. La consigne de la production est encore celle par défaut (empreinte vérifiée) : elle sera mise
+   à jour par « Ajouter les flux manquants » (page Modèle), sans toucher un texte modifié.
+   ⚠️ Le bloc IA du flux « IA - Recommandation » de la production a une instruction modifiée (« … puis
+   propose de commander ») : la consigne suffit, mais tu peux y ajouter « Utilise proposer_commande ».
+6. **plan.md** : ag_pizzaa (copie de l'Accueil) à relier au modèle avant sa bascule.
+7. **C6** : `docs/etape-c/guide-c6-bascule.md` (diagnostic, test, bascule, retour arrière en 2 min, numéro
+   PFlow Démo) + **page État → Canaux** : passer en actif / repasser en test / couper (confirmation ;
+   **un numéro de test Meta +1 555 ne passe jamais en actif**), choix du canal pour l'événement de test.
+   Coexistence d'un numéro pas encore sur l'API : Embedded Signup, pas codé (cas C du guide).
+8. **Hébergement** : `docs/hebergement.md` → **Vercel Pro (20 $/mois)** recommandé, avant le premier canal
+   actif (usage commercial, CRM compris ; fin de la limite de 12 fonctions).
+
+Tests : PFlow Bots 372 (vitest) ; simulateur `accueil-ia.js`, `agent-ia.js`, `commande-c5.js` verts.
+
+## À tester par Jules (à jour, 8 novembre 2026 — dans l'ordre)
+
+| # | Où | Quoi faire | Résultat attendu | Durée |
+|---|---|---|---|---|
+| 1 | GitHub Pflow-Crm | **Fermer la PR n° 74 sans la fusionner** | Fermée | 1 min |
+| 2 | Supabase → SQL Editor | Jouer `qg85-paiement-offre-de-base.sql`, puis `qg86-paiement-inclus.sql`, puis `qg87-pflow-bots-canal-actif.sql` (depuis la branche `pflow-bots-c4-v2`) | qg86 affiche `option_retiree: true, prix_a_zero: true` | 5 min |
+| 3 | GitHub | Fusionner la **PR n° 76** | Vercel déploie order.pflow.fr | 2 min |
+| 4 | order.pflow.fr | Mini-site Cookies An Nou, Atelier → panneau Paiement de Cookies, Dashboard d'un resto | S'ouvrent normalement ; plus de bouton « Option vendue » ni « +79 € » | 5 min |
+| 5 | Vercel (2 projets) | `PFLOW_BOTS_URL` + `PFLOW_BOTS_SECRET` (si pas déjà fait) ; **`PFLOW_ORDER_PONT_CLE`** = valeur de `PONT_CLE` du CRM, projet pflow-bot-app ; Redeploy | Page État : clés « présente » | 5 min |
+| 6 | PFlow Bots → **Modèle** | **Ajouter les flux manquants** | « Ajouté : Statut - Annulée, … IA - Suivre commande, IA - Annuler commande ; Agent IA : … » | 1 min |
+| 7 | WhatsApp, numéro de test | « Bonjour », puis page État → **Événement de commande de test** : Annulée, Remboursée, Annulation refusée, Rappel | Les 4 messages arrivent | 4 min |
+| 8 | WhatsApp, numéro de test | « elle arrive quand ma commande ? » puis « je veux annuler ma commande » → **Non** | Réponse de PFlow Order (ta dernière commande chez Cookies, ou « aucune commande ») ; « Non » ne touche à rien. ⚠️ Ne réponds « Oui » que si tu n'as **aucune vraie commande** en cours chez Cookies | 3 min |
+| 9 | WhatsApp, numéro de test | « vous avez quoi au chocolat ? » | Recommandation puis bouton « Je commande » | 1 min |
+| 10 | PFlow Bots → **État → Canaux** | Regarder la carte | Cookies An Nou (numéro de test) en « test » ; « Passer en actif » refusé (numéro de test Meta) | 1 min |
+| 11 | Prochaine vraie commande Cookies | Rien à faire | Le client reçoit le message d'UChat comme avant (canal en test) | — |
+| 12 | `docs/etape-c/guide-c6-bascule.md` | Faire le **diagnostic** (partie 1) du vrai numéro de Cookies et de PFlow Démo | Me dire le cas (A, B ou C) | 10 min |
+| 13 | `docs/hebergement.md` | Lire, décider | Vercel Pro avant le premier canal actif | 3 min |

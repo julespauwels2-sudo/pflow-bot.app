@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
   const canaux = channelStatuses();
   let evenements: { source: string; cle: string; at: string; erreur?: string }[] = [];
-  let comptes: { plateforme: string; etat: string }[] = [];
+  let comptes: { id: string; plateforme: string; etat: string; numero: string; role: string; resto: string; testNumeros: number }[] = [];
   let erreurCanaux: string | undefined;
   if (canaux.some((c) => c.configure)) {
     try {
@@ -25,7 +25,16 @@ export async function GET(request: Request) {
       const [events, list] = await Promise.all([rt.store.recentEvents(30), rt.store.listCanaux()]);
       // Identifiants masqués : ces clés contiennent parfois un numéro.
       evenements = events.map((e) => ({ source: e.source, cle: maskId(e.key), at: e.at, ...(e.error ? { erreur: maskId(e.error) } : {}) }));
-      comptes = list.map((c) => ({ plateforme: c.plateforme, etat: c.etat }));
+      const names = new Map((await rt.workspace().catch(() => ({ clients: [] as { id: string; nomResto: string }[] }))).clients.map((c) => [c.id, c.nomResto]));
+      comptes = list.map((c) => ({
+        id: c.id,
+        plateforme: c.plateforme,
+        etat: c.etat,
+        numero: c.numeroAffiche ?? c.accountId,
+        role: c.role ?? "resto",
+        resto: c.role === "pflow" ? "Numéro PFlow (démos)" : (names.get(c.restaurantId) ?? "?"),
+        testNumeros: c.testNumeros.length,
+      }));
     } catch (error) {
       erreurCanaux = error instanceof Error ? error.message : String(error);
     }
