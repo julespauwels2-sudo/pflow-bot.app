@@ -289,7 +289,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(DEMO_PERMANENTE.dashboardUrl).toBe("https://order.pflow.fr/demo?r=pflow");
     expect(demo[2].interactive?.body.text).toBe(PFLOW_TEXTS.tryYours);
     expect(titles(demo[2])).toEqual(["🙋 Je veux le mien", "🍔 Découvrir PFlow"]);
-    expect(PFLOW_TEXTS.tryOrder).toContain("*Mint Burger*");
+    expect(PFLOW_TEXTS.tryOrder).toContain("*Mint Bun*");
 
     // « Je veux le mien » : transfert, Jules prévenu (WhatsApp + boîte de réception), bot en pause pour ce contact.
     from = sent.length;
@@ -337,6 +337,57 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(isEmptyDemoSheet({ horaires: [], livraison: false, retrait: true, zonesLivraison: "Jarry", adresse: "x" })).toBe(true);
     // Hors démo : jamais de drapeau démo.
     expect(loadBotFromWorkspace(data, r.id)).toBeNull();
+  });
+
+  it("démo sans carte ni fiche : « Infos pratiques » n'affiche pas les valeurs par défaut du CRM, mais « pas encore renseignées » + boutons", async () => {
+    const repos = createLocalRepositories(createMemoryStore(), { now: () => new Date("2026-11-08T15:00:00Z") });
+    await createMasterTemplate(repos);
+    const gwada = await repos.clients.create({ nomResto: "Gwada food", orderSlug: "gwada" });
+    await repos.demos.start(gwada.id, { days: 5 });
+    const data = await repos.workspace.exportAll();
+    const defauts = {
+      horaires: [{ jour: 1 as const, plages: [{ de: "11:00", a: "14:00" }] }],
+      livraison: false,
+      retrait: true,
+      zonesLivraison: "Jarry",
+      adresse: "Rue des Palmiers",
+      paiementEnLigne: { mode: "non" as const, aConfigurer: false },
+    };
+    data.infoSheets[gwada.id] = defauts;
+    const canal: Canal = {
+      id: "pflow", role: "pflow", restaurantId: "", plateforme: "whatsapp", accountId: PFLOW_PHONE, triggerMode: "toujours",
+      coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "test", testNumeros: [PROSPECT],
+    };
+    const store = createMemoryChannelStore([canal]);
+    const deps = {
+      store,
+      graph: createGraphClient({ token: "t", base, version: "v24.0" }),
+      loadBot: async (id: string, options?: { demo?: boolean }) => loadBotFromWorkspace(data, id, options),
+      loadDemos: async () => demoDirectory(data),
+      now: () => new Date("2026-11-08T15:00:00Z"),
+      sleep: async () => {},
+    };
+    const buttonsOf = (m: Record<string, unknown>) =>
+      ((m.interactive as { action?: { buttons?: { reply: { id: string; title: string } }[] } })?.action?.buttons ?? []).map((b) => b.reply);
+    await processWebhookPayload(text("gwada food"), deps);
+    for (const ask of ["horaires", "livraison", "paiement"]) {
+      const from = sent.length;
+      await processWebhookPayload(text(ask), deps);
+      const msgs = texts(from).join();
+      expect(msgs, ask).toContain(TEXTS.demoInfosVides);
+      for (const faux of ["Retrait", "retrait", "Jarry", "Rue des Palmiers", "11 h", "11:00", "sur place", "Livraison : non", "Que souhaitez-vous savoir"]) {
+        expect(msgs, `${ask} : ${faux}`).not.toContain(faux);
+      }
+      const notice = sent.slice(from).find((m) => JSON.stringify(m).includes(TEXTS.demoInfosVides))!;
+      expect(buttonsOf(notice).map((b) => b.title)).toEqual(["🎁 Obtenir ma démo", "😋 Tester la démo"]);
+    }
+
+    // Fiche remplie (FAQ) : « Infos pratiques » s'affiche normalement.
+    data.infoSheets[gwada.id] = { ...defauts, faq: "Q : Végétarien ? R : Oui." };
+    const from = sent.length;
+    await processWebhookPayload(text("horaires"), deps);
+    expect(texts(from).join()).toContain("Que souhaitez-vous savoir");
+    expect(texts(from).join()).not.toContain(TEXTS.demoInfosVides);
   });
 });
 

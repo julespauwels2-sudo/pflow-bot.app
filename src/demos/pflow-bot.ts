@@ -1,7 +1,7 @@
 /**
  * Bot PFlow de base du numéro PFlow : répond quand aucun mot-clé de démo n'a été écrit. Figé dans le
  * code (jamais modifié depuis l'app) : présentation de PFlow Order, comment obtenir sa démo, et la démo
- * permanente (Mint Burger, sur la vraie page de commande et le vrai Dashboard de démonstration du CRM).
+ * permanente (Mint Bun, sur la vraie page de commande et le vrai Dashboard de démonstration du CRM).
  * Sans IA : aucun coût.
  */
 import { DEFAULT_TIMEZONE, encodeReplyId, type ChoiceOption, type Flow, type FlowNode } from "@/engine";
@@ -21,11 +21,11 @@ const message = (id: string, bubbles: { text: string; buttons?: Button[] }[]): F
 });
 
 /**
- * Démo permanente (Mint Burger) : pages de démonstration du CRM, servies en mémoire (aucune commande réelle,
- * aucun paiement, aucun message). Le resto vit seulement dans le navigateur (repo/img/demo/mint-burger/ du CRM).
+ * Démo permanente (Mint Bun) : pages de démonstration du CRM, servies en mémoire (aucune commande réelle,
+ * aucun paiement, aucun message). Le resto vit seulement dans le navigateur (repo/img/demo/mint-bun/ du CRM).
  */
 export const DEMO_PERMANENTE = {
-  nomResto: "Mint Burger",
+  nomResto: "Mint Bun",
   commandeUrl: "https://order.pflow.fr/demo/commande?r=pflow",
   dashboardUrl: "https://order.pflow.fr/demo?r=pflow",
 };
@@ -123,7 +123,7 @@ export const TRY_DEMO_KEYWORDS = [
 /** « Tester la démo » : la démo permanente, en 3 messages (« en train d'écrire » entre eux). */
 const tryDemo: Flow = {
   id: "pflow-tester",
-  name: "PFlow — tester la démo (Mint Burger)",
+  name: "PFlow — tester la démo (Mint Bun)",
   nodes: [
     { id: "t", type: "trigger", position: at(0, 0), data: { keywords: TRY_DEMO_KEYWORDS } },
     message("m1", [{ text: PFLOW_TEXTS.tryOrder, buttons: [link("cmd", "Je commande", DEMO_PERMANENTE.commandeUrl)] }]),
