@@ -51,7 +51,7 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   - CRM n° 79 (pages de la démo) : **fusionnée** ;
   - CRM n° 80 (Mint Bun : carte, formules, logo, photos webp, palette du menu) :
     https://github.com/julespauwels2-sudo/Pflow-Crm/pull/80, prête, à fusionner par Jules ;
-  - PFlow Bots n° 2 et n° 3 : **fusionnées** ;
+  - PFlow Bots n° 2 et n° 3 : **fusionnées** ; ordre restant : CRM n° 80 → CRM n° 81 → PFlow Bots n° 4 ;
   - **parcours guidé** (retour de test de Jules, 8 novembre) : PFlow Bots n° 4
     (https://github.com/julespauwels2-sudo/pflow-bot.app/pull/4) et CRM n° 81
     (https://github.com/julespauwels2-sudo/Pflow-Crm/pull/81, après la n° 80), à fusionner par Jules.

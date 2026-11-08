@@ -833,3 +833,15 @@ Détail dans `docs/etape-c/demo-permanente.md` (partie 0 ter).
   - Correctif : faux « Votre offre PFlow a été mise à jour » sur le dashboard de démo (deux variables `OFFRE` du même nom).
   - Tests navigateur : 11 sur 11.
 - **wa.me depuis le navigateur intégré de WhatsApp** : pas de documentation officielle ; des retours d'éditeurs signalent des liens qui restent sur la page web de wa.me (« Continuer vers la discussion ») ou qui perdent le texte prérempli. Le secours est codé (rappel + [✅ C'est fait]). À tester sur iPhone et Android.
+
+
+## 8 novembre 2026 (soir, suite) — joindre Jules en plein parcours (PR n° 4)
+
+- **[💬 Parler à Jules]** dans chaque rappel d'étape (1, 2, 3) : transfert à Jules avec alerte, « Pas de souci, Jules
+  vous répond très vite 🙂 » (comme « Je veux le mien » : bot en pause pour ce contact).
+- **Question en plein parcours** (« ? » ou plus de 4 mots) : « Bonne question ! Jules vous répond très vite 🙂 »,
+  alerte WhatsApp + boîte de réception (avec la question), rappel de l'étape, **sans pause**. Une alerte au plus par
+  contact toutes les 30 min. Source du transfert : `bloc` (sources fixées en base par `bot_transferts_source_check` ;
+  aucune migration).
+- 392 tests. **PFlow Bots n° 3 : fusionnée** ; la n° 4 en dépend, plus rien ne bloque.
+- Ordre de fusion : CRM n° 80 → CRM n° 81 → PFlow Bots n° 4.
