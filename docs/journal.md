@@ -845,3 +845,22 @@ Détail dans `docs/etape-c/demo-permanente.md` (partie 0 ter).
   aucune migration).
 - 392 tests. **PFlow Bots n° 3 : fusionnée** ; la n° 4 en dépend, plus rien ne bloque.
 - Ordre de fusion : CRM n° 80 → CRM n° 81 → PFlow Bots n° 4.
+
+
+## 9 novembre 2026 — démo permanente automatique (PR PFlow Bots n° 5, CRM n° 82)
+
+Retour de test de Jules : le parcours guidé marche ; il faut qu'il avance sans que le prospect écrive.
+- **Confirmation automatique** :
+  - la page Mint Bun, ouverte par le lien du bot (jeton `?j=`), envoie la commande validée à PFlow Bots (`POST /api/demo/commande`) ;
+  - le prospect reçoit « Commande enregistrée » (numéro, récap, options, total, paiement sur place, « commande de démo, rien n'est préparé »), puis l'étape 2/3.
+- **Étape 3 automatique** :
+  - le lien [Voir le dashboard] passe par `/api/demo/dashboard/<jeton>`, qui note l'ouverture, programme l'étape 3 (90 s, réglable) et redirige vers le dashboard avec la commande après le # ;
+  - la tâche Vercel à la minute (`/api/cron/demo`) l'envoie, même onglet fermé.
+- **Garde-fous** :
+  - jeton chiffré, propre au contact, 24 h ;
+  - 3 confirmations par heure au plus ; une commande confirmée une seule fois ;
+  - rien si le contact est en pause ; l'étape 3 jamais deux fois ; canal en test respecté ;
+  - textes nettoyés ; aucun Stripe ni PFlow Order. **Aucun SQL**.
+- **Secours conservés** : « Retour sur WhatsApp » en lien discret (principal si l'envoi échoue), et le rappel [✅ C'est fait].
+- **Tests** : PFlow Bots 399 (faux Meta, de bout en bout) ; CRM 15/15 en navigateur (dont le format exact de la commande, accepté des deux côtés).
+- **Variables Vercel vérifiées** (noms seulement) : `PFLOW_BOTS_SECRET` et `CRON_SECRET` présents en production. Facultatives : `PFLOW_DEMO_ETAPE3_SECONDES`, `PFLOW_BOTS_PUBLIC_URL`, `PFLOW_DEMO_ORIGINES`.

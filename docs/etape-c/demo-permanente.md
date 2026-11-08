@@ -14,6 +14,26 @@ le **vrai produit**. Proposition validée par Jules, avec ses ajustements (parti
 | Textes des 3 messages | À relire | Ton plus simple (partie 3, version finale dans `src/demos/pflow-bot.ts`) |
 | Facturation | Réglée (carte de Jules) | Seul blocage restant pour l'actif : cette démo |
 
+## 0 quater. Démo automatique (9 novembre 2026) : le parcours avance sans que le prospect écrive
+
+| Étape | Déclencheur | Envoyé automatiquement |
+|---|---|---|
+| 1 → 2 | Le prospect valide sa commande sur la page Mint Bun, ouverte par le lien du bot (avec jeton `?j=`) | « ✅ *Commande enregistrée !* » (numéro, récap et options, total, « Paiement sur place », « _Commande de démo : rien n'est préparé._ »), puis l'étape 2/3 [Voir le dashboard] |
+| 2 → 3 | Le prospect ouvre le dashboard par le lien du bot (redirection PFlow Bots) | L'étape 3/3, environ 90 s plus tard (`PFLOW_DEMO_ETAPE3_SECONDES`), envoyée par la tâche à la minute, même onglet fermé |
+
+- **Jeton** : chiffré (AES-256-GCM, `PFLOW_BOTS_SECRET`), propre au contact, valable 24 h, sans numéro lisible.
+- **Points d'entrée** : `POST /api/demo/commande` (CORS limité à order.pflow.fr), `GET /api/demo/dashboard/<jeton>`, et `GET /api/cron/demo` (Vercel Cron à la minute, `CRON_SECRET`).
+- **Garde-fous** :
+  - le jeton n'écrit qu'au contact concerné ;
+  - 3 confirmations par heure au plus ;
+  - une même commande n'est confirmée qu'une fois ;
+  - rien si le contact est en pause ;
+  - l'étape 3 n'est jamais envoyée deux fois ;
+  - le canal en test est respecté.
+- **Aucun SQL** : l'état est dans `bot_contacts.demo` (JSON).
+- **Secours** : « Retour sur WhatsApp » (lien discret) et [✅ C'est fait] fonctionnent toujours.
+- PR : PFlow Bots n° 5, CRM n° 82.
+
 ## 0 ter. Parcours guidé (8 novembre 2026, retour de test de Jules) — REMPLACE le parcours de la partie 3
 
 L'accueil était trop chargé (3 messages, 3 boutons, dont 2 incompris). Il y a maintenant un seul chemin, avec les choix à la fin. C'est fait pour la prospection physique et pour les visiteurs venus d'Instagram.
