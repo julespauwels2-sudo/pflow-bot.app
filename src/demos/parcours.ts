@@ -24,6 +24,29 @@ export interface ParcoursState {
   at: string;
   /** Dernière alerte « question » envoyée à Jules pour ce contact (anti-doublon). */
   alerteAt?: string;
+  /** Démo automatique (src/demos/demo-auto.ts) : confirmations de commande reçues (limite de débit). */
+  confirmations?: string[];
+  /** Dernière commande de démo confirmée (affichée dans le dashboard, même dans un autre navigateur). */
+  derniereCommande?: DemoOrderSnapshot;
+  /** Dashboard ouvert (lien du bot) : étape 3/3 à envoyer à cette heure (tâche planifiée à la minute). */
+  etape3Due?: string;
+  /** Étape 3/3 déjà envoyée (jamais deux fois). */
+  etape3EnvoyeeAt?: string;
+}
+
+/** Commande de démo, au format lu par le dashboard de démo du CRM (#commande=…, js/demo-commun.js). */
+export interface DemoOrderSnapshot {
+  id: string;
+  le: number;
+  resto: string;
+  numero: number;
+  client_nom: string | null;
+  mode: "livraison" | "retrait";
+  adresse: string | null;
+  creneau: string | null;
+  note: string | null;
+  total: number;
+  articles: { nom: string; qte: number; prix: number; total: number; supplements: { nom: string; prix: number; groupe?: string }[] }[];
 }
 
 /** Une alerte « question » au plus par contact sur cette durée. */
@@ -78,6 +101,10 @@ export function guide(message: IncomingMessage, flows: Flow[], parcours: Parcour
   const next = step === undefined ? undefined : NEXT_OF_STEP[step];
   if (next && DONE_TEXTS.includes(text)) return { message: { kind: "start_flow", flowId: next } };
   const match = matchKeyword(flows, message.text);
+  // Retour (« J'ai passé ma commande ✅ »…) d'une étape déjà passée (confirmation automatique arrivée avant) :
+  // pas de doublon, on rappelle l'étape en cours.
+  const passed = step !== undefined && match && ((match.flow.id === PFLOW_FLOWS.etape2 && step >= 2) || (match.flow.id === PFLOW_FLOWS.etape3 && step >= 3));
+  if (passed) return { message: { kind: "start_flow", flowId: REMINDER_OF_STEP[step] } };
   if (match && match.flow.id !== PFLOW_FLOWS.accueil) return { message: { kind: "start_flow", flowId: match.flow.id } };
   if (step !== undefined && looksLikeQuestion(message.text)) {
     return { message: { kind: "start_flow", flowId: `${PFLOW_FLOWS.question}${step}` }, question: message.text.trim() };
@@ -106,5 +133,14 @@ export function nextParcours(parcours: ParcoursState | undefined, events: Engine
     if (step !== undefined) etape = step;
   }
   if (etape === undefined) return undefined;
-  return touched || !parcours ? { etape, at: now.toISOString(), ...(parcours?.alerteAt ? { alerteAt: parcours.alerteAt } : {}) } : parcours;
+  if (!touched && parcours) return parcours;
+  // Parcours expiré : on repart de zéro (seule l'alerte anti-doublon est gardée).
+  const kept: Partial<ParcoursState> = activeStep(parcours, now) === undefined ? (parcours?.alerteAt ? { alerteAt: parcours.alerteAt } : {}) : { ...parcours };
+  const next: ParcoursState = { ...kept, etape, at: now.toISOString() };
+  // Étape 3 atteinte (automatiquement, au bouton ou au texte) : plus rien à programmer, jamais de second envoi.
+  if (etape === 3 && (!parcours || parcours.etape !== 3 || next.etape3Due)) {
+    delete next.etape3Due;
+    next.etape3EnvoyeeAt = next.etape3EnvoyeeAt ?? now.toISOString();
+  }
+  return next;
 }

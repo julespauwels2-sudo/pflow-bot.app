@@ -180,6 +180,7 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
         loadDemos: async () => demoDirectory(await workspace()),
         onAiCall: async (info) => void (await logAiCall(repos, info)),
         pflowBotsSecret: secret,
+        demoBotsUrl: env("PFLOW_BOTS_PUBLIC_URL") || undefined,
         transcriber,
         orderBridge: storeMode() === "memory" ? undefined : orderBridgeFromEnv(),
       };

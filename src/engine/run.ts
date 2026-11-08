@@ -889,6 +889,7 @@ class EngineRun {
       nouvelle_conversation: isNewConversation(this.previousInboundAt, this.input.now) ? "oui" : "non",
       nom_resto: this.input.client.nomResto,
       lien_commande: this.orderUrl() ?? "",
+      ...(client.vars ?? {}),
       ...(this.session?.vars ?? {}),
     };
   }
