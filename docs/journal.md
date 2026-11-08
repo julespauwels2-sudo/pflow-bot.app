@@ -766,3 +766,16 @@ Tests : PFlow Bots 372 (vitest) ; simulateur `accueil-ia.js`, `agent-ia.js`, `co
    - PFlow Bots : https://github.com/julespauwels2-sudo/pflow-bot.app/pull/3 (à fusionner après la n° 2).
 3. **Facturation de PFlow Démo réglée** (carte de Jules) : retirée des blocages. Seul blocage restant pour passer
    PFlow Démo en actif : la démo permanente.
+
+
+## 8 novembre 2026 (suite) — PR n° 2 : valeurs par défaut du CRM, SQL des numéros de test
+
+1. **PR n° 2** : pour une démo sans carte **ni fiche remplie** (aucun champ saisi à la main dans PFlow Bots), les
+   champs du CRM (livraison non / retrait oui, horaires, zones, adresse, paiement) ne sont que des valeurs par
+   défaut : l'IA ne les reçoit plus (fiche vide), et répond « c'est une démo, ces infos ne sont pas encore
+   renseignées », avec les deux boutons. Tests ajoutés. La branche de la PR n° 3 a été mise à jour avec ce
+   changement (aucun conflit à prévoir à la fusion).
+2. **SQL préparé, non appliqué** : 2 numéros de test de plus sur le canal PFlow Démo (emplacements `<NUMERO_1>`,
+   `<NUMERO_2>`), dans `docs/etape-c/bascule-pflow-demo.md`.
+3. **Ordre de fusion de Jules** : CRM n° 79, puis PFlow Bots n° 2, puis n° 3. Fusion classique (pas « squash »).
+4. **plan.md** : le test `sons-tendance.test.js` du CRM, en échec sur `main`, noté à traiter plus tard.

@@ -101,6 +101,27 @@ Démos : Prolonger si besoin).
    Une fois fusionnées et testées : désactive le bot UChat de ce numéro (sans retirer Smart Link), puis page État →
    **Passer en actif**. Fais écrire un ami (un « vrai » prospect) : bot de base, puis mot-clé de démo.
 
+## Ajouter des numéros de test (SQL préparé le 8 novembre 2026, NON appliqué)
+
+Canal PFlow Démo `3c38356d-1947-4462-95a8-8df1b400254e` (rôle `pflow`, état `test`, aujourd'hui
+`test_numeros = {590690938108}`). Format des numéros : indicatif + numéro, chiffres seuls, sans « + » ni espace
+(ex. `590690123456`, `33612345678`) : le bot compare exactement avec le numéro WhatsApp de l'expéditeur.
+
+```sql
+-- 1. Avant (lecture)
+select id, etat, test_numeros from public.bot_canaux where id = '3c38356d-1947-4462-95a8-8df1b400254e';
+
+-- 2. Ajout des 2 numéros, en gardant 590690938108 (sans doublon)
+update public.bot_canaux
+   set test_numeros = array(select distinct n from unnest(test_numeros || array['<NUMERO_1>', '<NUMERO_2>']::text[]) as n order by n)
+ where id = '3c38356d-1947-4462-95a8-8df1b400254e'
+   and role = 'pflow'
+   and '590690938108' = any(test_numeros)
+returning id, etat, test_numeros;
+```
+
+Retour arrière : `update public.bot_canaux set test_numeros = array['590690938108'] where id = '3c38356d-1947-4462-95a8-8df1b400254e';`
+
 ## Devise AED du compte de messagerie
 
 - La devise ne compte que pour les messages payants. **Depuis le 1er octobre 2026, les réponses dans les 24 h

@@ -111,6 +111,10 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - **Boîte de réception pour les gérants** : chaque gérant voit seulement les conversations de son resto
   (compte du dashboard, droit limité à son resto). Pas maintenant.
 - ~~Hébergement~~ : Vercel Pro (8 novembre 2026).
+- **CRM : test `repo/tests/sons-tendance.test.js` en échec sur `main`** (noté le 8 novembre 2026, à traiter plus
+  tard, PR séparée). Sous-test « un réel avec son tendance ne part jamais par l'API : notification avec le son,
+  relance, « C'est posté » » ; les 3 autres passent. Sans rapport avec la démo permanente (même échec sur `main`).
+  Lancer : `cd repo && node --test tests/sons-tendance.test.js`.
 
 ### Phase 2
 - ~~Fonctions IA `annuler_commande` et `suivre_commande`~~ : faites le 7 novembre 2026 (C5, pont existant
