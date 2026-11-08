@@ -23,6 +23,17 @@ export interface LoadedBot {
  * Démo d'un resto qui n'a pas (encore) de bot publié (pas relié au modèle, brouillon seulement) : elle
  * joue le modèle maître, au nom du resto, avec sa fiche. Une démo active doit toujours répondre.
  */
+/**
+ * Démo dont ni la carte ni la fiche n'ont été remplies : aucun des champs saisis à la main (carte, FAQ, règles,
+ * points de vente, précisions sur les horaires ou le paiement, jours de livraison, tournées). Restent alors
+ * seulement les champs du CRM, qui ont des valeurs par défaut (livraison non, retrait oui) : pas fiables.
+ */
+export function isEmptyDemoSheet(sheet: InfoSheet): boolean {
+  const filled = [sheet.resumeCarte, sheet.faq, sheet.reglesSpeciales, sheet.pointsDeVente, sheet.horairesNote, sheet.modesPaiement]
+    .some((x) => Boolean(x?.trim()));
+  return !filled && !sheet.joursLivraison?.length && !sheet.tournees?.length;
+}
+
 export function loadBotFromWorkspace(data: WorkspaceData, restaurantId: string, options: { demo?: boolean } = {}): LoadedBot | null {
   const found = data.clients.find((c) => c.id === restaurantId);
   if (!found || found.botDisabledAt) return null;
@@ -52,7 +63,8 @@ export function loadBotFromWorkspace(data: WorkspaceData, restaurantId: string, 
           timezone: client.timezone,
           ...(demoOrderUrl(client.demoCode) ? { orderUrl: demoOrderUrl(client.demoCode) } : {}),
           // Sans carte dans la démo : l'IA ne cite aucun produit ni prix, et propose les boutons PFlow.
-          demo: { sansCarte: !infoSheet.resumeCarte?.trim(), boutons: structuredClone(PFLOW_DEMO_BUTTONS) },
+          // Ni carte ni fiche remplie : les champs du CRM ne sont que ses valeurs par défaut (inconnus pour l'IA).
+          demo: { sansCarte: !infoSheet.resumeCarte?.trim(), ficheVide: isEmptyDemoSheet(infoSheet), boutons: structuredClone(PFLOW_DEMO_BUTTONS) },
         }
       : { id: client.id, nomResto: client.nomResto, orderSlug: client.orderSlug, timezone: client.timezone },
     flows,
