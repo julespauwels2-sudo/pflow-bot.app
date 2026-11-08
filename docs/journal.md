@@ -799,3 +799,16 @@ Tests : PFlow Bots 372 (vitest) ; simulateur `accueil-ia.js`, `agent-ia.js`, `co
    - tests navigateur 11/11.
    - **`mint-bun-assets.zip` pas reçu** : logo provisoire (SVG) et tuiles en attendant ; logo, photos (webp) et palette
      finale à ajouter dans la même PR dès réception.
+
+
+## 8 novembre 2026 (fin de journée) — PR n° 3 à jour, Mint Bun complet
+
+1. **PR n° 2** : fusionnée par Jules en **merge normal** (commit `d31578d`, deux parents ; `claude/demo-sans-bot` est un
+   ancêtre de la base).
+2. **PR n° 3** : GitHub la signalait en conflit (4 fichiers). La base y a été fusionnée **sans aucun conflit réel** :
+   la branche contenait déjà le dernier commit de la n° 2 (`0e91a8e`), la base n'apportait que de la documentation
+   (l'état « en conflit » venait de l'ancienne base, avant la fusion de la n° 2). Les deux séries de changements sont
+   présentes (démo sans carte / fiche vide ; démo permanente, Infos pratiques, Mint Bun). 387 tests, lint et build OK.
+3. **PR CRM n° 80** : zip reçu. Logo sans « ® » (webp carré + complet), 9 photos en webp (136 Ko pour tout le dossier,
+   proportions gardées ; Mint Classic = grand visuel ; cookie-brookie coupée en deux), palette relevée sur le menu
+   (`#0E2F1C`, `#DFE7B5`, `#FAF6E8`, `#FCE5DD`). Tests navigateur 11/11 (dont « aucune image cassée »).

@@ -29,7 +29,7 @@ Décision de Jules : « Mint Bun » (smash burgers & matcha), avec une vraie ide
   - burger + loaded fries + boisson, 18,90 € ;
   - matcha break (boisson matcha + dessert), 8,90 €.
 - **Palette** : vert foncé `#1E5B3A`, vert matcha clair `#B9D98C`, crème `#F7F1E3`, touche de rose. Le cadre PFlow est gardé. Elle est à ajuster d'après `menu-complet.png`.
-- **Logo et photos** : ils viennent de `mint-bun-assets.zip`, pas encore reçu. En attendant, un logo provisoire (SVG) et des tuiles de couleur. Les photos iront en webp dans `img/demo/mint-bun/`, dans le champ `photo`.
+- **Logo et photos** (`mint-bun-assets.zip`, reçu le 8 novembre) : logo sans « ® » (`logo.webp` carré, `logo-complet.webp`) ; photos en webp légers dans `img/demo/mint-bun/` (Mint Classic = grand visuel `hero-mint-classic` ; cookie-brookie coupée en deux). Les plats sans photo gardent une tuile. Palette relevée sur le menu : `#0E2F1C`, `#DFE7B5`, `#FAF6E8`, rose `#FCE5DD`.
 - **Bot** : textes de la démo permanente renommés (PR PFlow Bots n° 3).
 - **PR CRM** : https://github.com/julespauwels2-sudo/Pflow-Crm/pull/80.
 
