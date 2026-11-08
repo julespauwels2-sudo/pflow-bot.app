@@ -89,15 +89,38 @@ Démos : Prolonger si besoin).
    ton numéro perso, écris « Bonjour » : **le bot ne répond pas** (pause de 12 h, « le gérant a répondu »).
    Pour lever la pause : PFlow Bots → **Boîte de réception** → ta conversation → **Rendre au bot**.
 5. Page État → derniers événements : tes messages, et ceux que tu as envoyés depuis l'appli (« echo »).
-6. **⛔ ÉTAPE BLOQUANTE — facturation.** Depuis le **1er octobre 2026**, les messages de service (réponses dans
-   la fenêtre de 24 h) sont **payants**. Dans **WhatsApp Manager → compte de messagerie `4170754433058228` →
-   Paramètres de paiement**, regarde qui paie :
+6. **✅ Facturation : réglée le 8 novembre 2026** (la carte de Jules est enregistrée sur le compte de messagerie
+   `4170754433058228`). Pour mémoire, la vérification faite : depuis le **1er octobre 2026**, les messages de
+   service (réponses dans la fenêtre de 24 h) sont **payants**. Dans **WhatsApp Manager → compte de messagerie
+   `4170754433058228` → Paramètres de paiement**, regarder qui paie :
    - **ton moyen de paiement** (PFlow 1) → OK, on continue ;
    - **la ligne de crédit Smart Link** (UChat) → **on ne passe PAS en actif** : les messages envoyés par PFlow
      Bots seraient facturés à UChat. À régler d'abord (ajouter ton moyen de paiement au compte, ou accord
      avec UChat), puis revenir ici.
-7. Si l'étape 6 est réglée : désactive le bot UChat de ce numéro (sans retirer Smart Link), puis page État →
+7. **Seul blocage restant : la démo permanente** (`demo-permanente.md`, PR CRM n° 79 et PR PFlow Bots n° 3).
+   Une fois fusionnées et testées : désactive le bot UChat de ce numéro (sans retirer Smart Link), puis page État →
    **Passer en actif**. Fais écrire un ami (un « vrai » prospect) : bot de base, puis mot-clé de démo.
+
+## Ajouter des numéros de test (SQL préparé le 8 novembre 2026, NON appliqué)
+
+Canal PFlow Démo `3c38356d-1947-4462-95a8-8df1b400254e` (rôle `pflow`, état `test`, aujourd'hui
+`test_numeros = {590690938108}`). Format des numéros : indicatif + numéro, chiffres seuls, sans « + » ni espace
+(ex. `590690123456`, `33612345678`) : le bot compare exactement avec le numéro WhatsApp de l'expéditeur.
+
+```sql
+-- 1. Avant (lecture)
+select id, etat, test_numeros from public.bot_canaux where id = '3c38356d-1947-4462-95a8-8df1b400254e';
+
+-- 2. Ajout des 2 numéros, en gardant 590690938108 (sans doublon)
+update public.bot_canaux
+   set test_numeros = array(select distinct n from unnest(test_numeros || array['<NUMERO_1>', '<NUMERO_2>']::text[]) as n order by n)
+ where id = '3c38356d-1947-4462-95a8-8df1b400254e'
+   and role = 'pflow'
+   and '590690938108' = any(test_numeros)
+returning id, etat, test_numeros;
+```
+
+Retour arrière : `update public.bot_canaux set test_numeros = array['590690938108'] where id = '3c38356d-1947-4462-95a8-8df1b400254e';`
 
 ## Devise AED du compte de messagerie
 

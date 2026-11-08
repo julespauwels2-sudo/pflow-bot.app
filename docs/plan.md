@@ -25,6 +25,11 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - Buckets publics listables (point 1 de `docs/securite-crm.md`) : à corriger **avant le prochain
   questionnaire d'onboarding envoyé à un client**.
 
+### Numérotation des scripts SQL du CRM (règle de Jules, 8 novembre 2026)
+- Livraison : **qg88 à qg149**. PFlow Bots et le reste du CRM : **à partir de qg150**.
+- Avant de créer un script : vérifier `main` de Pflow-Crm, `repo/sql/NUMEROTATION.md` et les branches ouvertes ;
+  ajouter la ligne du script dans ce fichier, dans la même PR (PR n° 78 de Pflow-Crm pour le fichier).
+
 ### Sortie d'UChat (décision de Jules, 8 novembre 2026)
 - Bascule numéro par numéro : **pause du bot UChat** pour le contact de test pendant les essais, puis
   **désactivation du bot UChat** du numéro à la bascule. Le partenaire **Smart Link** (prestataire d'UChat,
@@ -38,6 +43,13 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   démo : les commandes de démo passent par la page de démonstration du CRM, qui n'écrit rien.
 - Suppression des démos expirées : aujourd'hui au chargement de l'app ; à passer en tâche planifiée
   (Vercel Cron) avec l'étape C.
+
+- **Passage en actif de PFlow Démo : bloqué tant que la démo permanente n'existe pas** (décision de Jules,
+  8 novembre 2026). C'est le **seul** blocage restant : la facturation est réglée (la carte de Jules est le moyen
+  de paiement du compte de messagerie de PFlow Démo). Démo « Mint Burger » sur la vraie page de commande et le
+  vrai Dashboard du CRM, en mémoire (`docs/etape-c/demo-permanente.md`, validée) : PR CRM
+  https://github.com/julespauwels2-sudo/Pflow-Crm/pull/79 et PR PFlow Bots
+  https://github.com/julespauwels2-sudo/pflow-bot.app/pull/3 (après la n° 2), à fusionner par Jules.
 
 ### Étape B
 - **Options payantes** (ex. relance panier abandonné) : lues dans le CRM (modules du resto). **Les
@@ -99,6 +111,10 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - **Boîte de réception pour les gérants** : chaque gérant voit seulement les conversations de son resto
   (compte du dashboard, droit limité à son resto). Pas maintenant.
 - ~~Hébergement~~ : Vercel Pro (8 novembre 2026).
+- **CRM : test `repo/tests/sons-tendance.test.js` en échec sur `main`** (noté le 8 novembre 2026, à traiter plus
+  tard, PR séparée). Sous-test « un réel avec son tendance ne part jamais par l'API : notification avec le son,
+  relance, « C'est posté » » ; les 3 autres passent. Sans rapport avec la démo permanente (même échec sur `main`).
+  Lancer : `cd repo && node --test tests/sons-tendance.test.js`.
 
 ### Phase 2
 - ~~Fonctions IA `annuler_commande` et `suivre_commande`~~ : faites le 7 novembre 2026 (C5, pont existant

@@ -725,3 +725,57 @@ Tests : PFlow Bots 372 (vitest) ; simulateur `accueil-ia.js`, `agent-ia.js`, `co
    « Commander » n'apparaît pas (voulu).
 5. **plan.md** : Smart Link reste pendant les bascules ; son retrait est la toute dernière étape, après l'arrêt
    complet d'UChat.
+
+
+## 8 novembre 2026 — tests réels sur PFlow Démo : mot-clé de démo, démo permanente
+
+1. **Problème 1 : « gwada food » ne lançait pas la démo.** Le mot-clé était bien reconnu (`src/demos/router.ts`),
+   mais le resto Gwada food n'a **aucun bot publié** (pas de modèle relié, brouillon seulement) :
+   `loadBotFromWorkspace` (`src/channels/core/bot-loader.ts`) renvoyait `null`, et `src/channels/core/processor.ts`
+   (vers la ligne 152, `if (!bot)`) retombait sur le bot PFlow de base. Correctif : en démo, un resto sans flux
+   publié prend le **modèle maître** (Accueil, IA) avec son nom ; sans lien de démo dans le CRM, pas de bouton
+   « Commander » (voulu). Tests : nom en plusieurs mots, majuscules, accents, espaces, « Démo … », « Bonjour … ».
+   PR sans fusion : https://github.com/julespauwels2-sudo/pflow-bot.app/pull/2
+2. **Problème 2 : démo permanente.** Inventaire du CRM : la page de commande (`/demo/commande`) et le Dashboard
+   (`/demo`) de démo existent déjà, en mémoire (aucun appel `/api/…` réel, faux Supabase), reliés par le
+   navigateur. Le resto fictif n'a donc **besoin d'aucune ligne en base ni d'aucun SQL**. Resto choisi par
+   Jules : **Mint Burger** (burgers au matcha). Proposition (parcours WhatsApp, carte de 7 produits, 2 options,
+   palette matcha + PFlow, isolation, ce qui manque) : `docs/etape-c/demo-permanente.md`. **Rien de codé** avant
+   l'accord de Jules.
+3. **plan.md** : le passage en actif de PFlow Démo est bloqué tant que la démo permanente n'existe pas.
+
+
+## 8 novembre 2026 — démo permanente validée, PR ouvertes ; IA en démo sans carte
+
+1. **IA d'une démo sans bot publié (PR n° 2)** : vérifié dans le code. L'IA voit la fiche du resto lue dans le CRM
+   (`src/data/supabase/crm.ts` : horaires, adresse, livraison, zones, **carte avec prix et options**) plus la fiche
+   PFlow Bots. Gwada food n'a **ni carte, ni horaires, ni adresse**, ni fiche PFlow Bots ; la base de connaissances n'a
+   donc pas de section « Carte ». Les règles PFlow interdisaient déjà d'inventer. Ajouté pour une démo **sans carte** :
+   - règles de démo prioritaires dans le prompt (`demoRules`, avant la base, en cache) : aucun produit ni prix, même
+     en exemple ; réponse « c'est une démo, la carte n'y est pas encore » ;
+   - les réponses portent les boutons « Obtenir ma démo » et « Tester la démo », qui ramènent au bot PFlow ;
+   - fonctions de commande retirées à l'IA ; bouton « Commander » sans page de démo remplacé par le même message ;
+   - tests (prompt, route `/api/ai`, faux Meta de bout en bout).
+   **Coût IA mesuré en production** (Haiku 5.5, 6 appels WhatsApp réels) : 0,0004 $ par réponse en moyenne,
+   0,0007 $ au plus. Une conversation de démo (3 à 6 questions) : **0,001 à 0,004 $** ; plafond : 20 réponses IA par
+   contact et par jour, soit **0,015 $ au plus** par prospect et par jour. Le bot PFlow de base et la démo
+   permanente : aucune IA, **0 $**. (Hors coût Meta des messages, payé par la carte de Jules.)
+2. **Démo permanente validée** (Mint Burger, carte, options et palette telles quelles ; logo simple ; photos plus
+   tard, champ prévu ; les deux mécanismes du Dashboard). PR sans fusion :
+   - CRM : https://github.com/julespauwels2-sudo/Pflow-Crm/pull/79 (aucun SQL) ;
+   - PFlow Bots : https://github.com/julespauwels2-sudo/pflow-bot.app/pull/3 (à fusionner après la n° 2).
+3. **Facturation de PFlow Démo réglée** (carte de Jules) : retirée des blocages. Seul blocage restant pour passer
+   PFlow Démo en actif : la démo permanente.
+
+
+## 8 novembre 2026 (suite) — PR n° 2 : valeurs par défaut du CRM, SQL des numéros de test
+
+1. **PR n° 2** : pour une démo sans carte **ni fiche remplie** (aucun champ saisi à la main dans PFlow Bots), les
+   champs du CRM (livraison non / retrait oui, horaires, zones, adresse, paiement) ne sont que des valeurs par
+   défaut : l'IA ne les reçoit plus (fiche vide), et répond « c'est une démo, ces infos ne sont pas encore
+   renseignées », avec les deux boutons. Tests ajoutés. La branche de la PR n° 3 a été mise à jour avec ce
+   changement (aucun conflit à prévoir à la fusion).
+2. **SQL préparé, non appliqué** : 2 numéros de test de plus sur le canal PFlow Démo (emplacements `<NUMERO_1>`,
+   `<NUMERO_2>`), dans `docs/etape-c/bascule-pflow-demo.md`.
+3. **Ordre de fusion de Jules** : CRM n° 79, puis PFlow Bots n° 2, puis n° 3. Fusion classique (pas « squash »).
+4. **plan.md** : le test `sons-tendance.test.js` du CRM, en échec sur `main`, noté à traiter plus tard.
