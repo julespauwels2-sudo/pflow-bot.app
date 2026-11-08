@@ -562,7 +562,7 @@ class EngineRun {
           this.handoff("ia", undefined, text);
           return;
         }
-        // Démo sans carte : la réponse porte les boutons « Obtenir ma démo » et « Tester la démo ».
+        // Démo sans carte : la réponse porte les boutons « Je veux le mien » et « Tester la démo ».
         const demoButtons = client.demo?.sansCarte ? client.demo.boutons : [];
         if (demoButtons.length) this.send({ kind: "buttons", text: answer, buttons: demoButtons });
         else this.send({ kind: "text", text: answer });

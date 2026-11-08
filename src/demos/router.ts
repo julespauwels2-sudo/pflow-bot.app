@@ -13,11 +13,12 @@ import type { DemoRecord } from "@/data/types";
 import { normalizeKeyword } from "./keyword";
 import { isDemoActive } from "./lifecycle";
 import { PFLOW_FLOW_PREFIX } from "./pflow-bot";
+import type { ParcoursState } from "./parcours";
 
 /** Écrits pendant une démo, ces messages reviennent au bot PFlow de base (comme ses boutons). */
-const PFLOW_ESCAPE_TEXTS = ["obtenir ma demo", "tester la demo", "je veux le mien"];
+const PFLOW_ESCAPE_TEXTS = ["obtenir ma demo", "tester la demo", "je veux le mien", "j ai passe ma commande", "j ai vu le dashboard"];
 
-/** Bouton du bot PFlow de base (ex. « Obtenir ma démo » sous une réponse de démo) ou son texte. */
+/** Bouton du bot PFlow de base (ex. « Je veux le mien » sous une réponse de démo) ou son texte. */
 function isPflowAction(message: IncomingMessage): boolean {
   if (message.kind === "button_reply" || message.kind === "list_reply") {
     return Boolean(decodeReplyId(message.id)?.flowId.startsWith(PFLOW_FLOW_PREFIX));
@@ -32,6 +33,8 @@ export interface ContactDemo {
   lastAt: string;
   /** Démos déjà ouvertes par ce contact (compteur de conversations par démo). */
   visited: string[];
+  /** Parcours guidé du bot PFlow de base : étape en cours (src/demos/parcours.ts). */
+  parcours?: ParcoursState;
 }
 
 export type DemoRoute =
@@ -77,7 +80,7 @@ export function routePflowMessage(input: {
     if (active) return { kind: "demo", clientId: active.clientId, entered: true };
     if (hits[0]) return { kind: "ended", clientId: hits[0].clientId, nomResto: hits[0].nomResto };
   }
-  // Bouton PFlow (« Obtenir ma démo », « Tester la démo ») : on quitte la démo pour le bot PFlow de base.
+  // Bouton PFlow (« Je veux le mien », « Tester la démo ») : on quitte la démo pour le bot PFlow de base.
   if (isPflowAction(message)) return { kind: "pflow" };
   if (sessionAlive) return { kind: "demo", clientId: current!.clientId, entered: false };
   return { kind: "pflow" };
@@ -88,6 +91,7 @@ export function nextContactDemo(current: ContactDemo | undefined, route: DemoRou
   if (route.kind !== "demo") return current ? { ...current, clientId: "", lastAt: now.toISOString() } : undefined;
   const visited = current?.visited ?? [];
   return {
+    ...current,
     clientId: route.clientId,
     lastAt: now.toISOString(),
     visited: visited.includes(route.clientId) ? visited : [...visited, route.clientId],

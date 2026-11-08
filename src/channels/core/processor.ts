@@ -11,6 +11,7 @@ import { sendOptions } from "./send-options";
 import type { Transcriber } from "../voice/transcriber";
 import { pflowBaseBot, PFLOW_BOT_ID, PFLOW_TEXTS } from "@/demos/pflow-bot";
 import { nextContactDemo, routePflowMessage, type DemoDirectoryEntry } from "@/demos/router";
+import { guideMessage, nextParcours } from "@/demos/parcours";
 
 /** Plafond d'un « en train d'écrire » côté serveur (le webhook ne doit pas attendre trop longtemps). */
 export const MAX_TYPING_MS = 3000;
@@ -176,6 +177,10 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
       }
     : undefined;
 
+  // Bot PFlow de base : parcours guidé (un mot-clé lance son étape, tout autre message rappelle l'étape en cours).
+  const guided = canal.role === "pflow" && bot.client.id === PFLOW_BOT_ID;
+  const engineMessage = guided ? guideMessage(event.message, bot.flows, contact.demo?.parcours, now) : event.message;
+
   const result: EngineResult = await runEngine(
     {
       now,
@@ -196,7 +201,7 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
       // (accueil complet), même si le contact vient d'écrire.
       contact: resetSession ? { ...contact.state, lastInboundAt: undefined } : contact.state,
       session: stored?.session ?? null,
-      message: event.message,
+      message: engineMessage,
       agent: bot.agent,
       // La page de commande sait que le client vient du bot, et pré-remplit prénom et téléphone.
       // Jamais pour une démo ni le numéro PFlow : page de démonstration, aucune commande réelle.
@@ -227,6 +232,10 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     }
   }
 
+  if (guided) {
+    const parcours = nextParcours(contact.demo?.parcours, result.events, now);
+    if (parcours) contact.demo = { ...(contact.demo ?? { clientId: "", lastAt: now.toISOString(), visited: [] }), parcours };
+  }
   await store.saveContact({ ...contact, state: result.contact });
   if (!(await store.saveSession(contact.id, result.session, storedVersion))) {
     report.errors.push(`Conversation de ${event.waId} modifiée en parallèle : état gardé tel quel`);

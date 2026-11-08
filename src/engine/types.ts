@@ -32,7 +32,7 @@ export interface ClientContext {
   /**
    * Démo jouée sur le numéro PFlow. sansCarte : la carte du resto n'est pas (encore) dans la démo. L'IA ne
    * connaît alors aucun produit ni aucun prix : elle le dit, ses réponses portent les boutons PFlow
-   * (« Obtenir ma démo », « Tester la démo ») et les fonctions de commande lui sont retirées.
+   * (« Je veux le mien », « Tester la démo ») et les fonctions de commande lui sont retirées.
    * ficheVide : ni carte ni fiche remplie. Les champs du CRM (livraison / retrait, horaires, zones, adresse,
    * paiement) sont alors ses valeurs par défaut, pas des infos du resto : l'IA ne les reçoit pas, et dit que
    * ces infos ne sont pas encore renseignées.
