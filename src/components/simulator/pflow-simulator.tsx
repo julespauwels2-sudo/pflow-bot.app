@@ -9,6 +9,7 @@ import type { WorkspaceData } from "@/data/types";
 import { demoDirectory, isDemoActive } from "@/demos/lifecycle";
 import { pflowBaseBot, PFLOW_BOT_ID, PFLOW_TEXTS } from "@/demos/pflow-bot";
 import { nextContactDemo, routePflowMessage, type ContactDemo } from "@/demos/router";
+import { guideMessage, nextParcours } from "@/demos/parcours";
 import { accessToken } from "@/lib/supabase";
 import { formatShort } from "@/simulator/clock";
 import { advanceTime, newSimulation, pendingClientEntry, playTurn, withSystemLine, type Bot, type ChatEntry, type SimState } from "@/simulator/session";
@@ -82,7 +83,14 @@ export function PflowSimulator({ data }: { data: WorkspaceData }) {
         agent: loaded.agent,
         aiDailyLimit: loaded.aiDailyLimit,
       };
-      const { state: next } = await playTurn(reset ? { ...before, session: null } : before, bot, message, label, aiPort ? { ai: aiPort } : {});
+      // Bot PFlow de base : parcours guidé, comme sur WhatsApp (src/demos/parcours.ts).
+      const guided = loaded.client.id === PFLOW_BOT_ID;
+      const played = guided ? guideMessage(message, loaded.flows, nextDemo?.parcours, at) : message;
+      const { state: next, result } = await playTurn(reset ? { ...before, session: null } : before, bot, played, label, aiPort ? { ai: aiPort } : {}, message);
+      if (guided) {
+        const parcours = nextParcours(nextDemo?.parcours, result.events, at);
+        if (parcours) nextDemo = { ...(nextDemo ?? { clientId: "", lastAt: at.toISOString(), visited: [] }), parcours };
+      }
       // Le simulateur du numéro PFlow affiche les réponses d'un coup (sans « en train d'écrire »).
       setSim({ ...next, chat: next.chat.filter((e) => !(e.from === "bot" && e.message.kind === "typing")) });
       setCurrent(nextDemo);

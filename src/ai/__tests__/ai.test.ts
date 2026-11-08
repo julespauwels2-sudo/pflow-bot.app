@@ -214,7 +214,7 @@ describe("démo sur le numéro PFlow : règles de l'IA", () => {
     expect(text).toContain("# Démonstration PFlow (règles prioritaires)");
     expect(text).toContain("La carte de Gwada food n'a pas encore été ajoutée à cette démo : tu ne connais AUCUN produit, AUCUN prix");
     expect(text).toContain("Ne cite jamais un produit, un plat, une boisson, un prix");
-    expect(text).toContain("« Obtenir ma démo »");
+    expect(text).toContain("« Je veux le mien »");
     expect(text).toContain("« Tester la démo »");
     // Base de connaissances sans section Carte ; les règles de démo sont avant elle (même préfixe en cache).
     const titles = prompt.system.map((b) => b.title);
@@ -237,7 +237,7 @@ describe("démo sur le numéro PFlow : règles de l'IA", () => {
     expect(withMenu).toContain("Cette conversation est une démonstration de PFlow préparée pour Gwada food");
     expect(withMenu).not.toContain("AUCUN produit");
     expect(systemText(request)).not.toContain("Démonstration PFlow");
-    expect(demoRules("X", false)).not.toContain("Obtenir ma démo");
+    expect(demoRules("X", false)).not.toContain("Je veux le mien");
   });
 
   it("la route /api/ai garde le champ démo (sinon les règles seraient perdues côté simulateur)", () => {

@@ -94,6 +94,8 @@ export async function playTurn(
   message: EngineInput["message"],
   chatText?: string,
   deps: EngineDeps = {},
+  /** Message affiché dans la conversation, s'il diffère de celui joué (parcours guidé du numéro PFlow). */
+  shown?: EngineInput["message"],
 ): Promise<{ state: SimState; result: EngineResult }> {
   const input: EngineInput = {
     now: new Date(state.now),
@@ -110,7 +112,7 @@ export async function playTurn(
   const result = await runEngine(input, { orderBridge: simulatedOrderBridge, ...deps });
   const at = state.now;
   const chat = [...state.chat];
-  const clientEntry = pendingClientEntry(state, message, chatText);
+  const clientEntry = pendingClientEntry(state, shown ?? message, chatText);
   if (clientEntry) {
     chat.push(clientEntry);
   } else if (message.kind === "unsupported") {

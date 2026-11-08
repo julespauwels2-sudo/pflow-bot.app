@@ -54,7 +54,7 @@ export function demoRules(nomResto: string, sansCarte: boolean, ficheVide = fals
             `- La fiche de ${nomResto} n'est pas encore remplie non plus : tu ne connais ni ses horaires, ni son adresse, ni s'il livre ou propose le retrait, ni ses zones, ni ses moyens de paiement. Ne présente jamais l'une de ces informations comme vraie (ni « oui », ni « non ») : réponds que c'est une démo et que ces infos ne sont pas encore renseignées.`,
           ]
         : []),
-      "- Sous chacune de tes réponses, deux boutons sont ajoutés automatiquement : « Obtenir ma démo » (on prépare la démo avec la vraie carte) et « Tester la démo » (notre resto de démo, avec sa carte). Tu peux inviter à les utiliser, sans les écrire comme des liens.",
+      "- Sous chacune de tes réponses, deux boutons sont ajoutés automatiquement : « Je veux le mien » (on prépare la démo avec la vraie carte) et « Tester la démo » (notre resto de démo, avec sa carte). Tu peux inviter à les utiliser, sans les écrire comme des liens.",
     );
   }
   return lines.join("\n");

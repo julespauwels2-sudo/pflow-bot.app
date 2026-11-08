@@ -94,15 +94,16 @@ const contact = (): ContactState => ({ id: "c", profileName: "Léa", pause: null
 const channel = { id: "pflow", clientId: "pflow", triggerMode: "toujours" as const, echoPauseHours: 12, handoffPauseHours: 24, sessionTimeoutMinutes: 30, aiDailyLimitPerContact: 0 };
 
 describe("bot PFlow de base (figé)", () => {
-  it("présente PFlow et propose la démo ; « Obtenir ma démo » passe la main à Jules", async () => {
+  it("accueil : un seul message, un seul bouton « Tester la démo » ; « Je veux le mien » passe la main à Jules", async () => {
     const bot = pflowBaseBot();
     const base = { now: NOW, client: bot.client, channel, flows: bot.flows, infoSheet: bot.infoSheet };
     const first = await runEngine({ ...base, contact: contact(), session: null, message: text("salut") }, {});
-    expect(first.outgoing.some((m) => m.kind === "text" && m.text.includes("Ici *PFlow*"))).toBe(true);
-    const buttons = first.outgoing.find((m) => m.kind === "buttons");
-    expect(buttons?.kind === "buttons" && buttons.buttons.map((b) => b.title)).toEqual(["😋 Tester la démo", "🍔 Découvrir PFlow", "🎁 Obtenir ma démo"]);
-    const ask = await runEngine({ ...base, contact: first.contact, session: first.session, message: { kind: "button_reply", id: "demo", title: "🎁 Obtenir ma démo" } }, {});
-    expect(ask.outgoing.some((m) => m.kind === "text" && m.text === PFLOW_TEXTS.demoRequest)).toBe(true);
+    const sent = first.outgoing.filter((m) => m.kind !== "typing");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ kind: "buttons", text: PFLOW_TEXTS.welcome, buttons: [{ title: "Tester la démo" }] });
+    expect(PFLOW_TEXTS.welcome).toContain("Vous avez un code de démo ? Écrivez-le ici.");
+    const ask = await runEngine({ ...base, contact: first.contact, session: first.session, message: text("je veux le mien") }, {});
+    expect(ask.outgoing.some((m) => m.kind === "text" && m.text === PFLOW_TEXTS.wantMine)).toBe(true);
     expect(ask.events.some((e) => e.type === "handoff")).toBe(true);
   });
 });

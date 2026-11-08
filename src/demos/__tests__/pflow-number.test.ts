@@ -10,7 +10,8 @@ import { processWebhookPayload } from "@/channels/core/processor";
 import { demoDirectory } from "../lifecycle";
 import type { Canal } from "@/channels/core/types";
 import { createGraphClient } from "@/channels/whatsapp/graph";
-import { DEMO_PERMANENTE, PFLOW_DEMO_BUTTONS, PFLOW_TEXTS, pflowBaseBot } from "../pflow-bot";
+import { DEMO_PERMANENTE, PFLOW_DEMO_BUTTONS, PFLOW_FLOWS, PFLOW_TEXTS, pflowBaseBot } from "../pflow-bot";
+import { canAlertQuestion, guide, guideMessage, looksLikeQuestion } from "../parcours";
 import { buildPrompt } from "@/ai/prompt";
 import { matchKeyword, TEXTS, type AiRequest } from "@/engine";
 import { routePflowMessage } from "../router";
@@ -82,7 +83,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     // 1. Sans mot-clé : bot PFlow de base.
     let from = sent.length;
     expect((await processWebhookPayload(text("Bonjour"), deps)).errors).toEqual([]);
-    expect(texts(from).join()).toContain("Ici *PFlow*");
+    expect(texts(from).join()).toContain("Bienvenue chez PFlow");
 
     // 2. « BYRON » : la démo de Byron démarre (son Accueil), bouton vers la page de DÉMO du CRM.
     from = sent.length;
@@ -116,7 +117,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     clock.now = new Date("2026-11-12T15:45:00Z");
     from = sent.length;
     await processWebhookPayload(text("Bonjour"), deps);
-    expect(texts(from).join()).toContain("Ici *PFlow*");
+    expect(texts(from).join()).toContain("Bienvenue chez PFlow");
     expect((await store.listContacts("pflow"))[0].demo?.visited).toEqual([byron.id, mexico.id]);
   });
 
@@ -151,7 +152,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect((await processWebhookPayload(text("gwada food"), deps)).errors).toEqual([]);
     const msgs = texts(from).join();
     expect(msgs).toContain("Bienvenue chez Gwada food");
-    expect(msgs).not.toContain("Ici *PFlow*");
+    expect(msgs).not.toContain("Bienvenue chez PFlow");
     expect(msgs).not.toContain("gwada-vrai-slug");
     expect(sent.slice(from).some((m) => m.type === "interactive" && (m.interactive as { type: string }).type === "cta_url")).toBe(false);
     expect((await store.listContacts("pflow"))[0].demo).toMatchObject({ clientId: gwada.id });
@@ -200,7 +201,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     await processWebhookPayload(text("gwada food"), deps);
     expect(texts(from).join()).toContain("Bienvenue chez Gwada food");
     const notice = sent.slice(from).find((m) => JSON.stringify(m).includes("n'est pas encore prête dans cette démo"))!;
-    expect(buttonsOf(notice).map((b) => b.title)).toEqual(["🎁 Obtenir ma démo", "😋 Tester la démo"]);
+    expect(buttonsOf(notice).map((b) => b.title)).toEqual(["🙋 Je veux le mien", "😋 Tester la démo"]);
 
     // Question sur un prix : l'IA reçoit les règles « démo sans carte » et aucune fonction de commande.
     from = sent.length;
@@ -222,7 +223,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     // La réponse de l'IA porte les deux boutons PFlow.
     const reply = sent.slice(from).find((m) => JSON.stringify(m).includes("la carte de Gwada food n'y est pas encore"))!;
     expect(reply.type).toBe("interactive");
-    expect(buttonsOf(reply).map((b) => b.title)).toEqual(["🎁 Obtenir ma démo", "😋 Tester la démo"]);
+    expect(buttonsOf(reply).map((b) => b.title)).toEqual(["🙋 Je veux le mien", "😋 Tester la démo"]);
 
     // « Tester la démo » : on quitte la démo pour le bot PFlow de base.
     from = sent.length;
@@ -230,16 +231,16 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(texts(from).join()).toContain("https://order.pflow.fr/demo/commande?r=pflow"); // la démo permanente
     expect((await store.listContacts("pflow"))[0].demo?.clientId).toBe("");
 
-    // Retour dans la démo, puis « Obtenir ma démo » : transfert à Jules (bot PFlow), jamais l'IA de la démo.
+    // Retour dans la démo, puis « Je veux le mien » : transfert à Jules (bot PFlow), jamais l'IA de la démo.
     await processWebhookPayload(text("gwada food"), deps);
     from = sent.length;
     await processWebhookPayload(click(PFLOW_DEMO_BUTTONS[0].id, PFLOW_DEMO_BUTTONS[0].title), deps);
-    expect(texts(from).join()).toContain(PFLOW_TEXTS.demoRequest.slice(0, 40));
+    expect(texts(from).join()).toContain(PFLOW_TEXTS.wantMine.slice(0, 30));
     expect(requests).toHaveLength(1);
     expect(texts(from).join()).not.toContain(TEXTS.handoff.slice(0, 30));
   });
 
-  it("démo permanente : « Tester la démo » → 3 messages (Je commande, Voir le dashboard, Et pour votre resto ?), « Je veux le mien » → Jules prévenu", async () => {
+  it("parcours guidé : accueil 1 bouton → étape 1/3 → retour « J'ai passé ma commande ✅ » → 2/3 → « J'ai vu le dashboard 👀 » → 3/3 → Jules prévenu", async () => {
     const repos = createLocalRepositories(createMemoryStore(), { now: () => new Date("2026-11-08T15:00:00Z") });
     await createMasterTemplate(repos);
     const gwada = await repos.clients.create({ nomResto: "Gwada food", orderSlug: "gwada" });
@@ -267,61 +268,150 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     type Out = { type: string; to?: string; text?: { body: string }; interactive?: { type: string; body: { text: string }; action: { buttons?: { reply: { id: string; title: string } }[]; parameters?: { display_text: string; url: string } } } };
     const out = (from: number) => (sent.slice(from) as Out[]).filter((m) => m.to !== "590690938108");
     const titles = (m: Out) => (m.interactive?.action.buttons ?? []).map((b) => b.reply.title);
+    const step = async () => (await store.listContacts("pflow"))[0].demo?.parcours?.etape;
+    const say = async (t: string) => { const from = sent.length; await processWebhookPayload(text(t), deps); return out(from); };
+    const press = async (m: Out, i: number) => {
+      const b = m.interactive!.action.buttons![i].reply;
+      const from = sent.length;
+      await processWebhookPayload(click(b.id, b.title), deps);
+      return out(from);
+    };
 
-    // Accueil : 3 boutons (WhatsApp en accepte 3 au plus).
+    // 1. Accueil : un seul message, un seul bouton (n'importe quel premier message).
+    let msgs = await say("Bonjour, c'est quoi ce numéro ?");
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.welcome);
+    expect(titles(msgs[0])).toEqual(["Tester la démo"]);
+    expect(await step()).toBe(0);
+
+    // 2. Étape 1/3 : un message, un bouton lien « Je commande ».
+    msgs = await press(msgs[0], 0);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.step1 }, action: { parameters: { display_text: "Je commande", url: DEMO_PERMANENTE.commandeUrl } } });
+    expect(await step()).toBe(1);
+
+    // Filet de sécurité : autre chose (ou un retour plus tard, « Bonjour ») → rappel de l'étape 1 avec son bouton.
+    for (const autre of ["euh je comprends pas", "Bonjour"]) {
+      msgs = await say(autre);
+      expect(msgs[0].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.remind1 }, action: { parameters: { url: DEMO_PERMANENTE.commandeUrl } } });
+      expect(msgs[1].interactive?.body.text).toBe(PFLOW_TEXTS.remindDone);
+      expect(titles(msgs[1])).toEqual(["✅ C'est fait", "💬 Parler à Jules"]);
+      expect(await step()).toBe(1);
+    }
+
+    // 3. Retour depuis la confirmation (texte prérempli du CRM) → étape 2/3 « Voir le dashboard ».
+    msgs = await say(DEMO_PERMANENTE.retourCommande);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.step2 }, action: { parameters: { display_text: "Voir le dashboard", url: DEMO_PERMANENTE.dashboardUrl } } });
+    expect(await step()).toBe(2);
+
+    // Rappel de l'étape 2, puis « ✅ C'est fait » (bouton du rappel) → étape 3/3.
+    msgs = await say("ok merci");
+    expect(msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.remind2);
+    msgs = await press(msgs[1], 0);
+    expect(msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.step3);
+    expect(titles(msgs[0])).toEqual(["🙋 Je veux le mien", "Comment ça marche ?"]);
+    expect(await step()).toBe(3);
+
+    // « Comment ça marche ? » : 3 lignes, puis [Je veux le mien].
+    msgs = await press(msgs[0], 1);
+    expect(msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.howItWorks);
+    expect(PFLOW_TEXTS.howItWorks.split("\n")).toHaveLength(3);
+    expect(titles(msgs[0])).toEqual(["🙋 Je veux le mien"]);
+
+    // « Je veux le mien » : transfert, Jules prévenu (WhatsApp + boîte de réception), puis le bot se tait.
     let from = sent.length;
-    await processWebhookPayload(text("Bonjour"), deps);
-    const welcome = out(from);
-    expect(JSON.stringify(welcome)).toContain("Ici *PFlow*");
-    const choices = welcome.find((m) => titles(m).length)!;
-    expect(titles(choices)).toEqual(["😋 Tester la démo", "🍔 Découvrir PFlow", "🎁 Obtenir ma démo"]);
-    expect(choices.interactive!.body.text).toContain("Sinon, testez notre resto de démo");
-
-    // « Tester la démo » : les 3 messages, dans l'ordre, avec les liens ?r=pflow.
-    from = sent.length;
-    const tester = choices.interactive!.action.buttons![0].reply;
-    await processWebhookPayload(click(tester.id, tester.title), deps);
-    const demo = out(from);
-    expect(demo).toHaveLength(3);
-    expect(demo[0].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.tryOrder }, action: { parameters: { display_text: "Je commande", url: DEMO_PERMANENTE.commandeUrl } } });
-    expect(demo[1].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.tryDashboard }, action: { parameters: { display_text: "Voir le dashboard", url: DEMO_PERMANENTE.dashboardUrl } } });
-    expect(DEMO_PERMANENTE.commandeUrl).toBe("https://order.pflow.fr/demo/commande?r=pflow");
-    expect(DEMO_PERMANENTE.dashboardUrl).toBe("https://order.pflow.fr/demo?r=pflow");
-    expect(demo[2].interactive?.body.text).toBe(PFLOW_TEXTS.tryYours);
-    expect(titles(demo[2])).toEqual(["🙋 Je veux le mien", "🍔 Découvrir PFlow"]);
-    expect(PFLOW_TEXTS.tryOrder).toContain("*Mint Bun*");
-
-    // « Je veux le mien » : transfert, Jules prévenu (WhatsApp + boîte de réception), bot en pause pour ce contact.
-    from = sent.length;
-    const mien = demo[2].interactive!.action.buttons![0].reply;
-    await processWebhookPayload(click(mien.id, mien.title), deps);
-    expect(JSON.stringify(out(from))).toContain(PFLOW_TEXTS.wantMine.slice(0, 30));
+    msgs = await press(msgs[0], 0);
+    expect(JSON.stringify(msgs)).toContain(PFLOW_TEXTS.wantMine.slice(0, 30));
     expect(sent.slice(from).some((m) => (m as Out).to === "590690938108" && JSON.stringify(m).includes("attend une réponse"))).toBe(true);
     expect((await store.listTransferts("pflow")).length).toBe(1);
     from = sent.length;
     await processWebhookPayload(text("Bonjour"), deps);
-    expect(out(from)).toHaveLength(0); // en pause : Jules reprend la main
+    expect(out(from)).toHaveLength(0);
     expect(calls).toBe(0);
+
+    // Aucun message n'est jamais envoyé sans que le prospect écrive : pas de relance.
+    expect(sent.filter((m) => (m as Out).to !== "590690938108").length).toBeGreaterThan(0);
   });
 
-  it("démo permanente : l'intention de commander la lance directement ; un nom de démo active reste prioritaire", () => {
+  it("parcours guidé : retour « J'ai vu le dashboard 👀 », « c'est fait » écrit, oubli après 7 jours, nom de démo prioritaire", async () => {
+    const repos = createLocalRepositories(createMemoryStore(), { now: () => new Date("2026-11-08T15:00:00Z") });
+    await createMasterTemplate(repos);
+    const gwada = await repos.clients.create({ nomResto: "Gwada food", orderSlug: "gwada" });
+    await repos.demos.start(gwada.id, { days: 5 });
+    const data = await repos.workspace.exportAll();
+    const canal: Canal = {
+      id: "pflow", role: "pflow", restaurantId: "", plateforme: "whatsapp", accountId: PFLOW_PHONE, triggerMode: "toujours",
+      coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "actif", testNumeros: [],
+    };
+    const store = createMemoryChannelStore([canal]);
+    const clock = { now: new Date("2026-11-08T15:00:00Z") };
+    const deps = {
+      store,
+      graph: createGraphClient({ token: "t", base, version: "v24.0" }),
+      loadBot: async (id: string, options?: { demo?: boolean }) => loadBotFromWorkspace(data, id, options),
+      loadDemos: async () => demoDirectory(data),
+      now: () => clock.now,
+      sleep: async () => {},
+    };
+    const say = async (t: string) => { const from = sent.length; await processWebhookPayload(text(t), deps); return texts(from).join(); };
+    const step = async () => (await store.listContacts("pflow"))[0].demo?.parcours?.etape;
+
+    // Intention de commander dès le premier message : étape 1 directement.
+    expect(await say("Bonjour je veux commander")).toContain(DEMO_PERMANENTE.commandeUrl);
+    expect(await step()).toBe(1);
+    // « c'est fait » écrit à la main → étape 2.
+    expect(await say("C'est fait !")).toContain(DEMO_PERMANENTE.dashboardUrl);
+    expect(await step()).toBe(2);
+    // Retour depuis le dashboard (texte prérempli) → étape 3, même sans « c'est fait ».
+    expect(await say(DEMO_PERMANENTE.retourDashboard)).toContain("Étape 3/3");
+    expect(await step()).toBe(3);
+    // Plus tard, un autre message : rappel de l'étape 3 (ses boutons).
+    clock.now = new Date("2026-11-10T09:00:00Z");
+    expect(await say("bonjour")).toContain("Étape 3/3");
+    // Nom d'une démo personnalisée : toujours prioritaire.
+    expect(await say("gwada food")).toContain("Gwada food");
+    // 7 jours sans rien : on repart de l'accueil.
+    clock.now = new Date("2026-11-20T09:00:00Z");
+    expect(await say("bonjour")).toContain("Bienvenue chez PFlow");
+    expect(await step()).toBe(0);
+  });
+
+  it("parcours guidé (fonctions pures) : mots-clés, « c'est fait », rappel", () => {
     const flows = pflowBaseBot().flows;
-    const flowOf = (msg: string) => matchKeyword(flows, msg)?.flow.id;
-    for (const msg of ["commander", "Bonjour je veux commander", "je veux commander", "la carte", "Tester la démo", "voir le menu"]) {
-      expect(flowOf(msg), msg).toBe("pflow-tester");
-    }
-    expect(flowOf("Bonjour")).toBe("pflow-accueil");
-    expect(flowOf("Obtenir ma démo")).toBe("pflow-demo");
-    expect(flowOf("je veux le mien")).toBe("pflow-mien");
-    // Les noms de démo passent avant le bot PFlow (router.ts), même avec « commander ».
+    const now = new Date("2026-11-08T12:00:00Z");
+    const at = now.toISOString();
+    const g = (t: string, etape?: 0 | 1 | 2 | 3) => {
+      const m = guideMessage({ kind: "text", text: t }, flows, etape === undefined ? undefined : { etape, at }, now);
+      return m.kind === "start_flow" ? m.flowId : m.kind;
+    };
+    // Mêmes textes et numéro que les boutons « Retour sur WhatsApp » du CRM (img/demo/mint-bun/carte.json).
+    expect(DEMO_PERMANENTE).toMatchObject({ numeroWhatsapp: "590691266853", retourCommande: "J'ai passé ma commande ✅", retourDashboard: "J'ai vu le dashboard 👀" });
+    expect(g("salut")).toBe(PFLOW_FLOWS.accueil);
+    expect(g("n'importe quoi")).toBe(PFLOW_FLOWS.accueil);
+    for (const t of ["commander", "Bonjour je veux commander", "la carte", "Tester la démo", "démo"]) expect(g(t), t).toBe(PFLOW_FLOWS.etape1);
+    expect(g(DEMO_PERMANENTE.retourCommande, 1)).toBe(PFLOW_FLOWS.etape2);
+    expect(g(DEMO_PERMANENTE.retourDashboard, 2)).toBe(PFLOW_FLOWS.etape3);
+    expect(g("ok", 1)).toBe(PFLOW_FLOWS.etape2);
+    expect(g("ok", 2)).toBe(PFLOW_FLOWS.etape3);
+    expect(g("ok", 3)).toBe(PFLOW_FLOWS.rappel3);
+    expect(g("bonjour", 1)).toBe(PFLOW_FLOWS.rappel1);
+    expect(g("hein", 2)).toBe(PFLOW_FLOWS.rappel2);
+    expect(g("hein ?", 2)).toBe(`${PFLOW_FLOWS.question}2`); // un « ? » : question pour Jules
+    expect(g("Obtenir ma démo", 1)).toBe(PFLOW_FLOWS.mien);
+    expect(g("je veux le mien", 0)).toBe(PFLOW_FLOWS.mien);
+    expect(g("Comment ça marche ?", 2)).toBe(PFLOW_FLOWS.commentCaMarche);
+    const click = guideMessage({ kind: "button_reply", id: "x", title: "y" }, flows, { etape: 1, at }, now);
+    expect(click.kind).toBe("button_reply");
+    // Les textes des boutons « Retour sur WhatsApp » du CRM font quitter une démo personnalisée en cours.
     const route = routePflowMessage({
-      message: { kind: "text", text: "Gwada food" },
+      message: { kind: "text", text: DEMO_PERMANENTE.retourCommande },
       demos: [{ id: "d", clientId: "g", keyword: "Gwada food", nomResto: "Gwada food", startedAt: "2026-11-07T00:00:00Z", expiresAt: "2026-11-12T00:00:00Z" } as never],
-      current: undefined,
-      now: new Date("2026-11-08T12:00:00Z"),
+      current: { clientId: "g", lastAt: at, visited: ["g"] },
+      now,
       sessionMinutes: 30,
     });
-    expect(route).toMatchObject({ kind: "demo", clientId: "g" });
+    expect(route).toEqual({ kind: "pflow" });
   });
 
   it("démo sans carte mais avec une fiche remplie (FAQ…) : l'IA garde la fiche ; avec une carte : rien ne change", async () => {
@@ -379,7 +469,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
         expect(msgs, `${ask} : ${faux}`).not.toContain(faux);
       }
       const notice = sent.slice(from).find((m) => JSON.stringify(m).includes(TEXTS.demoInfosVides))!;
-      expect(buttonsOf(notice).map((b) => b.title)).toEqual(["🎁 Obtenir ma démo", "😋 Tester la démo"]);
+      expect(buttonsOf(notice).map((b) => b.title)).toEqual(["🙋 Je veux le mien", "😋 Tester la démo"]);
     }
 
     // Fiche remplie (FAQ) : « Infos pratiques » s'affiche normalement.
@@ -388,6 +478,139 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     await processWebhookPayload(text("horaires"), deps);
     expect(texts(from).join()).toContain("Que souhaitez-vous savoir");
     expect(texts(from).join()).not.toContain(TEXTS.demoInfosVides);
+  });
+
+  describe("parcours guidé : joindre Jules en plein parcours", () => {
+    type Out = { type: string; to?: string; text?: { body: string }; interactive?: { type: string; body: { text: string }; action: { buttons?: { reply: { id: string; title: string } }[]; parameters?: { display_text: string; url: string } } } };
+    const ALERTE = "590690938108";
+    async function setup() {
+      const repos = createLocalRepositories(createMemoryStore(), { now: () => new Date("2026-11-08T15:00:00Z") });
+      await createMasterTemplate(repos);
+      const data = await repos.workspace.exportAll();
+      const canal: Canal = {
+        id: "pflow", role: "pflow", restaurantId: "", plateforme: "whatsapp", accountId: PFLOW_PHONE, triggerMode: "toujours",
+        coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "actif", testNumeros: [], telAlerte: ALERTE,
+      };
+      const store = createMemoryChannelStore([canal]);
+      const clock = { now: new Date("2026-11-08T15:00:00Z") };
+      const deps = {
+        store,
+        graph: createGraphClient({ token: "t", base, version: "v24.0" }),
+        loadBot: async (id: string, options?: { demo?: boolean }) => loadBotFromWorkspace(data, id, options),
+        loadDemos: async () => demoDirectory(data),
+        now: () => clock.now,
+        sleep: async () => {},
+      };
+      const out = (from: number) => (sent.slice(from) as Out[]).filter((m) => m.to !== ALERTE);
+      const alerts = (from: number) => (sent.slice(from) as Out[]).filter((m) => m.to === ALERTE).map((m) => m.text?.body ?? "");
+      const titles = (m: Out) => (m.interactive?.action.buttons ?? []).map((b) => b.reply.title);
+      const say = async (t: string) => { const from = sent.length; await processWebhookPayload(text(t), deps); return { msgs: out(from), alerts: alerts(from) }; };
+      const press = async (m: Out, title: string) => {
+        const b = m.interactive!.action.buttons!.find((x) => x.reply.title === title)!.reply;
+        const from = sent.length;
+        await processWebhookPayload(click(b.id, b.title), deps);
+        return { msgs: out(from), alerts: alerts(from) };
+      };
+      const etape = async () => (await store.listContacts("pflow"))[0].demo?.parcours;
+      const paused = async () => Boolean((await store.listContacts("pflow"))[0].state.pause);
+      return { store, clock, say, press, titles, etape, paused };
+    }
+
+    it("chaque rappel d'étape propose [💬 Parler à Jules] : transfert à Jules avec alerte, « Pas de souci… »", async () => {
+      const t = await setup();
+      await t.say("Tester la démo");
+      // Rappel de l'étape 1 : [✅ C'est fait] [💬 Parler à Jules].
+      let r = await t.say("hmm");
+      expect(t.titles(r.msgs[1])).toEqual(["✅ C'est fait", "💬 Parler à Jules"]);
+      r = await t.press(r.msgs[1], "💬 Parler à Jules");
+      expect(JSON.stringify(r.msgs)).toContain(PFLOW_TEXTS.talkToJules);
+      expect(r.alerts.some((a) => a.includes("attend une réponse"))).toBe(true);
+      expect(await t.paused()).toBe(true); // comme « Je veux le mien » : Jules reprend la main
+      const transferts = await t.store.listTransferts("pflow");
+      expect(transferts).toHaveLength(1);
+      expect(transferts[0].source).toBe("bloc");
+    });
+
+    it("rappels des étapes 2 et 3 : [💬 Parler à Jules] aussi ; « parler à Jules » écrit fait pareil", async () => {
+      const t = await setup();
+      await t.say("Tester la démo");
+      await t.say(DEMO_PERMANENTE.retourCommande);
+      let r = await t.say("hmm");
+      expect(r.msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.remind2);
+      expect(t.titles(r.msgs[1])).toEqual(["✅ C'est fait", "💬 Parler à Jules"]);
+      await t.say(DEMO_PERMANENTE.retourDashboard);
+      r = await t.say("hmm");
+      expect(r.msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.step3);
+      expect(t.titles(r.msgs[0])).toEqual(["🙋 Je veux le mien", "Comment ça marche ?", "💬 Parler à Jules"]);
+      r = await t.say("Je voudrais parler à Jules");
+      expect(JSON.stringify(r.msgs)).toContain(PFLOW_TEXTS.talkToJules);
+      expect(r.alerts).toHaveLength(1);
+    });
+
+    it("question en plein parcours : « Bonne question ! », alerte à Jules avec la question, PAS de pause, rappel de l'étape ; une alerte max / 30 min", async () => {
+      const t = await setup();
+      // Sans parcours (premier message), une question mène à l'accueil, sans alerte.
+      let r = await t.say("C'est quoi PFlow exactement ?");
+      expect(r.msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.welcome);
+      expect(r.alerts).toHaveLength(0);
+
+      await t.say("Tester la démo");
+      // 1. Une question (« ? ») : réponse, alerte avec le texte, rappel de l'étape 1 (avec son bouton).
+      r = await t.say("C'est payant ?");
+      expect(r.msgs[0].text?.body).toBe(PFLOW_TEXTS.question);
+      expect(r.msgs[1].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.remind1 }, action: { parameters: { url: DEMO_PERMANENTE.commandeUrl } } });
+      expect(t.titles(r.msgs[2])).toEqual(["✅ C'est fait", "💬 Parler à Jules"]);
+      expect(r.alerts).toHaveLength(1);
+      expect(r.alerts[0]).toContain("pose une question");
+      expect(r.alerts[0]).toContain("« C'est payant ? »");
+      expect(await t.paused()).toBe(false);
+      const transferts = await t.store.listTransferts("pflow");
+      expect(transferts).toHaveLength(1);
+      expect(transferts[0].dernierMessage).toBe("C'est payant ?");
+      expect((await t.etape())?.etape).toBe(1);
+
+      // Le prospect continue la démo : pas de pause.
+      r = await t.say(DEMO_PERMANENTE.retourCommande);
+      expect(r.msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.step2);
+
+      // 2. Autre question (plus de 4 mots, sans « ? ») 10 min après : réponse et rappel, mais PAS de 2e alerte.
+      t.clock.now = new Date("2026-11-08T15:10:00Z");
+      r = await t.say("et pour la livraison vous faites comment");
+      expect(r.msgs[0].text?.body).toBe(PFLOW_TEXTS.question);
+      expect(r.msgs[1].interactive?.body.text).toBe(PFLOW_TEXTS.remind2);
+      expect(r.alerts).toHaveLength(0);
+      expect(await t.store.listTransferts("pflow")).toHaveLength(1);
+
+      // 3. Un message court sans « ? » : simple rappel, pas de « Bonne question ».
+      r = await t.say("ah ok");
+      expect(r.msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.remind2);
+      expect(JSON.stringify(r.msgs)).not.toContain(PFLOW_TEXTS.question);
+
+      // 4. Plus de 30 min après la première alerte : nouvelle alerte.
+      t.clock.now = new Date("2026-11-08T15:31:00Z");
+      r = await t.say("Ça marche aussi pour un food truck ?");
+      expect(r.alerts).toHaveLength(1);
+      expect(await t.store.listTransferts("pflow")).toHaveLength(2);
+      expect(await t.paused()).toBe(false);
+    });
+
+    it("détection d'une question (fonction pure)", () => {
+      expect(looksLikeQuestion("C'est payant ?")).toBe(true);
+      expect(looksLikeQuestion("et pour la livraison vous faites comment")).toBe(true);
+      expect(looksLikeQuestion("ah ok")).toBe(false);
+      expect(looksLikeQuestion("euh je comprends pas")).toBe(false);
+      const flows = pflowBaseBot().flows;
+      const now = new Date("2026-11-08T12:00:00Z");
+      const at = now.toISOString();
+      expect(guide({ kind: "text", text: "C'est payant ?" }, flows, { etape: 2, at }, now)).toEqual({
+        message: { kind: "start_flow", flowId: "pflow-question-2" },
+        question: "C'est payant ?",
+      });
+      // Les mots-clés du parcours passent avant (« comment ça marche ? » n'est pas une question pour Jules).
+      expect(guide({ kind: "text", text: "Comment ça marche ?" }, flows, { etape: 2, at }, now).question).toBeUndefined();
+      expect(canAlertQuestion({ etape: 1, at, alerteAt: at }, new Date("2026-11-08T12:29:00Z"))).toBe(false);
+      expect(canAlertQuestion({ etape: 1, at, alerteAt: at }, new Date("2026-11-08T12:30:00Z"))).toBe(true);
+    });
   });
 });
 
