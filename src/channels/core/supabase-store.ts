@@ -92,6 +92,8 @@ function rowToTransfert(r: Row): Transfert {
     source: r.source as Transfert["source"],
     ...(r.dernier_message ? { dernierMessage: String(r.dernier_message) } : {}),
     gerantPrevenu: Boolean(r.gerant_prevenu),
+    ...(r.alerte_voie ? { alerteVoie: r.alerte_voie as Transfert["alerteVoie"] } : {}),
+    ...(r.alerte_erreur ? { alerteErreur: String(r.alerte_erreur) } : {}),
     at: iso(r.cree_le)!,
     ...(r.vu_le ? { vuLe: iso(r.vu_le) } : {}),
     ...(r.resolu_le ? { resoluLe: iso(r.resolu_le) } : {}),
@@ -245,8 +247,16 @@ export function createSupabaseChannelStore(db: Db, newId: () => string = () => c
         gerant_prevenu: t.gerantPrevenu ?? false,
         cree_le: new Date().toISOString(),
       };
-      await db.upsert("bot_transferts", [row], "id");
-      return rowToTransfert(row);
+      const alerte: Row = { ...(t.alerteVoie ? { alerte_voie: t.alerteVoie } : {}), ...(t.alerteErreur ? { alerte_erreur: t.alerteErreur.slice(0, 1000) } : {}) };
+      try {
+        await db.upsert("bot_transferts", [{ ...row, ...alerte }], "id");
+        return rowToTransfert({ ...row, ...alerte });
+      } catch (error) {
+        // Colonnes alerte_voie / alerte_erreur pas encore créées (migration 20261109000000) : le transfert passe quand même.
+        if (!Object.keys(alerte).length || !/alerte_(voie|erreur)/.test(error instanceof Error ? error.message : String(error))) throw error;
+        await db.upsert("bot_transferts", [row], "id");
+        return rowToTransfert(row);
+      }
     },
     async listContacts(canalId) {
       return (await db.select("bot_contacts", "*", { ...eq("canal_id", canalId), order: { column: "maj_le", ascending: false } })).map(rowToContact);
