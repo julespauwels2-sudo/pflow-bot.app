@@ -46,10 +46,14 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 
 - **Passage en actif de PFlow Démo : bloqué tant que la démo permanente n'existe pas** (décision de Jules,
   8 novembre 2026). C'est le **seul** blocage restant : la facturation est réglée (la carte de Jules est le moyen
-  de paiement du compte de messagerie de PFlow Démo). Démo « Mint Burger » sur la vraie page de commande et le
-  vrai Dashboard du CRM, en mémoire (`docs/etape-c/demo-permanente.md`, validée) : PR CRM
-  https://github.com/julespauwels2-sudo/Pflow-Crm/pull/79 et PR PFlow Bots
-  https://github.com/julespauwels2-sudo/pflow-bot.app/pull/3 (après la n° 2), à fusionner par Jules.
+  de paiement du compte de messagerie de PFlow Démo). Démo « Mint Bun » (ex-Mint Burger) sur la vraie page de commande et le
+  vrai Dashboard du CRM, en mémoire (`docs/etape-c/demo-permanente.md`, validée). Où on en est :
+  - CRM n° 79 (pages de la démo) : **fusionnée** ;
+  - CRM n° 80 (Mint Bun) : https://github.com/julespauwels2-sudo/Pflow-Crm/pull/80, en attente du logo et des photos
+    de `mint-bun-assets.zip` (pas encore reçu) ;
+  - PFlow Bots n° 2 puis n° 3 : à fusionner par Jules (n° 2 encore ouverte le 8 novembre en fin de journée).
+  Ensuite : test sur iPhone et Android avec les 3 numéros de test (590690938108, 590690748247, 590690635359),
+  désactivation du bot UChat de ce numéro, puis « Passer en actif ».
 
 ### Étape B
 - **Options payantes** (ex. relance panier abandonné) : lues dans le CRM (modules du resto). **Les

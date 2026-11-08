@@ -779,3 +779,23 @@ Tests : PFlow Bots 372 (vitest) ; simulateur `accueil-ia.js`, `agent-ia.js`, `co
    `<NUMERO_2>`), dans `docs/etape-c/bascule-pflow-demo.md`.
 3. **Ordre de fusion de Jules** : CRM n° 79, puis PFlow Bots n° 2, puis n° 3. Fusion classique (pas « squash »).
 4. **plan.md** : le test `sons-tendance.test.js` du CRM, en échec sur `main`, noté à traiter plus tard.
+
+
+## 8 novembre 2026 (soir) — numéros de test, Infos pratiques en démo vide, Mint Bun
+
+1. **SQL appliqué** (accord de Jules) sur le canal PFlow Démo `3c38356d-1947-4462-95a8-8df1b400254e` :
+   `returning` → état `test`, `test_numeros = {590690635359, 590690748247, 590690938108}`.
+2. **PR n° 2 de PFlow Bots : encore ouverte** sur GitHub au moment du travail (Jules pensait l'avoir fusionnée ;
+   la PR CRM n° 79, elle, est fusionnée). La n° 3 la contient déjà : rien de bloquant. À fusionner : n° 2 puis n° 3.
+3. **PR n° 3 mise à jour** :
+   - branche remise à jour avec la base ;
+   - flux « Infos pratiques » (et tout flux qui affiche des infos de la fiche) : dans une démo sans carte ni fiche,
+     « C'est une démo : ces infos ne sont pas encore renseignées. » avec les deux boutons, au lieu des valeurs par
+     défaut du CRM ; test ;
+   - Mint Burger devient Mint Bun dans les textes. 387 tests passent.
+4. **PR CRM n° 80 : Mint Bun** (smash burgers & matcha) :
+   - carte du menu (19 produits) ; suppléments steak et cheddar ; formules à prix fixe avec groupes de choix ;
+   - nouvelle palette (cadre PFlow gardé) ; aucun « ® » ; dossier `img/demo/mint-bun` ;
+   - tests navigateur 11/11.
+   - **`mint-bun-assets.zip` pas reçu** : logo provisoire (SVG) et tuiles en attendant ; logo, photos (webp) et palette
+     finale à ajouter dans la même PR dès réception.
