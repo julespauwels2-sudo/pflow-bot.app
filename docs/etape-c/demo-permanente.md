@@ -7,12 +7,31 @@ le **vrai produit**. Proposition validée par Jules, avec ses ajustements (parti
 
 | Point | Décision de Jules | Fait |
 |---|---|---|
-| Carte, options, palette | Validées telles quelles (partie 5) | `repo/img/demo/mint-burger/carte.json` du CRM |
-| Logo | Logo simple : « Mint Burger » en navy, feuille de matcha | `repo/img/demo/mint-burger/logo.svg` (texte en tracés : même rendu sur tous les téléphones) |
+| Carte, options, palette | Validées telles quelles (partie 5) | `repo/img/demo/mint-bun/carte.json` du CRM |
+| Logo | Logo simple : « Mint Burger » en navy, feuille de matcha | `repo/img/demo/mint-bun/logo.svg` (texte en tracés : même rendu sur tous les téléphones) |
 | Photos | Tuiles de couleur pour l'instant, une photo par plat possible plus tard sans code | Champ `photo` par produit dans `carte.json` : déposer l'image dans `img/demo/mint-burger/` et écrire son adresse |
 | Dashboard | Les **deux** : commandes de ce téléphone des 6 dernières heures, **et** bouton « Voir ma commande sur le dashboard » sur la confirmation | Le bouton passe la commande dans l'adresse, après le `#` (jamais envoyée au serveur) : visible même dans un autre navigateur. Le Dashboard s'ouvre alors sur « Commandes », et la commande du prospect est la seule « à accepter » au départ |
 | Textes des 3 messages | À relire | Ton plus simple (partie 3, version finale dans `src/demos/pflow-bot.ts`) |
 | Facturation | Réglée (carte de Jules) | Seul blocage restant pour l'actif : cette démo |
+
+## 0 bis. Mint Bun (8 novembre 2026) : le resto fictif devient « Mint Bun »
+
+Décision de Jules : « Mint Bun » (smash burgers & matcha), avec une vraie identité. Marque fictive : aucun « ® ».
+
+- **Carte du menu** (`repo/img/demo/mint-bun/carte.json` du CRM) :
+  - Burgers : Mint Classic 12,90 € (best-seller), Truffle Melt 14,50 €, Spicy Matcha 13,90 €, Green Veggie 12,50 € ;
+  - Sides : frites maison 4,50 €, loaded fries cheddar 6,90 €, mozza sticks 5,90 €, coleslaw matcha 3,90 € ;
+  - Matcha & drinks : matcha latte glacé 5,50 €, strawberry matcha 6 €, vanilla matcha cloud 6,50 €, citronnade maison 4,50 €, soda / eau 2,50 € ;
+  - Desserts : matcha cookie 3,50 €, brookie chocolat 4,50 €, soft serve matcha-vanille 4,90 €.
+- **Options des burgers** : supplément steak +3 €, supplément cheddar +1 €.
+- **Formules** : des produits à prix fixe, avec des groupes de choix, comme sur la page de commande des vrais restos. Il n'y a pas de mécanique nouvelle :
+  - burger + frites + boisson, 16,90 € ;
+  - burger + loaded fries + boisson, 18,90 € ;
+  - matcha break (boisson matcha + dessert), 8,90 €.
+- **Palette** : vert foncé `#1E5B3A`, vert matcha clair `#B9D98C`, crème `#F7F1E3`, touche de rose. Le cadre PFlow est gardé. Elle est à ajuster d'après `menu-complet.png`.
+- **Logo et photos** : ils viennent de `mint-bun-assets.zip`, pas encore reçu. En attendant, un logo provisoire (SVG) et des tuiles de couleur. Les photos iront en webp dans `img/demo/mint-bun/`, dans le champ `photo`.
+- **Bot** : textes de la démo permanente renommés (PR PFlow Bots n° 3).
+- **PR CRM** : https://github.com/julespauwels2-sudo/Pflow-Crm/pull/80.
 
 PR (sans fusion) : CRM https://github.com/julespauwels2-sudo/Pflow-Crm/pull/79 ; PFlow Bots
 https://github.com/julespauwels2-sudo/pflow-bot.app/pull/3 (part de la PR n° 2 : fusionner la n° 2 d'abord).
@@ -34,7 +53,7 @@ https://github.com/julespauwels2-sudo/pflow-bot.app/pull/3 (part de la PR n° 2 
 
 ### PR CRM (Pflow-Crm), petite, sans SQL
 1. **Le resto de démo PFlow** dans `js/demo-commun.js` : un 3e cas à côté de `?d=` et `?nom=`, l'adresse
-   `?r=pflow` charge **Mint Burger** (nom, couleurs, logo, carte, options). « Pizzeria du Port » reste le resto
+   `?r=pflow` charge **Mint Bun** (nom, couleurs, logo, carte, options). « Pizzeria du Port » reste le resto
    par défaut (rien ne change pour les liens existants).
 2. **Couleurs** (partie 5) : le resto garde **sa** couleur, le vert matcha, comme un vrai resto ; le **cadre
    PFlow** (bandeau de démo navy, badge rose, liens bleus, fond crème) montre que c'est PFlow. Seulement pour
@@ -68,7 +87,7 @@ https://github.com/julespauwels2-sudo/pflow-bot.app/pull/3 (part de la PR n° 2 
 
 **Démo permanente** (3 messages à la suite, avec l'indicateur « en train d'écrire » entre eux). Version finale,
 plus simple que la proposition ci-dessous :
-1. « 😋 Mettez-vous à la place d'un client de *Mint Burger*, notre resto de démo. Choisissez votre burger et passez
+1. « 😋 Mettez-vous à la place d'un client de *Mint Bun*, notre resto de démo. Choisissez votre burger et passez
    commande, comme sur une vraie page de commande. Rien n'est payé ni envoyé. » — **Je commande**
 2. « 📊 Côté resto, chaque commande arrive en direct sur le tableau de bord. Passez la vôtre, puis ouvrez-le pour la
    voir arriver. » — **Voir le dashboard**
@@ -108,7 +127,7 @@ le **même navigateur** (sinon la commande n'apparaît pas dans le Dashboard). S
 téléphone, plan B : le lien « Voir le dashboard » est aussi proposé **sur la page de confirmation** de la commande
 de démo (même onglet, donc toujours visible).
 
-## 5. Le resto de démo : Mint Burger (burgers au matcha)
+## 5. Le resto de démo : Mint Burger (burgers au matcha) — REMPLACÉ par Mint Bun (partie 0 bis)
 
 Choisi par Jules. Pain brioché au matcha, produits locaux, à emporter et en livraison.
 
