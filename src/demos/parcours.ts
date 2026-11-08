@@ -6,8 +6,11 @@
  * - un mot-clé du bot PFlow (« tester la démo », « J'ai passé ma commande ✅ », « je veux le mien »…) lance
  *   directement son flux, quelle que soit la longueur du message ;
  * - « c'est fait », « ok »… fait passer à l'étape suivante (étapes 1 et 2) ;
+ * - une QUESTION en plein parcours (« ? », ou plus de 4 mots) : « Bonne question ! Jules vous répond très vite »,
+ *   Jules est prévenu (WhatsApp + boîte de réception, avec la question ; une alerte au plus toutes les 30 min par
+ *   contact), le bot n'est PAS mis en pause, puis l'étape en cours est rappelée ;
  * - tout autre message (salutation comprise) RAPPELLE l'étape en cours, avec son bouton : le prospect ne se
- *   perd jamais, et n'est jamais transféré à Jules par erreur. Sans parcours : l'accueil.
+ *   perd jamais. Chaque rappel propose aussi [💬 Parler à Jules]. Sans parcours : l'accueil.
  * Aucune relance automatique : le bot ne parle que quand le prospect écrit.
  */
 import { matchKeyword, normalize, type EngineEvent, type Flow, type IncomingMessage } from "@/engine";
@@ -19,7 +22,12 @@ export interface ParcoursState {
   etape: ParcoursEtape;
   /** Dernière activité dans le parcours. */
   at: string;
+  /** Dernière alerte « question » envoyée à Jules pour ce contact (anti-doublon). */
+  alerteAt?: string;
 }
+
+/** Une alerte « question » au plus par contact sur cette durée. */
+export const QUESTION_ALERT_MINUTES = 30;
 
 /** Au-delà, le parcours est oublié : le prospect qui revient repart de l'accueil. */
 export const PARCOURS_DAYS = 7;
@@ -38,7 +46,7 @@ const REMINDER_OF_STEP: Record<ParcoursEtape, string> = {
   0: PFLOW_FLOWS.accueil,
   1: PFLOW_FLOWS.rappel1,
   2: PFLOW_FLOWS.rappel2,
-  3: PFLOW_FLOWS.etape3,
+  3: PFLOW_FLOWS.rappel3,
 };
 
 const NEXT_OF_STEP: Partial<Record<ParcoursEtape, string>> = { 1: PFLOW_FLOWS.etape2, 2: PFLOW_FLOWS.etape3 };
@@ -51,16 +59,40 @@ function activeStep(parcours: ParcoursState | undefined, now: Date): ParcoursEta
   return now.getTime() - Date.parse(parcours.at) < PARCOURS_DAYS * 86_400_000 ? parcours.etape : undefined;
 }
 
-/** Le message à donner au moteur pour le bot PFlow de base. Boutons, médias… : inchangés. */
-export function guideMessage(message: IncomingMessage, flows: Flow[], parcours: ParcoursState | undefined, now: Date): IncomingMessage {
-  if (message.kind !== "text") return message;
+/** Une question : un « ? », ou plus de 4 mots. */
+export function looksLikeQuestion(text: string): boolean {
+  return text.includes("?") || normalize(text).split(" ").filter(Boolean).length > 4;
+}
+
+export interface GuidedMessage {
+  message: IncomingMessage;
+  /** Question en plein parcours : son texte (le serveur prévient Jules, sans mettre le bot en pause). */
+  question?: string;
+}
+
+/** Ce que le moteur doit jouer pour le bot PFlow de base, et s'il faut prévenir Jules. Boutons, médias… : inchangés. */
+export function guide(message: IncomingMessage, flows: Flow[], parcours: ParcoursState | undefined, now: Date): GuidedMessage {
+  if (message.kind !== "text") return { message };
   const step = activeStep(parcours, now);
   const text = normalize(message.text);
   const next = step === undefined ? undefined : NEXT_OF_STEP[step];
-  if (next && DONE_TEXTS.includes(text)) return { kind: "start_flow", flowId: next };
+  if (next && DONE_TEXTS.includes(text)) return { message: { kind: "start_flow", flowId: next } };
   const match = matchKeyword(flows, message.text);
-  if (match && match.flow.id !== PFLOW_FLOWS.accueil) return { kind: "start_flow", flowId: match.flow.id };
-  return { kind: "start_flow", flowId: REMINDER_OF_STEP[step ?? 0] };
+  if (match && match.flow.id !== PFLOW_FLOWS.accueil) return { message: { kind: "start_flow", flowId: match.flow.id } };
+  if (step !== undefined && looksLikeQuestion(message.text)) {
+    return { message: { kind: "start_flow", flowId: `${PFLOW_FLOWS.question}${step}` }, question: message.text.trim() };
+  }
+  return { message: { kind: "start_flow", flowId: REMINDER_OF_STEP[step ?? 0] } };
+}
+
+/** Le message à donner au moteur (voir guide). */
+export function guideMessage(message: IncomingMessage, flows: Flow[], parcours: ParcoursState | undefined, now: Date): IncomingMessage {
+  return guide(message, flows, parcours, now).message;
+}
+
+/** Peut-on prévenir Jules d'une question maintenant (une alerte au plus toutes les 30 min par contact) ? */
+export function canAlertQuestion(parcours: ParcoursState | undefined, now: Date): boolean {
+  return !parcours?.alerteAt || now.getTime() - Date.parse(parcours.alerteAt) >= QUESTION_ALERT_MINUTES * 60_000;
 }
 
 /** L'étape après le passage du moteur (d'après les flux lancés). */
@@ -74,5 +106,5 @@ export function nextParcours(parcours: ParcoursState | undefined, events: Engine
     if (step !== undefined) etape = step;
   }
   if (etape === undefined) return undefined;
-  return touched || !parcours ? { etape, at: now.toISOString() } : parcours;
+  return touched || !parcours ? { etape, at: now.toISOString(), ...(parcours?.alerteAt ? { alerteAt: parcours.alerteAt } : {}) } : parcours;
 }

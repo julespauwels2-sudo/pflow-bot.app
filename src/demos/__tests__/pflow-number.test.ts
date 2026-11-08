@@ -11,7 +11,7 @@ import { demoDirectory } from "../lifecycle";
 import type { Canal } from "@/channels/core/types";
 import { createGraphClient } from "@/channels/whatsapp/graph";
 import { DEMO_PERMANENTE, PFLOW_DEMO_BUTTONS, PFLOW_FLOWS, PFLOW_TEXTS, pflowBaseBot } from "../pflow-bot";
-import { guideMessage } from "../parcours";
+import { canAlertQuestion, guide, guideMessage, looksLikeQuestion } from "../parcours";
 import { buildPrompt } from "@/ai/prompt";
 import { matchKeyword, TEXTS, type AiRequest } from "@/engine";
 import { routePflowMessage } from "../router";
@@ -295,7 +295,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
       msgs = await say(autre);
       expect(msgs[0].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.remind1 }, action: { parameters: { url: DEMO_PERMANENTE.commandeUrl } } });
       expect(msgs[1].interactive?.body.text).toBe(PFLOW_TEXTS.remindDone);
-      expect(titles(msgs[1])).toEqual(["✅ C'est fait"]);
+      expect(titles(msgs[1])).toEqual(["✅ C'est fait", "💬 Parler à Jules"]);
       expect(await step()).toBe(1);
     }
 
@@ -394,9 +394,10 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(g(DEMO_PERMANENTE.retourDashboard, 2)).toBe(PFLOW_FLOWS.etape3);
     expect(g("ok", 1)).toBe(PFLOW_FLOWS.etape2);
     expect(g("ok", 2)).toBe(PFLOW_FLOWS.etape3);
-    expect(g("ok", 3)).toBe(PFLOW_FLOWS.etape3);
+    expect(g("ok", 3)).toBe(PFLOW_FLOWS.rappel3);
     expect(g("bonjour", 1)).toBe(PFLOW_FLOWS.rappel1);
-    expect(g("hein ?", 2)).toBe(PFLOW_FLOWS.rappel2);
+    expect(g("hein", 2)).toBe(PFLOW_FLOWS.rappel2);
+    expect(g("hein ?", 2)).toBe(`${PFLOW_FLOWS.question}2`); // un « ? » : question pour Jules
     expect(g("Obtenir ma démo", 1)).toBe(PFLOW_FLOWS.mien);
     expect(g("je veux le mien", 0)).toBe(PFLOW_FLOWS.mien);
     expect(g("Comment ça marche ?", 2)).toBe(PFLOW_FLOWS.commentCaMarche);
@@ -477,6 +478,139 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     await processWebhookPayload(text("horaires"), deps);
     expect(texts(from).join()).toContain("Que souhaitez-vous savoir");
     expect(texts(from).join()).not.toContain(TEXTS.demoInfosVides);
+  });
+
+  describe("parcours guidé : joindre Jules en plein parcours", () => {
+    type Out = { type: string; to?: string; text?: { body: string }; interactive?: { type: string; body: { text: string }; action: { buttons?: { reply: { id: string; title: string } }[]; parameters?: { display_text: string; url: string } } } };
+    const ALERTE = "590690938108";
+    async function setup() {
+      const repos = createLocalRepositories(createMemoryStore(), { now: () => new Date("2026-11-08T15:00:00Z") });
+      await createMasterTemplate(repos);
+      const data = await repos.workspace.exportAll();
+      const canal: Canal = {
+        id: "pflow", role: "pflow", restaurantId: "", plateforme: "whatsapp", accountId: PFLOW_PHONE, triggerMode: "toujours",
+        coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "actif", testNumeros: [], telAlerte: ALERTE,
+      };
+      const store = createMemoryChannelStore([canal]);
+      const clock = { now: new Date("2026-11-08T15:00:00Z") };
+      const deps = {
+        store,
+        graph: createGraphClient({ token: "t", base, version: "v24.0" }),
+        loadBot: async (id: string, options?: { demo?: boolean }) => loadBotFromWorkspace(data, id, options),
+        loadDemos: async () => demoDirectory(data),
+        now: () => clock.now,
+        sleep: async () => {},
+      };
+      const out = (from: number) => (sent.slice(from) as Out[]).filter((m) => m.to !== ALERTE);
+      const alerts = (from: number) => (sent.slice(from) as Out[]).filter((m) => m.to === ALERTE).map((m) => m.text?.body ?? "");
+      const titles = (m: Out) => (m.interactive?.action.buttons ?? []).map((b) => b.reply.title);
+      const say = async (t: string) => { const from = sent.length; await processWebhookPayload(text(t), deps); return { msgs: out(from), alerts: alerts(from) }; };
+      const press = async (m: Out, title: string) => {
+        const b = m.interactive!.action.buttons!.find((x) => x.reply.title === title)!.reply;
+        const from = sent.length;
+        await processWebhookPayload(click(b.id, b.title), deps);
+        return { msgs: out(from), alerts: alerts(from) };
+      };
+      const etape = async () => (await store.listContacts("pflow"))[0].demo?.parcours;
+      const paused = async () => Boolean((await store.listContacts("pflow"))[0].state.pause);
+      return { store, clock, say, press, titles, etape, paused };
+    }
+
+    it("chaque rappel d'étape propose [💬 Parler à Jules] : transfert à Jules avec alerte, « Pas de souci… »", async () => {
+      const t = await setup();
+      await t.say("Tester la démo");
+      // Rappel de l'étape 1 : [✅ C'est fait] [💬 Parler à Jules].
+      let r = await t.say("hmm");
+      expect(t.titles(r.msgs[1])).toEqual(["✅ C'est fait", "💬 Parler à Jules"]);
+      r = await t.press(r.msgs[1], "💬 Parler à Jules");
+      expect(JSON.stringify(r.msgs)).toContain(PFLOW_TEXTS.talkToJules);
+      expect(r.alerts.some((a) => a.includes("attend une réponse"))).toBe(true);
+      expect(await t.paused()).toBe(true); // comme « Je veux le mien » : Jules reprend la main
+      const transferts = await t.store.listTransferts("pflow");
+      expect(transferts).toHaveLength(1);
+      expect(transferts[0].source).toBe("bloc");
+    });
+
+    it("rappels des étapes 2 et 3 : [💬 Parler à Jules] aussi ; « parler à Jules » écrit fait pareil", async () => {
+      const t = await setup();
+      await t.say("Tester la démo");
+      await t.say(DEMO_PERMANENTE.retourCommande);
+      let r = await t.say("hmm");
+      expect(r.msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.remind2);
+      expect(t.titles(r.msgs[1])).toEqual(["✅ C'est fait", "💬 Parler à Jules"]);
+      await t.say(DEMO_PERMANENTE.retourDashboard);
+      r = await t.say("hmm");
+      expect(r.msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.step3);
+      expect(t.titles(r.msgs[0])).toEqual(["🙋 Je veux le mien", "Comment ça marche ?", "💬 Parler à Jules"]);
+      r = await t.say("Je voudrais parler à Jules");
+      expect(JSON.stringify(r.msgs)).toContain(PFLOW_TEXTS.talkToJules);
+      expect(r.alerts).toHaveLength(1);
+    });
+
+    it("question en plein parcours : « Bonne question ! », alerte à Jules avec la question, PAS de pause, rappel de l'étape ; une alerte max / 30 min", async () => {
+      const t = await setup();
+      // Sans parcours (premier message), une question mène à l'accueil, sans alerte.
+      let r = await t.say("C'est quoi PFlow exactement ?");
+      expect(r.msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.welcome);
+      expect(r.alerts).toHaveLength(0);
+
+      await t.say("Tester la démo");
+      // 1. Une question (« ? ») : réponse, alerte avec le texte, rappel de l'étape 1 (avec son bouton).
+      r = await t.say("C'est payant ?");
+      expect(r.msgs[0].text?.body).toBe(PFLOW_TEXTS.question);
+      expect(r.msgs[1].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.remind1 }, action: { parameters: { url: DEMO_PERMANENTE.commandeUrl } } });
+      expect(t.titles(r.msgs[2])).toEqual(["✅ C'est fait", "💬 Parler à Jules"]);
+      expect(r.alerts).toHaveLength(1);
+      expect(r.alerts[0]).toContain("pose une question");
+      expect(r.alerts[0]).toContain("« C'est payant ? »");
+      expect(await t.paused()).toBe(false);
+      const transferts = await t.store.listTransferts("pflow");
+      expect(transferts).toHaveLength(1);
+      expect(transferts[0].dernierMessage).toBe("C'est payant ?");
+      expect((await t.etape())?.etape).toBe(1);
+
+      // Le prospect continue la démo : pas de pause.
+      r = await t.say(DEMO_PERMANENTE.retourCommande);
+      expect(r.msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.step2);
+
+      // 2. Autre question (plus de 4 mots, sans « ? ») 10 min après : réponse et rappel, mais PAS de 2e alerte.
+      t.clock.now = new Date("2026-11-08T15:10:00Z");
+      r = await t.say("et pour la livraison vous faites comment");
+      expect(r.msgs[0].text?.body).toBe(PFLOW_TEXTS.question);
+      expect(r.msgs[1].interactive?.body.text).toBe(PFLOW_TEXTS.remind2);
+      expect(r.alerts).toHaveLength(0);
+      expect(await t.store.listTransferts("pflow")).toHaveLength(1);
+
+      // 3. Un message court sans « ? » : simple rappel, pas de « Bonne question ».
+      r = await t.say("ah ok");
+      expect(r.msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.remind2);
+      expect(JSON.stringify(r.msgs)).not.toContain(PFLOW_TEXTS.question);
+
+      // 4. Plus de 30 min après la première alerte : nouvelle alerte.
+      t.clock.now = new Date("2026-11-08T15:31:00Z");
+      r = await t.say("Ça marche aussi pour un food truck ?");
+      expect(r.alerts).toHaveLength(1);
+      expect(await t.store.listTransferts("pflow")).toHaveLength(2);
+      expect(await t.paused()).toBe(false);
+    });
+
+    it("détection d'une question (fonction pure)", () => {
+      expect(looksLikeQuestion("C'est payant ?")).toBe(true);
+      expect(looksLikeQuestion("et pour la livraison vous faites comment")).toBe(true);
+      expect(looksLikeQuestion("ah ok")).toBe(false);
+      expect(looksLikeQuestion("euh je comprends pas")).toBe(false);
+      const flows = pflowBaseBot().flows;
+      const now = new Date("2026-11-08T12:00:00Z");
+      const at = now.toISOString();
+      expect(guide({ kind: "text", text: "C'est payant ?" }, flows, { etape: 2, at }, now)).toEqual({
+        message: { kind: "start_flow", flowId: "pflow-question-2" },
+        question: "C'est payant ?",
+      });
+      // Les mots-clés du parcours passent avant (« comment ça marche ? » n'est pas une question pour Jules).
+      expect(guide({ kind: "text", text: "Comment ça marche ?" }, flows, { etape: 2, at }, now).question).toBeUndefined();
+      expect(canAlertQuestion({ etape: 1, at, alerteAt: at }, new Date("2026-11-08T12:29:00Z"))).toBe(false);
+      expect(canAlertQuestion({ etape: 1, at, alerteAt: at }, new Date("2026-11-08T12:30:00Z"))).toBe(true);
+    });
   });
 });
 

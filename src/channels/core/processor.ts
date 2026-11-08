@@ -11,7 +11,7 @@ import { sendOptions } from "./send-options";
 import type { Transcriber } from "../voice/transcriber";
 import { pflowBaseBot, PFLOW_BOT_ID, PFLOW_TEXTS } from "@/demos/pflow-bot";
 import { nextContactDemo, routePflowMessage, type DemoDirectoryEntry } from "@/demos/router";
-import { guideMessage, nextParcours } from "@/demos/parcours";
+import { canAlertQuestion, guide, nextParcours } from "@/demos/parcours";
 
 /** Plafond d'un « en train d'écrire » côté serveur (le webhook ne doit pas attendre trop longtemps). */
 export const MAX_TYPING_MS = 3000;
@@ -179,7 +179,8 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
 
   // Bot PFlow de base : parcours guidé (un mot-clé lance son étape, tout autre message rappelle l'étape en cours).
   const guided = canal.role === "pflow" && bot.client.id === PFLOW_BOT_ID;
-  const engineMessage = guided ? guideMessage(event.message, bot.flows, contact.demo?.parcours, now) : event.message;
+  const guidance = guided ? guide(event.message, bot.flows, contact.demo?.parcours, now) : null;
+  const engineMessage = guidance ? guidance.message : event.message;
 
   const result: EngineResult = await runEngine(
     {
@@ -232,9 +233,17 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     }
   }
 
+  // Question en plein parcours : Jules est prévenu (sans pause du bot), une alerte au plus toutes les 30 min. Rien si le
+  // bot n'a pas répondu (contact en pause : Jules a déjà la main).
+  const question = guidance?.question && result.outgoing.length > 0 && canAlertQuestion(contact.demo?.parcours, now) ? guidance.question : null;
   if (guided) {
     const parcours = nextParcours(contact.demo?.parcours, result.events, now);
-    if (parcours) contact.demo = { ...(contact.demo ?? { clientId: "", lastAt: now.toISOString(), visited: [] }), parcours };
+    if (parcours) {
+      contact.demo = {
+        ...(contact.demo ?? { clientId: "", lastAt: now.toISOString(), visited: [] }),
+        parcours: question ? { ...parcours, alerteAt: now.toISOString() } : parcours,
+      };
+    }
   }
   await store.saveContact({ ...contact, state: result.contact });
   if (!(await store.saveSession(contact.id, result.session, storedVersion))) {
@@ -259,6 +268,28 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
       }
     }
     await store.addTransfert({ canalId: canal.id, contactId: contact.id, source: e.source, dernierMessage: e.message, gerantPrevenu });
+  }
+
+  if (question) {
+    let gerantPrevenu = false;
+    if (canal.telAlerte) {
+      try {
+        await graph.send(
+          canal.accountId,
+          canal.telAlerte,
+          {
+            kind: "text",
+            text: `❓ ${bot.client.nomResto} : ${event.profileName ?? event.waId} pose une question pendant la démo : « ${question.slice(0, 500)} ». Le bot continue ; répondez depuis la boîte de réception PFlow Bots.`,
+          },
+          sendOptions(canal),
+        );
+        gerantPrevenu = true;
+      } catch {
+        gerantPrevenu = false;
+      }
+    }
+    // Source « bloc » : les sources possibles sont fixées en base (bot_transferts_source_check), sans migration.
+    await store.addTransfert({ canalId: canal.id, contactId: contact.id, source: "bloc", dernierMessage: question.slice(0, 1000), gerantPrevenu });
   }
 
   report.handled.push({ wamid: event.wamid, outgoing: sent });

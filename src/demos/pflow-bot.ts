@@ -59,6 +59,10 @@ export const PFLOW_TEXTS = {
   remind1: "On en était à l'*étape 1/3* : passez commande comme un client 👇",
   remind2: "On en était à l'*étape 2/3* : voici ce que le resto voit, en direct 👇",
   remindDone: "C'est fait ? Touchez le bouton 👇",
+  /** « 💬 Parler à Jules » (dans chaque rappel) : transfert à Jules, avec alerte. */
+  talkToJules: "Pas de souci, Jules vous répond très vite 🙂",
+  /** Question en plein parcours : Jules est prévenu (sans pause du bot), puis rappel de l'étape. */
+  question: "Bonne question ! Jules vous répond très vite 🙂",
   /** Mot-clé d'une démo terminée (expirée ou supprimée). */
   demoEnded: (nom: string) =>
     `⏳ La démo de *${nom}* est terminée. Merci de l'avoir essayée ! Pour la prolonger ou passer à la vraie version, écrivez « Je veux le mien » : Jules vous recontacte 🙂`,
@@ -77,6 +81,10 @@ export const PFLOW_FLOWS = {
   rappel2: "pflow-rappel-2",
   commentCaMarche: "pflow-decouvrir",
   mien: "pflow-mien",
+  rappel3: "pflow-rappel-3",
+  jules: "pflow-jules",
+  /** Question en plein parcours, puis rappel de l'étape N (pflow-question-0 … -3). */
+  question: "pflow-question-",
 } as const;
 
 const replyTo = (flowId: string, title: string): ChoiceOption => ({ id: encodeReplyId({ flowId, nodeId: "t", handle: "next" }), title });
@@ -95,7 +103,9 @@ export const TRY_DEMO_KEYWORDS = [
 /** Textes préremplis des retours (et variantes écrites à la main) qui font passer à l'étape suivante. */
 export const STEP2_KEYWORDS = ["j ai passe ma commande", "commande passee", "j ai commande", "commande envoyee"];
 export const STEP3_KEYWORDS = ["j ai vu le dashboard", "dashboard vu", "j ai vu le tableau de bord"];
-export const WANT_MINE_KEYWORDS = ["je veux le mien", "obtenir ma demo", "je veux une demo", "parler a jules", "rappelez moi", "etre rappele"];
+export const WANT_MINE_KEYWORDS = ["je veux le mien", "obtenir ma demo", "je veux une demo", "rappelez moi", "etre rappele"];
+export const TALK_TO_JULES_KEYWORDS = ["parler a jules", "parler a quelqu un", "un humain", "une personne"];
+const TALK_TO_JULES = "💬 Parler à Jules";
 
 const welcome: Flow = {
   id: PFLOW_FLOWS.accueil,
@@ -154,18 +164,70 @@ const reminder = (id: string, name: string, text: string, button: Button, next: 
     trigger([]),
     message("m", [{ text, buttons: [button] }]),
     { id: "d", type: "delay", position: at(340, 160), data: { mode: "intelligent" } },
-    message("f", [{ text: PFLOW_TEXTS.remindDone, buttons: [reply("fait", "✅ C'est fait")] }], 320),
+    message("f", [{ text: PFLOW_TEXTS.remindDone, buttons: [reply("fait", "✅ C'est fait"), reply("jules", TALK_TO_JULES)] }], 320),
     goto("g", next, 320),
+    goto("g_jules", PFLOW_FLOWS.jules, 480),
   ],
   edges: [
     { id: "e1", source: "t", target: "m" },
     { id: "e2", source: "m", target: "d" },
     { id: "e3", source: "d", target: "f" },
     { id: "e4", source: "f", sourceHandle: "fait", target: "g" },
+    { id: "e5", source: "f", sourceHandle: "jules", target: "g_jules" },
   ],
 });
 const remind1 = reminder(PFLOW_FLOWS.rappel1, "PFlow — rappel étape 1/3", PFLOW_TEXTS.remind1, link("cmd", "Je commande", DEMO_PERMANENTE.commandeUrl), PFLOW_FLOWS.etape2);
 const remind2 = reminder(PFLOW_FLOWS.rappel2, "PFlow — rappel étape 2/3", PFLOW_TEXTS.remind2, link("dash", "Voir le dashboard", DEMO_PERMANENTE.dashboardUrl), PFLOW_FLOWS.etape3);
+
+/** Rappel de l'étape 3/3 : le même message, avec en plus [💬 Parler à Jules]. */
+const remind3: Flow = {
+  id: PFLOW_FLOWS.rappel3,
+  name: "PFlow — rappel étape 3/3",
+  nodes: [
+    trigger([]),
+    message("m", [
+      { text: PFLOW_TEXTS.step3, buttons: [reply("mien", "🙋 Je veux le mien"), reply("comment", "Comment ça marche ?"), reply("jules", TALK_TO_JULES)] },
+    ]),
+    goto("g_mien", PFLOW_FLOWS.mien, 0),
+    goto("g_comment", PFLOW_FLOWS.commentCaMarche, 200),
+    goto("g_jules", PFLOW_FLOWS.jules, 400),
+  ],
+  edges: [
+    { id: "e1", source: "t", target: "m" },
+    { id: "e2", source: "m", sourceHandle: "mien", target: "g_mien" },
+    { id: "e3", source: "m", sourceHandle: "comment", target: "g_comment" },
+    { id: "e4", source: "m", sourceHandle: "jules", target: "g_jules" },
+  ],
+};
+
+/** « 💬 Parler à Jules » : comme « Je veux le mien » (transfert + alerte, bot en pause pour ce contact). */
+const talkToJules: Flow = {
+  id: PFLOW_FLOWS.jules,
+  name: "PFlow — parler à Jules",
+  nodes: [trigger(TALK_TO_JULES_KEYWORDS), { id: "h", type: "handoff", position: at(340, 0), data: { text: PFLOW_TEXTS.talkToJules } }],
+  edges: [{ id: "e1", source: "t", target: "h" }],
+};
+
+/**
+ * Question en plein parcours (src/demos/parcours.ts) : « Bonne question ! … », puis le rappel de l'étape. Jules est
+ * prévenu par le serveur (alerte sans pause : le prospect peut continuer la démo).
+ */
+const STEP_REMINDERS = [PFLOW_FLOWS.accueil, PFLOW_FLOWS.rappel1, PFLOW_FLOWS.rappel2, PFLOW_FLOWS.rappel3];
+const questionFlows: Flow[] = STEP_REMINDERS.map((reminderId, etape) => ({
+  id: `${PFLOW_FLOWS.question}${etape}`,
+  name: `PFlow — question en plein parcours (étape ${etape})`,
+  nodes: [
+    trigger([]),
+    message("m", [{ text: PFLOW_TEXTS.question }]),
+    { id: "d", type: "delay", position: at(340, 160), data: { mode: "intelligent" } },
+    goto("g", reminderId, 320),
+  ],
+  edges: [
+    { id: "e1", source: "t", target: "m" },
+    { id: "e2", source: "m", target: "d" },
+    { id: "e3", source: "d", target: "g" },
+  ],
+}));
 
 const howItWorks: Flow = {
   id: PFLOW_FLOWS.commentCaMarche,
@@ -193,7 +255,7 @@ const wantMine: Flow = {
 export function pflowBaseBot(): LoadedBot {
   return {
     client: { id: PFLOW_BOT_ID, nomResto: "PFlow", orderSlug: "", timezone: DEFAULT_TIMEZONE },
-    flows: structuredClone([welcome, step1, step2, step3, remind1, remind2, howItWorks, wantMine]),
+    flows: structuredClone([welcome, step1, step2, step3, remind1, remind2, remind3, howItWorks, wantMine, talkToJules, ...questionFlows]),
     infoSheet: { horaires: [] },
     aiDailyLimit: 0,
   };
