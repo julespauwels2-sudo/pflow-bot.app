@@ -263,6 +263,27 @@ describe("démo permanente automatique (faux Meta)", () => {
     expect(await handleDemoOrder(test.auto, { jeton: forged, commande: order(2) })).toMatchObject({ ok: false, status: 403 });
   });
 
+  it("format exact envoyé par la page de commande du CRM (champs en plus : id, option_id, options) : accepté et nettoyé", async () => {
+    const t = await setup();
+    const { token } = await t.start();
+    // Ligne telle que js/commande.js la produit (articlesDe), lien et astérisques glissés dans un nom.
+    const fromCrm = {
+      jeton: token,
+      commande: {
+        numero: 51, mode: "retrait", total: 15.9, creneau: "Dès que possible", client_nom: "Marie *gras*",
+        articles: [{ id: "d0000000-0000-4000-8000-000000000001", nom: "Mint Classic https://pirate.example", prix: 12.9, qte: 1, total: 15.9, options: ["d0000000-0000-4000-8000-000000000901"],
+          supplements: [{ groupe: "Suppléments", option_id: "d0000000-0000-4000-8000-000000000901", nom: "Supplément steak", prix: 3 }] }],
+      },
+    };
+    const from = sent.length;
+    expect(await handleDemoOrder(t.auto, fromCrm)).toEqual({ ok: true, envoye: true });
+    const confirmation = t.out(from)[0].text!.body;
+    expect(confirmation).toContain("• 1× Mint Classic — 15,90 €");
+    expect(confirmation).toContain("+ Supplément steak");
+    expect(confirmation).not.toContain("pirate.example");
+    expect(confirmation).not.toContain("*gras*");
+  });
+
   it("récap et dashboard : textes nettoyés (pas de lien, pas de mise en forme), lien simple sans commande", () => {
     const recap = formatDemoRecap({
       ...order(1),
