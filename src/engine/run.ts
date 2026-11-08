@@ -483,12 +483,13 @@ class EngineRun {
           maintenantLocal: `${local.date} ${local.hhmm}`,
           lienCommande: this.orderUrl() ?? "",
           prenomContact: firstName(this.contact.profileName) || undefined,
-          ...(client.demo ? { demo: { sansCarte: client.demo.sansCarte } } : {}),
+          ...(client.demo ? { demo: { sansCarte: client.demo.sansCarte, ficheVide: client.demo.ficheVide } } : {}),
         },
         consigne: agent?.consigne.trim() ? this.render(agent.consigne) : "",
         model: agent?.model,
-        // L'IA ne voit jamais les tournées de livraison passées.
-        infoSheet: withUpcomingRounds(infoSheet, now, client.timezone),
+        // L'IA ne voit jamais les tournées de livraison passées. Démo sans carte ni fiche : rien du tout (les
+        // champs du CRM ne sont que ses valeurs par défaut, ex. « livraison : non », jamais à présenter comme vrais).
+        infoSheet: client.demo?.ficheVide ? { horaires: [] } : withUpcomingRounds(infoSheet, now, client.timezone),
         functions: functions.map((f) => ({ name: f.name, description: f.description })),
         instructions: aiNode?.data.instructions?.trim() ? this.render(aiNode.data.instructions) : undefined,
       });

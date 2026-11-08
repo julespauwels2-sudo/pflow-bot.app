@@ -222,6 +222,16 @@ describe("démo sur le numéro PFlow : règles de l'IA", () => {
     expect(prompt.system.find((b) => b.title === "Base de connaissances")!.text).not.toContain("## Carte");
   });
 
+  it("sans carte ni fiche remplie : horaires, livraison, retrait, zones, paiement traités comme inconnus", () => {
+    const req = { ...demoRequest(true), client: { ...demoRequest(true).client, demo: { sansCarte: true, ficheVide: true } } };
+    const text = systemText(req);
+    expect(text).toContain("La fiche de Gwada food n'est pas encore remplie non plus");
+    expect(text).toContain("Ne présente jamais l'une de ces informations comme vraie (ni « oui », ni « non »)");
+    expect(text).toContain("ces infos ne sont pas encore renseignées");
+    expect(systemText(demoRequest(true))).not.toContain("pas encore remplie non plus");
+    expect(aiRequestSchema.parse(req).client.demo).toEqual({ sansCarte: true, ficheVide: true });
+  });
+
   it("démo avec carte : seulement le rappel « démonstration » ; hors démo : rien", () => {
     const withMenu = systemText(demoRequest(false));
     expect(withMenu).toContain("Cette conversation est une démonstration de PFlow préparée pour Gwada food");

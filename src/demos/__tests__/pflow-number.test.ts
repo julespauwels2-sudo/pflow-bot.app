@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createLocalRepositories } from "@/data/local/repositories";
 import { createMemoryStore } from "@/data/local/store";
 import { createMasterTemplate } from "@/data/template-seed";
-import { loadBotFromWorkspace } from "@/channels/core/bot-loader";
+import { isEmptyDemoSheet, loadBotFromWorkspace } from "@/channels/core/bot-loader";
 import { createMemoryChannelStore } from "@/channels/core/memory-store";
 import { processWebhookPayload } from "@/channels/core/processor";
 import { demoDirectory } from "../lifecycle";
@@ -163,7 +163,15 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     const gwada = await repos.clients.create({ nomResto: "Gwada food", orderSlug: "gwada-vrai-slug" });
     await repos.demos.start(gwada.id, { days: 5 });
     const data = await repos.workspace.exportAll();
-    expect(data.infoSheets[gwada.id]?.resumeCarte ?? "").toBe(""); // comme en production : aucune carte
+    // Comme en production : aucune carte, aucune fiche remplie ; seulement les valeurs par défaut du CRM.
+    data.infoSheets[gwada.id] = {
+      horaires: [{ jour: 1, plages: [{ de: "11:00", a: "14:00" }] }],
+      livraison: false,
+      retrait: true,
+      zonesLivraison: "Jarry",
+      adresse: "Rue des Palmiers",
+      paiementEnLigne: { mode: "non", aConfigurer: false },
+    };
 
     const canal: Canal = {
       id: "pflow", role: "pflow", restaurantId: "", plateforme: "whatsapp", accountId: PFLOW_PHONE, triggerMode: "toujours",
@@ -199,14 +207,18 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     await processWebhookPayload(text("c'est combien votre bokit poulet ?"), deps);
     expect(requests).toHaveLength(1);
     const req = requests[0];
-    expect(req.client.demo).toEqual({ sansCarte: true });
-    expect(req.infoSheet.resumeCarte ?? "").toBe("");
+    expect(req.client.demo).toEqual({ sansCarte: true, ficheVide: true });
+    // Les valeurs par défaut du CRM ne vont jamais à l'IA : tout est inconnu.
+    expect(req.infoSheet).toEqual({ horaires: [] });
     expect(req.functions.map((f) => f.name)).not.toEqual(expect.arrayContaining(["lancer_commande"]));
     for (const hidden of ["lancer_commande", "proposer_commande", "suivre_commande", "annuler_commande"]) {
       expect(req.functions.map((f) => f.name)).not.toContain(hidden);
     }
     const system = buildPrompt(req).system.map((b) => b.text).join("\n");
     expect(system).toContain("tu ne connais AUCUN produit, AUCUN prix");
+    expect(system).toContain("ces infos ne sont pas encore renseignées");
+    for (const faux of ["Livraison : non", "Retrait sur place : oui", "Jarry", "Rue des Palmiers", "11:00", "11 h"]) expect(system).not.toContain(faux);
+    expect(system).toContain("## Horaires d'ouverture\nNon renseignés.");
     // La réponse de l'IA porte les deux boutons PFlow.
     const reply = sent.slice(from).find((m) => JSON.stringify(m).includes("la carte de Gwada food n'y est pas encore"))!;
     expect(reply.type).toBe("interactive");
@@ -310,6 +322,21 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
       sessionMinutes: 30,
     });
     expect(route).toMatchObject({ kind: "demo", clientId: "g" });
+  });
+
+  it("démo sans carte mais avec une fiche remplie (FAQ…) : l'IA garde la fiche ; avec une carte : rien ne change", async () => {
+    const repos = createLocalRepositories(createMemoryStore(), { now: () => new Date("2026-11-08T15:00:00Z") });
+    await createMasterTemplate(repos);
+    const r = await repos.clients.create({ nomResto: "Chez Test", orderSlug: "chez-test" });
+    const data = await repos.workspace.exportAll();
+    data.infoSheets[r.id] = { horaires: [], livraison: true, retrait: false, faq: "Q : Vous avez du végétarien ? R : Oui." };
+    expect(loadBotFromWorkspace(data, r.id, { demo: true })!.client.demo).toMatchObject({ sansCarte: true, ficheVide: false });
+    expect(isEmptyDemoSheet(data.infoSheets[r.id])).toBe(false);
+    data.infoSheets[r.id] = { horaires: [], livraison: false, retrait: true, resumeCarte: "• Bokit : 7 €" };
+    expect(loadBotFromWorkspace(data, r.id, { demo: true })!.client.demo).toMatchObject({ sansCarte: false, ficheVide: false });
+    expect(isEmptyDemoSheet({ horaires: [], livraison: false, retrait: true, zonesLivraison: "Jarry", adresse: "x" })).toBe(true);
+    // Hors démo : jamais de drapeau démo.
+    expect(loadBotFromWorkspace(data, r.id)).toBeNull();
   });
 });
 
