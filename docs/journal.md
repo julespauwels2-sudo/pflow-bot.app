@@ -864,3 +864,22 @@ Retour de test de Jules : le parcours guidé marche ; il faut qu'il avance sans 
 - **Secours conservés** : « Retour sur WhatsApp » en lien discret (principal si l'envoi échoue), et le rappel [✅ C'est fait].
 - **Tests** : PFlow Bots 399 (faux Meta, de bout en bout) ; CRM 15/15 en navigateur (dont le format exact de la commande, accepté des deux côtés).
 - **Variables Vercel vérifiées** (noms seulement) : `PFLOW_BOTS_SECRET` et `CRON_SECRET` présents en production. Facultatives : `PFLOW_DEMO_ETAPE3_SECONDES`, `PFLOW_BOTS_PUBLIC_URL`, `PFLOW_DEMO_ORIGINES`.
+
+
+## 9 novembre 2026 — alertes à Jules (PR PFlow Bots n° 6)
+
+- **État des fusions** :
+  - CRM n° 80 et n° 81 : fusionnées.
+  - CRM n° 82 : ouverte, construite sur `main` à jour.
+  - PFlow Bots n° 4 : fusionnée.
+  - PFlow Bots n° 5 : ouverte, construite sur la base après la n° 4.
+  - PFlow Bots n° 6 : ouverte, construite sur la branche de la n° 5.
+- **Avant** : alertes en message libre depuis le numéro du canal (PFlow Démo) vers 590690938108, refusées par Meta hors
+  fenêtre de 24 h (cas normal en production) ; personne n'était prévenu.
+- **Après** :
+  - message libre si la fenêtre est ouverte ;
+  - sinon modèle utilitaire approuvé `alerte_conversation` (à créer par Jules ; texte, catégorie, coût ≈ 0,025-0,03 € et étapes dans `docs/etape-c/alertes-jules.md`) ;
+  - sinon e-mail de secours (Resend, à créer).
+  - Voie et erreurs gardées avec le transfert, page État « Alertes au gérant ».
+- **SQL** (2 colonnes sur `bot_transferts`) fourni, **non appliqué** ; le code fonctionne sans.
+- **Tests** : 405. **Rien de créé chez Meta ni chez Resend.**
