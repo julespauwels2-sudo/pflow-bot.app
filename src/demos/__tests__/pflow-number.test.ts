@@ -385,6 +385,8 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
       const m = guideMessage({ kind: "text", text: t }, flows, etape === undefined ? undefined : { etape, at }, now);
       return m.kind === "start_flow" ? m.flowId : m.kind;
     };
+    // Mêmes textes et numéro que les boutons « Retour sur WhatsApp » du CRM (img/demo/mint-bun/carte.json).
+    expect(DEMO_PERMANENTE).toMatchObject({ numeroWhatsapp: "590691266853", retourCommande: "J'ai passé ma commande ✅", retourDashboard: "J'ai vu le dashboard 👀" });
     expect(g("salut")).toBe(PFLOW_FLOWS.accueil);
     expect(g("n'importe quoi")).toBe(PFLOW_FLOWS.accueil);
     for (const t of ["commander", "Bonjour je veux commander", "la carte", "Tester la démo", "démo"]) expect(g(t), t).toBe(PFLOW_FLOWS.etape1);
