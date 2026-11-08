@@ -42,6 +42,12 @@ const MAX_CHAINED_AI_INPUTS = 3;
  * Utilisée automatiquement si l'IA écrit un lien malgré les règles.
  */
 export const PROPOSE_ORDER_FUNCTION = "proposer_commande";
+
+/**
+ * Démo sans carte : fonctions retirées à l'IA (pas de page de commande, aucune vraie commande à suivre ou
+ * annuler). Elle répond elle-même que la carte n'est pas dans la démo, avec les boutons PFlow.
+ */
+export const DEMO_SANS_CARTE_HIDDEN_FUNCTIONS = ["lancer_commande", PROPOSE_ORDER_FUNCTION, "suivre_commande", "annuler_commande"];
 /**
  * Texte prérempli du bouton « Retour sur WhatsApp » de PFlow Order (« ✅ Commande n° 42 passée ») :
  * le bot ne relance ni l'accueil ni l'IA, la confirmation part déjà par l'événement de commande.
@@ -55,6 +61,9 @@ export const TEXTS = {
   chooseOption: "Merci de choisir une des options ci-dessous 👇",
   orderLink: "Pour commander, c'est par ici 👇",
   orderButton: "Commander",
+  /** Démo sans page de commande : à la place du bouton « Commander », avec les boutons PFlow. */
+  demoSansPage: (nom: string) =>
+    `📲 La page de commande de *${nom}* n'est pas encore prête dans cette démo. On peut la préparer avec votre vraie carte, ou vous pouvez tester notre resto de démo 👇`,
   /** Pas de commande annulable (bloc Commande « annulable »). */
   annulationDejaAnnulee: (n: string) => `Votre commande n° ${n} est déjà annulée.`,
   annulationTerminee: (n: string) => `Votre commande n° ${n} est déjà terminée : elle ne peut plus être annulée. Écrivez « équipe » si vous avez un souci avec elle.`,
@@ -425,9 +434,10 @@ class EngineRun {
   /** Fonctions de l'agent utilisables ici : autorisées par le bloc IA et dont le flux est actif. */
   private availableFunctions(aiNode?: FlowNodeOf<"ai">): AgentFunction[] {
     const allowed = aiNode?.data.functions;
+    const hidden = this.input.client.demo?.sansCarte ? DEMO_SANS_CARTE_HIDDEN_FUNCTIONS : [];
     const seen = new Set<string>();
     return (this.input.agent?.functions ?? []).filter((f) => {
-      if (seen.has(f.name) || (allowed && !allowed.includes(f.name)) || !this.flow(f.flowId)) return false;
+      if (seen.has(f.name) || (allowed && !allowed.includes(f.name)) || !this.flow(f.flowId) || hidden.includes(f.name)) return false;
       seen.add(f.name);
       return true;
     });
@@ -473,11 +483,13 @@ class EngineRun {
           maintenantLocal: `${local.date} ${local.hhmm}`,
           lienCommande: this.orderUrl() ?? "",
           prenomContact: firstName(this.contact.profileName) || undefined,
+          ...(client.demo ? { demo: { sansCarte: client.demo.sansCarte, ficheVide: client.demo.ficheVide } } : {}),
         },
         consigne: agent?.consigne.trim() ? this.render(agent.consigne) : "",
         model: agent?.model,
-        // L'IA ne voit jamais les tournées de livraison passées.
-        infoSheet: withUpcomingRounds(infoSheet, now, client.timezone),
+        // L'IA ne voit jamais les tournées de livraison passées. Démo sans carte ni fiche : rien du tout (les
+        // champs du CRM ne sont que ses valeurs par défaut, ex. « livraison : non », jamais à présenter comme vrais).
+        infoSheet: client.demo?.ficheVide ? { horaires: [] } : withUpcomingRounds(infoSheet, now, client.timezone),
         functions: functions.map((f) => ({ name: f.name, description: f.description })),
         instructions: aiNode?.data.instructions?.trim() ? this.render(aiNode.data.instructions) : undefined,
       });
@@ -536,7 +548,10 @@ class EngineRun {
           this.handoff("ia", undefined, text);
           return;
         }
-        this.send({ kind: "text", text: answer });
+        // Démo sans carte : la réponse porte les boutons « Obtenir ma démo » et « Tester la démo ».
+        const demoButtons = client.demo?.sansCarte ? client.demo.boutons : [];
+        if (demoButtons.length) this.send({ kind: "buttons", text: answer, buttons: demoButtons });
+        else this.send({ kind: "text", text: answer });
         // Pas de fonction proposer_commande : le bouton « Commander » remplace le lien retiré.
         const url = orderButtonFallback ? this.orderButtonUrl() : undefined;
         if (url) this.send({ kind: "link", text: TEXTS.orderLink, url, buttonLabel: TEXTS.orderButton });
@@ -713,6 +728,13 @@ class EngineRun {
       const url = link.orderLink ? this.orderButtonUrl() : this.render(link.url ?? "");
       if (url && /^https?:\/\//.test(url)) {
         this.send({ kind: "link", text: text || TEXTS.orderLink, url, buttonLabel: this.render(link.title) || TEXTS.orderButton });
+        return;
+      }
+      // Démo sans page de commande (pas de lien de démo dans le CRM) : on le dit, avec les boutons PFlow.
+      const demo = this.input.client.demo;
+      if (link.orderLink && demo?.boutons.length) {
+        if (text) this.send({ kind: "text", text });
+        this.send({ kind: "buttons", text: TEXTS.demoSansPage(this.input.client.nomResto), buttons: demo.boutons });
         return;
       }
       this.events.push({
