@@ -14,6 +14,23 @@ le **vrai produit**. Proposition validée par Jules, avec ses ajustements (parti
 | Textes des 3 messages | À relire | Ton plus simple (partie 3, version finale dans `src/demos/pflow-bot.ts`) |
 | Facturation | Réglée (carte de Jules) | Seul blocage restant pour l'actif : cette démo |
 
+## 0 ter. Parcours guidé (8 novembre 2026, retour de test de Jules) — REMPLACE le parcours de la partie 3
+
+L'accueil était trop chargé (3 messages, 3 boutons, dont 2 incompris). Il y a maintenant un seul chemin, avec les choix à la fin. C'est fait pour la prospection physique et pour les visiteurs venus d'Instagram.
+
+| Étape | Message | Bouton(s) | Passe à la suite avec |
+|---|---|---|---|
+| Accueil | « 👋 Bienvenue chez PFlow ! Testez en 1 minute ce que vos clients vivraient en commandant chez vous sur WhatsApp. On fait comme si vous étiez client de Mint Bun, notre resto de démo 🍔 » + « _Vous avez un code de démo ? Écrivez-le ici._ » | [Tester la démo] | le bouton |
+| 1/3 | « *Étape 1/3* : passez commande comme un client 👇 Quand c'est fait, touchez « Retour sur WhatsApp ». » | [Je commande] (lien) | « J'ai passé ma commande ✅ » (bouton de la confirmation, wa.me) |
+| 2/3 | « *Étape 2/3* : voici ce que le resto voit, en direct 👇 Votre commande vient d'y arriver. Ensuite, touchez « Retour sur WhatsApp ». » | [Voir le dashboard] (lien) | « J'ai vu le dashboard 👀 » (bouton du dashboard) |
+| 3/3 | « ✨ *Étape 3/3* : et pour votre resto ? On adapte tout à votre carte et à votre façon de travailler. » | [🙋 Je veux le mien] [Comment ça marche ?] | — |
+
+- **Je veux le mien** : transfert à Jules avec alerte. Il remplace l'ancien « Obtenir ma démo ».
+- **Comment ça marche ?** : 3 lignes (page de commande à votre nom + paiement, assistant WhatsApp, tableau de bord), puis [Je veux le mien].
+- **Filet de sécurité** : tout autre message rappelle l'étape en cours, avec son bouton et [✅ C'est fait]. Il n'y a jamais de relance automatique. Le parcours est oublié après 7 jours.
+- **Retour par wa.me** : non garanti depuis le navigateur intégré de WhatsApp (aucune documentation officielle). Le rappel avec [✅ C'est fait] sert de secours. À tester sur iPhone et Android.
+- PR : PFlow Bots n° 4, CRM n° 81.
+
 ## 0 bis. Mint Bun (8 novembre 2026) : le resto fictif devient « Mint Bun »
 
 Décision de Jules : « Mint Bun » (smash burgers & matcha), avec une vraie identité. Marque fictive : aucun « ® ».

@@ -812,3 +812,24 @@ Tests : PFlow Bots 372 (vitest) ; simulateur `accueil-ia.js`, `agent-ia.js`, `co
 3. **PR CRM n° 80** : zip reçu. Logo sans « ® » (webp carré + complet), 9 photos en webp (136 Ko pour tout le dossier,
    proportions gardées ; Mint Classic = grand visuel ; cookie-brookie coupée en deux), palette relevée sur le menu
    (`#0E2F1C`, `#DFE7B5`, `#FAF6E8`, `#FCE5DD`). Tests navigateur 11/11 (dont « aucune image cassée »).
+
+
+## 8 novembre 2026 (soir) — parcours guidé du numéro PFlow Démo
+
+Retour de test de Jules : la démo permanente marche, mais l'accueil est trop chargé. Nouveau parcours, un seul chemin :
+- **Accueil** : un message, un bouton [Tester la démo].
+- **Étape 1/3** : [Je commande].
+- **Retour « J'ai passé ma commande ✅ »**, puis **étape 2/3** : [Voir le dashboard].
+- **Retour « J'ai vu le dashboard 👀 »**, puis **étape 3/3** : [Je veux le mien] [Comment ça marche ?].
+
+Détail dans `docs/etape-c/demo-permanente.md` (partie 0 ter).
+- **PFlow Bots n° 4** : flux du bot PFlow de base réécrits, et `src/demos/parcours.ts`.
+  - L'étape est gardée avec le contact.
+  - Un mot-clé lance son étape. Tout autre message rappelle l'étape avec son bouton et [✅ C'est fait] ; « c'est fait » écrit fait avancer.
+  - Pas de relance automatique ; oubli après 7 jours. Plus de transfert à Jules sur un message libre.
+  - Même logique dans le simulateur. 388 tests.
+- **CRM n° 81** (part de la n° 80) : boutons « Retour sur WhatsApp ».
+  - wa.me/590691266853 avec le texte prérempli, sur la confirmation et sur le dashboard de démo.
+  - Correctif : faux « Votre offre PFlow a été mise à jour » sur le dashboard de démo (deux variables `OFFRE` du même nom).
+  - Tests navigateur : 11 sur 11.
+- **wa.me depuis le navigateur intégré de WhatsApp** : pas de documentation officielle ; des retours d'éditeurs signalent des liens qui restent sur la page web de wa.me (« Continuer vers la discussion ») ou qui perdent le texte prérempli. Le secours est codé (rappel + [✅ C'est fait]). À tester sur iPhone et Android.
