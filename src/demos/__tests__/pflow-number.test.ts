@@ -10,9 +10,10 @@ import { processWebhookPayload } from "@/channels/core/processor";
 import { demoDirectory } from "../lifecycle";
 import type { Canal } from "@/channels/core/types";
 import { createGraphClient } from "@/channels/whatsapp/graph";
-import { PFLOW_DEMO_BUTTONS, PFLOW_TEXTS } from "../pflow-bot";
+import { DEMO_PERMANENTE, PFLOW_DEMO_BUTTONS, PFLOW_TEXTS, pflowBaseBot } from "../pflow-bot";
 import { buildPrompt } from "@/ai/prompt";
-import { TEXTS, type AiRequest } from "@/engine";
+import { matchKeyword, TEXTS, type AiRequest } from "@/engine";
+import { routePflowMessage } from "../router";
 
 const PFLOW_PHONE = "1000000099";
 const PROSPECT = "590690111111";
@@ -226,7 +227,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     // « Tester la démo » : on quitte la démo pour le bot PFlow de base.
     from = sent.length;
     await processWebhookPayload(click(PFLOW_DEMO_BUTTONS[1].id, PFLOW_DEMO_BUTTONS[1].title), deps);
-    expect(texts(from).join()).toContain("PFlow Order");
+    expect(texts(from).join()).toContain("https://order.pflow.fr/demo/commande?r=pflow"); // la démo permanente
     expect((await store.listContacts("pflow"))[0].demo?.clientId).toBe("");
 
     // Retour dans la démo, puis « Obtenir ma démo » : transfert à Jules (bot PFlow), jamais l'IA de la démo.
@@ -236,6 +237,91 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(texts(from).join()).toContain(PFLOW_TEXTS.demoRequest.slice(0, 40));
     expect(requests).toHaveLength(1);
     expect(texts(from).join()).not.toContain(TEXTS.handoff.slice(0, 30));
+  });
+
+  it("démo permanente : « Tester la démo » → 3 messages (Je commande, Voir le dashboard, Et pour votre resto ?), « Je veux le mien » → Jules prévenu", async () => {
+    const repos = createLocalRepositories(createMemoryStore(), { now: () => new Date("2026-11-08T15:00:00Z") });
+    await createMasterTemplate(repos);
+    const gwada = await repos.clients.create({ nomResto: "Gwada food", orderSlug: "gwada" });
+    await repos.demos.start(gwada.id, { days: 5 });
+    const data = await repos.workspace.exportAll();
+    const canal: Canal = {
+      id: "pflow", role: "pflow", restaurantId: "", plateforme: "whatsapp", accountId: PFLOW_PHONE, triggerMode: "toujours",
+      coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "actif", testNumeros: [], telAlerte: "590690938108",
+    };
+    const store = createMemoryChannelStore([canal]);
+    let calls = 0;
+    const clock = { now: new Date("2026-11-08T15:00:00Z") };
+    const deps = {
+      store,
+      graph: createGraphClient({ token: "t", base, version: "v24.0" }),
+      loadBot: async (id: string, options?: { demo?: boolean }) => loadBotFromWorkspace(data, id, options),
+      loadDemos: async () => demoDirectory(data),
+      now: () => clock.now,
+      sleep: async () => {},
+      ai: async () => {
+        calls++;
+        throw new Error("le bot PFlow de base n'appelle jamais l'IA");
+      },
+    };
+    type Out = { type: string; to?: string; text?: { body: string }; interactive?: { type: string; body: { text: string }; action: { buttons?: { reply: { id: string; title: string } }[]; parameters?: { display_text: string; url: string } } } };
+    const out = (from: number) => (sent.slice(from) as Out[]).filter((m) => m.to !== "590690938108");
+    const titles = (m: Out) => (m.interactive?.action.buttons ?? []).map((b) => b.reply.title);
+
+    // Accueil : 3 boutons (WhatsApp en accepte 3 au plus).
+    let from = sent.length;
+    await processWebhookPayload(text("Bonjour"), deps);
+    const welcome = out(from);
+    expect(JSON.stringify(welcome)).toContain("Ici *PFlow*");
+    const choices = welcome.find((m) => titles(m).length)!;
+    expect(titles(choices)).toEqual(["😋 Tester la démo", "🍔 Découvrir PFlow", "🎁 Obtenir ma démo"]);
+    expect(choices.interactive!.body.text).toContain("Sinon, testez notre resto de démo");
+
+    // « Tester la démo » : les 3 messages, dans l'ordre, avec les liens ?r=pflow.
+    from = sent.length;
+    const tester = choices.interactive!.action.buttons![0].reply;
+    await processWebhookPayload(click(tester.id, tester.title), deps);
+    const demo = out(from);
+    expect(demo).toHaveLength(3);
+    expect(demo[0].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.tryOrder }, action: { parameters: { display_text: "Je commande", url: DEMO_PERMANENTE.commandeUrl } } });
+    expect(demo[1].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.tryDashboard }, action: { parameters: { display_text: "Voir le dashboard", url: DEMO_PERMANENTE.dashboardUrl } } });
+    expect(DEMO_PERMANENTE.commandeUrl).toBe("https://order.pflow.fr/demo/commande?r=pflow");
+    expect(DEMO_PERMANENTE.dashboardUrl).toBe("https://order.pflow.fr/demo?r=pflow");
+    expect(demo[2].interactive?.body.text).toBe(PFLOW_TEXTS.tryYours);
+    expect(titles(demo[2])).toEqual(["🙋 Je veux le mien", "🍔 Découvrir PFlow"]);
+    expect(PFLOW_TEXTS.tryOrder).toContain("*Mint Bun*");
+
+    // « Je veux le mien » : transfert, Jules prévenu (WhatsApp + boîte de réception), bot en pause pour ce contact.
+    from = sent.length;
+    const mien = demo[2].interactive!.action.buttons![0].reply;
+    await processWebhookPayload(click(mien.id, mien.title), deps);
+    expect(JSON.stringify(out(from))).toContain(PFLOW_TEXTS.wantMine.slice(0, 30));
+    expect(sent.slice(from).some((m) => (m as Out).to === "590690938108" && JSON.stringify(m).includes("attend une réponse"))).toBe(true);
+    expect((await store.listTransferts("pflow")).length).toBe(1);
+    from = sent.length;
+    await processWebhookPayload(text("Bonjour"), deps);
+    expect(out(from)).toHaveLength(0); // en pause : Jules reprend la main
+    expect(calls).toBe(0);
+  });
+
+  it("démo permanente : l'intention de commander la lance directement ; un nom de démo active reste prioritaire", () => {
+    const flows = pflowBaseBot().flows;
+    const flowOf = (msg: string) => matchKeyword(flows, msg)?.flow.id;
+    for (const msg of ["commander", "Bonjour je veux commander", "je veux commander", "la carte", "Tester la démo", "voir le menu"]) {
+      expect(flowOf(msg), msg).toBe("pflow-tester");
+    }
+    expect(flowOf("Bonjour")).toBe("pflow-accueil");
+    expect(flowOf("Obtenir ma démo")).toBe("pflow-demo");
+    expect(flowOf("je veux le mien")).toBe("pflow-mien");
+    // Les noms de démo passent avant le bot PFlow (router.ts), même avec « commander ».
+    const route = routePflowMessage({
+      message: { kind: "text", text: "Gwada food" },
+      demos: [{ id: "d", clientId: "g", keyword: "Gwada food", nomResto: "Gwada food", startedAt: "2026-11-07T00:00:00Z", expiresAt: "2026-11-12T00:00:00Z" } as never],
+      current: undefined,
+      now: new Date("2026-11-08T12:00:00Z"),
+      sessionMinutes: 30,
+    });
+    expect(route).toMatchObject({ kind: "demo", clientId: "g" });
   });
 
   it("démo sans carte mais avec une fiche remplie (FAQ…) : l'IA garde la fiche ; avec une carte : rien ne change", async () => {
@@ -251,6 +337,57 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(isEmptyDemoSheet({ horaires: [], livraison: false, retrait: true, zonesLivraison: "Jarry", adresse: "x" })).toBe(true);
     // Hors démo : jamais de drapeau démo.
     expect(loadBotFromWorkspace(data, r.id)).toBeNull();
+  });
+
+  it("démo sans carte ni fiche : « Infos pratiques » n'affiche pas les valeurs par défaut du CRM, mais « pas encore renseignées » + boutons", async () => {
+    const repos = createLocalRepositories(createMemoryStore(), { now: () => new Date("2026-11-08T15:00:00Z") });
+    await createMasterTemplate(repos);
+    const gwada = await repos.clients.create({ nomResto: "Gwada food", orderSlug: "gwada" });
+    await repos.demos.start(gwada.id, { days: 5 });
+    const data = await repos.workspace.exportAll();
+    const defauts = {
+      horaires: [{ jour: 1 as const, plages: [{ de: "11:00", a: "14:00" }] }],
+      livraison: false,
+      retrait: true,
+      zonesLivraison: "Jarry",
+      adresse: "Rue des Palmiers",
+      paiementEnLigne: { mode: "non" as const, aConfigurer: false },
+    };
+    data.infoSheets[gwada.id] = defauts;
+    const canal: Canal = {
+      id: "pflow", role: "pflow", restaurantId: "", plateforme: "whatsapp", accountId: PFLOW_PHONE, triggerMode: "toujours",
+      coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "test", testNumeros: [PROSPECT],
+    };
+    const store = createMemoryChannelStore([canal]);
+    const deps = {
+      store,
+      graph: createGraphClient({ token: "t", base, version: "v24.0" }),
+      loadBot: async (id: string, options?: { demo?: boolean }) => loadBotFromWorkspace(data, id, options),
+      loadDemos: async () => demoDirectory(data),
+      now: () => new Date("2026-11-08T15:00:00Z"),
+      sleep: async () => {},
+    };
+    const buttonsOf = (m: Record<string, unknown>) =>
+      ((m.interactive as { action?: { buttons?: { reply: { id: string; title: string } }[] } })?.action?.buttons ?? []).map((b) => b.reply);
+    await processWebhookPayload(text("gwada food"), deps);
+    for (const ask of ["horaires", "livraison", "paiement"]) {
+      const from = sent.length;
+      await processWebhookPayload(text(ask), deps);
+      const msgs = texts(from).join();
+      expect(msgs, ask).toContain(TEXTS.demoInfosVides);
+      for (const faux of ["Retrait", "retrait", "Jarry", "Rue des Palmiers", "11 h", "11:00", "sur place", "Livraison : non", "Que souhaitez-vous savoir"]) {
+        expect(msgs, `${ask} : ${faux}`).not.toContain(faux);
+      }
+      const notice = sent.slice(from).find((m) => JSON.stringify(m).includes(TEXTS.demoInfosVides))!;
+      expect(buttonsOf(notice).map((b) => b.title)).toEqual(["🎁 Obtenir ma démo", "😋 Tester la démo"]);
+    }
+
+    // Fiche remplie (FAQ) : « Infos pratiques » s'affiche normalement.
+    data.infoSheets[gwada.id] = { ...defauts, faq: "Q : Végétarien ? R : Oui." };
+    const from = sent.length;
+    await processWebhookPayload(text("horaires"), deps);
+    expect(texts(from).join()).toContain("Que souhaitez-vous savoir");
+    expect(texts(from).join()).not.toContain(TEXTS.demoInfosVides);
   });
 });
 

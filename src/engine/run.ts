@@ -62,6 +62,8 @@ export const TEXTS = {
   orderLink: "Pour commander, c'est par ici 👇",
   orderButton: "Commander",
   /** Démo sans page de commande : à la place du bouton « Commander », avec les boutons PFlow. */
+  /** Démo sans carte ni fiche remplie : à la place des infos du resto (horaires, livraison, paiement…). */
+  demoInfosVides: "C'est une démo : ces infos ne sont pas encore renseignées.",
   demoSansPage: (nom: string) =>
     `📲 La page de commande de *${nom}* n'est pas encore prête dans cette démo. On peut la préparer avec votre vraie carte, ou vous pouvez tester notre resto de démo 👇`,
   /** Pas de commande annulable (bloc Commande « annulable »). */
@@ -78,6 +80,18 @@ export const TEXTS = {
     oui_non: "Répondez simplement par oui ou par non 🙂",
   } satisfies Record<QuestionValidation, string>,
 };
+
+/** Noms des variables tirées de la fiche du resto ({{horaires}}, {{infos_livraison}}, {{modes_paiement}}…). */
+const INFO_SHEET_VARIABLES = Object.keys(infoSheetVariables({ horaires: [] }, new Date(0), "UTC"));
+
+/** Le flux affiche des infos de la fiche du resto (un de ses messages utilise une de ces variables). */
+export function flowShowsInfoSheet(flow: Flow): boolean {
+  return flow.nodes.some((n) => {
+    const texts =
+      n.type === "message" ? n.data.bubbles.map((b) => b.text) : n.type === "end" ? [n.data.text ?? ""] : n.type === "question" ? [n.data.text] : [];
+    return texts.some((t) => INFO_SHEET_VARIABLES.some((v) => t.includes(`{{${v}}}`)));
+  });
+}
 
 type WaitingNode = FlowNodeOf<"message"> | FlowNodeOf<"list"> | FlowNodeOf<"question"> | FlowNodeOf<"ai">;
 
@@ -594,6 +608,15 @@ class EngineRun {
     this.session = this.newSession(flow.id, trigger.id, vars);
     this.events.push({ type: "flow_started", flowId: flow.id, via });
     this.events.push({ type: "step", flowId: flow.id, nodeId: trigger.id, nodeType: "trigger" });
+    // Démo sans carte ni fiche remplie : un flux qui affiche les infos du resto (« Infos pratiques ») montrerait
+    // les valeurs par défaut du CRM (livraison non, retrait oui…). À la place : « ces infos ne sont pas encore
+    // renseignées », avec les boutons PFlow.
+    const demo = this.input.client.demo;
+    if (demo?.ficheVide && demo.boutons.length && flowShowsInfoSheet(flow)) {
+      this.send({ kind: "buttons", text: TEXTS.demoInfosVides, buttons: demo.boutons });
+      this.endFlow();
+      return;
+    }
     this.runFrom(this.nextNodeId(flow, trigger.id, "next"));
   }
 
