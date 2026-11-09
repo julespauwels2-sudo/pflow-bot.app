@@ -6,6 +6,7 @@ import { canSendFreeform, type ContactState, type OutgoingMessage } from "@/engi
 import type { WorkspaceData } from "@/data/types";
 import type { ChannelSender, ChannelStore, Plateforme, StoredMessage } from "./types";
 import { sendOptions } from "./send-options";
+import { formatDuration } from "../voice/duration";
 
 export interface InboxConversation {
   contactId: string;
@@ -34,6 +35,16 @@ export interface InboxCanal {
 /** Texte lisible d'un message stocké (entrant, écho, ou message du bot). */
 export function messageText(m: Pick<StoredMessage, "type" | "contenu">): string {
   const c = (m.contenu ?? {}) as Record<string, unknown>;
+  // Message vocal transcrit : le vocal (avec sa durée) et sa transcription. L'audio lui-même n'est pas gardé.
+  if (m.type === "audio" && typeof c.transcription === "string") {
+    const duree = typeof c.duree === "number" ? ` (${formatDuration(c.duree)})` : "";
+    return `🎤 Message vocal${duree}\n« ${c.transcription} »`;
+  }
+  if (m.type === "audio" && typeof c.statut === "string" && c.statut !== "transcrit") {
+    const duree = typeof c.duree === "number" ? ` (${formatDuration(c.duree)})` : "";
+    const raison = { trop_long: "trop long", plafond: "plafond du jour atteint", echec: "non compris" }[c.statut] ?? c.statut;
+    return `🎤 Message vocal${duree} : non transcrit (${raison}), le bot a demandé d'écrire`;
+  }
   if (typeof c.texte === "string" && c.texte) return c.texte;
   const out = c as Partial<OutgoingMessage> & { kind?: string };
   if (out.kind === "text" && typeof out.text === "string") return out.text;

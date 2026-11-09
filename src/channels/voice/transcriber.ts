@@ -4,8 +4,9 @@
  * « je ne peux lire que les messages écrits »).
  *
  * Réglages (variables d'environnement, jamais dans le code) :
- * - TRANSCRIPTION_PROVIDER : openai | mistral | deepgram (aucun choisi par défaut : voir docs/journal.md) ;
- * - TRANSCRIPTION_API_KEY : clé du service ;
+ * - TRANSCRIPTION_API_KEY : clé du service (la seule variable obligatoire) ;
+ * - TRANSCRIPTION_PROVIDER : groq (par défaut, retenu le 9 novembre 2026 : docs/etape-c/vocaux.md) | openai |
+ *   mistral | deepgram ;
  * - TRANSCRIPTION_MODEL : facultatif (sinon le modèle indiqué ci-dessous) ;
  * - TRANSCRIPTION_BASE : facultatif, pour un faux serveur de test.
  * Formats d'appel à revérifier dans la documentation de chaque service au moment du choix.
@@ -17,7 +18,7 @@ export interface Transcriber {
   transcribe(audio: Uint8Array, mimeType: string): Promise<string>;
 }
 
-export type TranscriptionProvider = "openai" | "mistral" | "deepgram";
+export type TranscriptionProvider = "groq" | "openai" | "mistral" | "deepgram";
 
 export interface TranscriberConfig {
   provider: TranscriptionProvider;
@@ -31,10 +32,18 @@ export interface TranscriberConfig {
 export class TranscriptionError extends Error {}
 
 const DEFAULTS: Record<TranscriptionProvider, { base: string; model: string }> = {
+  // Groq : API au format OpenAI, sous /openai/v1/audio/transcriptions.
+  groq: { base: "https://api.groq.com/openai", model: "whisper-large-v3-turbo" },
   openai: { base: "https://api.openai.com", model: "gpt-4o-mini-transcribe" },
   mistral: { base: "https://api.mistral.ai", model: "voxtral-mini-latest" },
   deepgram: { base: "https://api.deepgram.com", model: "nova-3" },
 };
+
+/**
+ * Indication de vocabulaire (modèles Whisper : Groq, OpenAI) : contexte guadeloupéen, mots de la commande. Elle aide
+ * pour les noms de lieux et les phrases mêlées de créole ; elle ne traduit pas le créole.
+ */
+export const VOCABULARY_HINT = "Guadeloupe, Baie-Mahault, Pointe-à-Pitre, Le Gosier, Jarry. Commande, livraison, retrait, menu, burger, bokit, accras, colombo. Créole guadeloupéen possible.";
 
 /** Plafond d'un message vocal téléchargé (≈ 10 minutes en Opus). */
 export const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
@@ -79,11 +88,15 @@ export function createTranscriber(config: TranscriberConfig): Transcriber {
         const results = (json.results ?? {}) as { channels?: { alternatives?: { transcript?: string }[] }[] };
         return (results.channels?.[0]?.alternatives?.[0]?.transcript ?? "").trim();
       }
-      // OpenAI et Mistral : même format (formulaire avec le fichier).
+      // Groq, OpenAI et Mistral : même format (formulaire avec le fichier).
       const form = new FormData();
       form.append("file", new Blob([audio as unknown as BlobPart], { type: mimeType || "audio/ogg" }), `vocal.${extension(mimeType)}`);
       form.append("model", model);
       form.append("language", "fr");
+      if (config.provider === "groq" || config.provider === "openai") {
+        form.append("prompt", VOCABULARY_HINT);
+        form.append("temperature", "0");
+      }
       const json = await call(`${base}/v1/audio/transcriptions`, { method: "POST", headers: { authorization: `Bearer ${config.apiKey}` }, body: form });
       return (typeof json.text === "string" ? json.text : "").trim();
     },
@@ -91,13 +104,13 @@ export function createTranscriber(config: TranscriberConfig): Transcriber {
 }
 
 const env = (name: string) => process.env[name]?.trim() || "";
-const PROVIDERS: TranscriptionProvider[] = ["openai", "mistral", "deepgram"];
+const PROVIDERS: TranscriptionProvider[] = ["groq", "openai", "mistral", "deepgram"];
 
-/** État des réglages, pour la page « État du système » (jamais la clé elle-même). */
+/** État des réglages, pour la page « État du système » (jamais la clé elle-même). Groq par défaut. */
 export function transcriptionStatus(): { active: boolean; provider?: TranscriptionProvider; missing: string[] } {
-  const provider = env("TRANSCRIPTION_PROVIDER") as TranscriptionProvider;
+  const provider = (env("TRANSCRIPTION_PROVIDER").toLowerCase() || "groq") as TranscriptionProvider;
   const missing = [
-    ...(PROVIDERS.includes(provider) ? [] : ["TRANSCRIPTION_PROVIDER (openai, mistral ou deepgram)"]),
+    ...(PROVIDERS.includes(provider) ? [] : ["TRANSCRIPTION_PROVIDER (groq, openai, mistral ou deepgram)"]),
     ...(env("TRANSCRIPTION_API_KEY") ? [] : ["TRANSCRIPTION_API_KEY"]),
   ];
   return { active: missing.length === 0, ...(PROVIDERS.includes(provider) ? { provider } : {}), missing };
@@ -113,4 +126,25 @@ export function transcriberFromEnv(): Transcriber | null {
     model: env("TRANSCRIPTION_MODEL") || undefined,
     base: env("TRANSCRIPTION_BASE") || undefined,
   });
+}
+
+/** Limites des vocaux (variables facultatives). */
+export interface VoiceLimits {
+  /** Durée maximale transcrite ; au-delà, le bot demande d'écrire. */
+  maxSeconds: number;
+  /** Vocaux transcrits au plus par contact sur 24 h glissantes ; au-delà, le bot demande d'écrire. */
+  maxPerDay: number;
+}
+
+export const DEFAULT_VOICE_LIMITS: VoiceLimits = { maxSeconds: 120, maxPerDay: 10 };
+
+export function voiceLimitsFromEnv(): VoiceLimits {
+  const num = (name: string, fallback: number, min: number, max: number) => {
+    const value = Number(env(name));
+    return Number.isFinite(value) && value >= min && value <= max ? Math.round(value) : fallback;
+  };
+  return {
+    maxSeconds: num("TRANSCRIPTION_MAX_SECONDES", DEFAULT_VOICE_LIMITS.maxSeconds, 10, 600),
+    maxPerDay: num("TRANSCRIPTION_MAX_PAR_JOUR", DEFAULT_VOICE_LIMITS.maxPerDay, 1, 100),
+  };
 }

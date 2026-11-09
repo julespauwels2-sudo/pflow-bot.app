@@ -272,6 +272,15 @@ class EngineRun {
 
     if (message.kind === "unsupported") {
       const waiting = this.currentWaitingNode();
+      // Vocal non transcrit (trop long, plafond du jour, non compris) : la raison précise, puis la question en cours.
+      if (message.reply) {
+        this.send({ kind: "text", text: message.reply });
+        if (waiting) {
+          this.sendPrompt(waiting);
+          this.refreshExpiry();
+        }
+        return;
+      }
       if (waiting) {
         this.send({ kind: "text", text: TEXTS.unsupported });
         this.sendPrompt(waiting);

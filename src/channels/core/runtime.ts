@@ -17,7 +17,7 @@ import { createMasterTemplate } from "@/data/template-seed";
 import type { WorkspaceData } from "@/data/types";
 import { createInstagramSender } from "../instagram/send";
 import { createGraphClient } from "../whatsapp/graph";
-import { transcriberFromEnv } from "../voice/transcriber";
+import { transcriberFromEnv, voiceLimitsFromEnv } from "../voice/transcriber";
 import { orderBridgeFromEnv } from "../pflow-order/pont";
 import { demoDirectory } from "@/demos/lifecycle";
 import { loadBotFromWorkspace } from "./bot-loader";
@@ -184,6 +184,7 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
         demoBotsUrl: env("PFLOW_BOTS_PUBLIC_URL") || undefined,
         alerts: alertConfigFromEnv(env),
         transcriber,
+        voiceLimits: voiceLimitsFromEnv(),
         orderBridge: storeMode() === "memory" ? undefined : orderBridgeFromEnv(),
       };
     },
