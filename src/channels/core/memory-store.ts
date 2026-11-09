@@ -1,6 +1,6 @@
 /** Stockage du canal en mémoire : tests et démo locale (jamais en production). */
 import type { Session } from "@/engine";
-import type { Canal, ChannelContact, ChannelStore, StoredMessage, Transfert } from "./types";
+import type { Canal, ChannelContact, ChannelStore, PushSubscriptionRecord, StoredMessage, Transfert } from "./types";
 
 export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: () => Date; newId?: () => string } = {}): ChannelStore & {
   addCanal(canal: Canal): void;
@@ -14,6 +14,7 @@ export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: 
   const sessions = new Map<string, { session: Session; version: number }>();
   const messages: StoredMessage[] = [];
   const transferts: Transfert[] = [];
+  const pushSubscriptions = new Map<string, PushSubscriptionRecord>();
   const events = new Map<string, { charge: unknown; error?: string; done: boolean; at: string; source: string; key: string }>();
   const clone = <T>(v: T): T => structuredClone(v);
 
@@ -135,6 +136,16 @@ export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: 
     },
     async resolveTransferts(contactId) {
       for (const t of transferts) if (t.contactId === contactId && !t.resoluLe) t.resoluLe = now();
+    },
+    async savePushSubscription(subscription) {
+      const previous = pushSubscriptions.get(subscription.endpoint);
+      pushSubscriptions.set(subscription.endpoint, { creeLe: previous?.creeLe ?? now(), ...clone(subscription) });
+    },
+    async listPushSubscriptions(userId) {
+      return clone([...pushSubscriptions.values()].filter((s) => !userId || s.userId === userId));
+    },
+    async deletePushSubscription(endpoint) {
+      pushSubscriptions.delete(endpoint);
     },
   };
 }

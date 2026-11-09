@@ -9,6 +9,7 @@ import { createMemoryChannelStore } from "@/channels/core/memory-store";
 import { processWebhookPayload } from "@/channels/core/processor";
 import { demoDirectory } from "../lifecycle";
 import type { Canal } from "@/channels/core/types";
+import type { AlertConfig } from "@/channels/core/alerts";
 import { createGraphClient } from "@/channels/whatsapp/graph";
 import { DEMO_PERMANENTE, PFLOW_DEMO_BUTTONS, PFLOW_FLOWS, PFLOW_TEXTS, pflowBaseBot } from "../pflow-bot";
 import { canAlertQuestion, guide, guideMessage, looksLikeQuestion } from "../parcours";
@@ -48,10 +49,25 @@ const text = (t: string) => notif({ type: "text", text: { body: t } });
 const click = (id: string, title: string) => notif({ type: "interactive", interactive: { type: "button_reply", button_reply: { id, title } } });
 const texts = (from: number) => sent.slice(from).map((m) => JSON.stringify(m));
 
-/** Jules (numéro d'alerte 590690938108) a écrit au numéro PFlow il y a peu : sa fenêtre de 24 h est ouverte. */
-async function julesWroteRecently(store: ReturnType<typeof createMemoryChannelStore>) {
-  const jules = await store.getOrCreateContact("pflow", "590690938108", "Jules");
-  await store.saveContact({ ...jules, state: { ...jules.state, lastInboundAt: "2026-11-08T14:00:00Z" } });
+/**
+ * Jules a activé les notifications sur son iPhone : les alertes partent en push (seule voie). Les notifications sont
+ * interceptées en clair (le chiffrement est testé dans push.test.ts) ; rien ne part vers son numéro WhatsApp.
+ */
+async function julesSubscribed(store: ReturnType<typeof createMemoryChannelStore>) {
+  await store.savePushSubscription({ userId: "jules", endpoint: "https://web.push.apple.com/iphone-de-jules", p256dh: "cle", auth: "auth", appareil: "iPhone (Safari)" });
+  const notifications: { title: string; body: string; url: string }[] = [];
+  const alerts: AlertConfig = {
+    push: {
+      publicKey: "pub",
+      privateKey: "priv",
+      subject: "https://pflow-bot-app.vercel.app",
+      send: async (_subscription, payload) => {
+        notifications.push(JSON.parse(payload));
+        return { statusCode: 201 };
+      },
+    },
+  };
+  return { alerts, notifications };
 }
 
 describe("numéro PFlow partagé par les démos (faux Meta)", () => {
@@ -257,7 +273,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
       coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "actif", testNumeros: [], telAlerte: "590690938108",
     };
     const store = createMemoryChannelStore([canal]);
-    await julesWroteRecently(store); // Jules (numéro d'alerte) a écrit au numéro PFlow : fenêtre de 24 h ouverte, alerte en message libre
+    const jules = await julesSubscribed(store);
     let calls = 0;
     const clock = { now: new Date("2026-11-08T15:00:00Z") };
     const deps = {
@@ -267,6 +283,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
       loadDemos: async () => demoDirectory(data),
       now: () => clock.now,
       sleep: async () => {},
+      alerts: jules.alerts,
       ai: async () => {
         calls++;
         throw new Error("le bot PFlow de base n'appelle jamais l'IA");
@@ -326,19 +343,20 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(PFLOW_TEXTS.howItWorks.split("\n")).toHaveLength(3);
     expect(titles(msgs[0])).toEqual(["🙋 Je veux le mien"]);
 
-    // « Je veux le mien » : transfert, Jules prévenu (WhatsApp + boîte de réception), puis le bot se tait.
+    // « Je veux le mien » : transfert, Jules prévenu (notification push + boîte de réception), puis le bot se tait.
     let from = sent.length;
     msgs = await press(msgs[0], 0);
     expect(JSON.stringify(msgs)).toContain(PFLOW_TEXTS.wantMine.slice(0, 30));
-    expect(sent.slice(from).some((m) => (m as Out).to === "590690938108" && JSON.stringify(m).includes("attend une réponse"))).toBe(true);
+    expect(jules.notifications.at(-1)).toMatchObject({ title: "🔔 Je veux le mien", url: expect.stringMatching(/^\/inbox\?contact=/) });
     expect((await store.listTransferts("pflow")).length).toBe(1);
     from = sent.length;
     await processWebhookPayload(text("Bonjour"), deps);
     expect(out(from)).toHaveLength(0);
     expect(calls).toBe(0);
 
-    // Aucun message n'est jamais envoyé sans que le prospect écrive : pas de relance.
+    // Aucun message n'est jamais envoyé sans que le prospect écrive : pas de relance. Rien vers le numéro de Jules.
     expect(sent.filter((m) => (m as Out).to !== "590690938108").length).toBeGreaterThan(0);
+    expect(sent.some((m) => (m as Out).to === "590690938108")).toBe(false);
   });
 
   it("parcours guidé : retour « J'ai vu le dashboard 👀 », « c'est fait » écrit, oubli après 7 jours, nom de démo prioritaire", async () => {
@@ -499,7 +517,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
         coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "actif", testNumeros: [], telAlerte: ALERTE,
       };
       const store = createMemoryChannelStore([canal]);
-      await julesWroteRecently(store); // Jules (numéro d'alerte) a écrit au numéro PFlow : fenêtre de 24 h ouverte, alerte en message libre
+      const jules = await julesSubscribed(store);
       const clock = { now: new Date("2026-11-08T15:00:00Z") };
       const deps = {
         store,
@@ -508,16 +526,27 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
         loadDemos: async () => demoDirectory(data),
         now: () => clock.now,
         sleep: async () => {},
+        alerts: jules.alerts,
       };
-      const out = (from: number) => (sent.slice(from) as Out[]).filter((m) => m.to !== ALERTE);
-      const alerts = (from: number) => (sent.slice(from) as Out[]).filter((m) => m.to === ALERTE).map((m) => m.text?.body ?? "");
+      const out = (from: number) => {
+        // Jamais de message WhatsApp vers le numéro de Jules : l'alerte part en notification push.
+        expect((sent.slice(from) as Out[]).some((m) => m.to === ALERTE)).toBe(false);
+        return sent.slice(from) as Out[];
+      };
+      let seen = 0;
+      const alerts = () => {
+        const fresh = jules.notifications.slice(seen).map((n) => `${n.title} | ${n.body}`);
+        seen = jules.notifications.length;
+        return fresh;
+      };
       const titles = (m: Out) => (m.interactive?.action.buttons ?? []).map((b) => b.reply.title);
-      const say = async (t: string) => { const from = sent.length; await processWebhookPayload(text(t), deps); return { msgs: out(from), alerts: alerts(from) }; };
+      const say = async (t: string) => { const from = sent.length; alerts(); await processWebhookPayload(text(t), deps); return { msgs: out(from), alerts: alerts() }; };
       const press = async (m: Out, title: string) => {
         const b = m.interactive!.action.buttons!.find((x) => x.reply.title === title)!.reply;
         const from = sent.length;
+        alerts();
         await processWebhookPayload(click(b.id, b.title), deps);
-        return { msgs: out(from), alerts: alerts(from) };
+        return { msgs: out(from), alerts: alerts() };
       };
       const etape = async () => (await store.listContacts("pflow"))[0].demo?.parcours;
       const paused = async () => Boolean((await store.listContacts("pflow"))[0].state.pause);
@@ -532,7 +561,8 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
       expect(t.titles(r.msgs[1])).toEqual(["✅ C'est fait", "💬 Parler à Jules"]);
       r = await t.press(r.msgs[1], "💬 Parler à Jules");
       expect(JSON.stringify(r.msgs)).toContain(PFLOW_TEXTS.talkToJules);
-      expect(r.alerts.some((a) => a.includes("attend une réponse"))).toBe(true);
+      expect(r.alerts).toHaveLength(1);
+      expect(r.alerts[0]).toContain("🔔 Parler à Jules");
       expect(await t.paused()).toBe(true); // comme « Je veux le mien » : Jules reprend la main
       const transferts = await t.store.listTransferts("pflow");
       expect(transferts).toHaveLength(1);
@@ -569,7 +599,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
       expect(r.msgs[1].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.remind1 }, action: { parameters: { url: DEMO_PERMANENTE.commandeUrl } } });
       expect(t.titles(r.msgs[2])).toEqual(["✅ C'est fait", "💬 Parler à Jules"]);
       expect(r.alerts).toHaveLength(1);
-      expect(r.alerts[0]).toContain("Motif : Question pendant la démo");
+      expect(r.alerts[0]).toContain("🔔 Question pendant la démo");
       expect(r.alerts[0]).toContain("« C'est payant ? »");
       expect(await t.paused()).toBe(false);
       const transferts = await t.store.listTransferts("pflow");

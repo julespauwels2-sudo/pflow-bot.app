@@ -5,7 +5,7 @@
  */
 import type { OutgoingMessage } from "@/engine";
 import { allowedMediaUrl, fetchMedia, MediaError } from "../core/media";
-import type { MediaRef, SendOptions, TemplateMessage } from "../core/types";
+import type { MediaRef, SendOptions } from "../core/types";
 
 export interface GraphConfig {
   token: string;
@@ -116,22 +116,6 @@ export function createGraphClient(config: GraphConfig) {
       const json = await post(accountId, options.messagingAccountId ? { ...payload, messaging_account_id: options.messagingAccountId } : payload);
       const first = (json.messages as { id?: string }[] | undefined)?.[0];
       return first?.id;
-    },
-    /** Modèle approuvé (hors fenêtre de 24 h) : corps à paramètres texte, dans l'ordre. */
-    async sendTemplate(accountId: string, to: string, template: TemplateMessage, options: SendOptions = {}): Promise<string | undefined> {
-      const payload: Record<string, unknown> = {
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to,
-        type: "template",
-        template: {
-          name: template.name,
-          language: { code: template.language },
-          ...(template.bodyParams.length ? { components: [{ type: "body", parameters: template.bodyParams.map((text) => ({ type: "text", text })) }] } : {}),
-        },
-      };
-      const json = await post(accountId, options.messagingAccountId ? { ...payload, messaging_account_id: options.messagingAccountId } : payload);
-      return (json.messages as { id?: string }[] | undefined)?.[0]?.id;
     },
     /** Accusé de lecture du message reçu, avec l'indicateur « en train d'écrire ». */
     async markRead(accountId: string, wamid: string, typing: boolean): Promise<void> {

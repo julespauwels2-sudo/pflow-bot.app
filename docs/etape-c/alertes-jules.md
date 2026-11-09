@@ -1,121 +1,89 @@
-# Alertes à Jules (et aux gérants) : fiables même fenêtre de 24 h fermée
+# Alertes à Jules (et aux gérants) : notification push uniquement
 
-Préparé le 9 novembre 2026. **Rien n'a été créé chez Meta** : à faire par Jules, après accord.
+Mis à jour le 9 novembre 2026 : **changement de stratégie décidé par Jules** (pas de frais, pas d'e-mail).
+Détail technique des notifications : `docs/etape-c/notifications-push.md`.
 
-## 1. Aujourd'hui (avant la PR)
+## 1. La règle
 
-- Les alertes (« Je veux le mien », « Parler à Jules », question en plein parcours, transfert IA) partent **du
-  numéro du canal** (pour la démo : **PFlow Démo, +590 691 26 68 53**) vers `bot_canaux.tel_alerte` (**590690938108**).
-- C'est un **message libre** (texte). Meta ne l'accepte que si le destinataire a écrit à ce numéro dans les
-  **24 dernières heures**. Sinon : erreur 131047 (« Re-engagement message »). Le transfert est quand même noté
-  (`gerant_prevenu = false`), mais **personne n'est prévenu**.
-- En test, ça marche : Jules écrit lui-même au bot. **En production, la fenêtre sera presque toujours fermée.**
+Quand un client attend une réponse (« Je veux le mien », « Parler à Jules », question en plein parcours, transfert de
+l'assistant), **la seule alerte est une notification push** sur les appareils abonnés : iPhone avec l'app installée,
+ordinateur. Toucher la notification ouvre la conversation.
 
-## 2. Après la PR
+**Retiré** (code supprimé, plus aucun envoi) :
+- **message WhatsApp** de PFlow Démo (ou du numéro d'un resto) vers le numéro d'alerte (`tel_alerte`) : ni message
+  libre, ni modèle Meta ;
+- **modèle de message Meta** `alerte_conversation` : à ne pas créer. L'envoi de modèles (`sendTemplate`) a été retiré
+  du code ;
+- **e-mail de secours** (Resend) : pas de compte à créer, plus aucun appel à Resend.
 
-Dans l'ordre (`src/channels/core/alerts.ts`) :
+La colonne `tel_alerte` de `bot_canaux` reste en base (rien n'est supprimé), mais le code ne l'utilise plus.
 
-1. **Message libre**, seulement si la fenêtre de 24 h du destinataire est ouverte. On le sait parce qu'il a écrit au
-   canal récemment, avec une marge de 10 min.
-2. Sinon, ou en cas d'échec : **modèle approuvé** par Meta, de catégorie « Utilitaire » (partie 3).
-3. Si WhatsApp échoue : **e-mail de secours** à `ALERTE_EMAIL` (partie 4).
-4. La voie utilisée et les erreurs sont gardées **avec le transfert**. Elles sont affichées sur la **page État**,
-   encadré « Alertes au gérant » : dernières alertes, voie, erreurs, et un bandeau rouge s'il y a des alertes non
-   reçues.
+## 2. Si personne n'est prévenu
 
-## 3. Le modèle WhatsApp (à créer par Jules, après accord)
+Cas possibles : aucun appareil abonné, notifications désactivées, push en échec, clés VAPID absentes. L'alerte n'est
+pas perdue :
+- **boîte de réception** : la conversation reste marquée **« 🔔 Attend l'équipe »** tant que le transfert est ouvert ;
+- **page État** : **bandeau rouge** en haut de la page, « 🚨 Alertes : personne n'est prévenu ». Il s'affiche dans
+  trois cas :
+  - des alertes récentes non reçues (combien, et combien de clients attendent peut-être encore) ;
+  - aucun appareil abonné ;
+  - clés VAPID absentes.
+- encadré **« Alertes au gérant »** : chaque alerte avec sa voie (**notification push** ou **NON REÇUE**), la raison
+  (aucun appareil abonné, push en échec, push non configurée) et « à traiter dans la boîte de réception ».
 
-| Champ | Valeur |
-|---|---|
-| Nom | `alerte_conversation` |
-| Catégorie | **Utilitaire** (*Utility*) |
-| Langue | Français (`fr`) |
-| Compte | le compte WhatsApp de PFlow Démo (et plus tard celui de chaque resto) |
+Les anciennes alertes (avant ce changement) gardent leur voie d'origine dans la liste : « WhatsApp (ancienne voie) »,
+etc.
 
-**Corps** (4 variables) :
+## 3. Ce que le code enregistre
 
-```
-🔔 PFlow Bots : {{1}} attend une réponse sur {{2}}.
-Motif : {{3}}
-Dernier message : « {{4}} »
-Répondez depuis la boîte de réception PFlow Bots.
-```
+`src/channels/core/alerts.ts` → `sendAlert` : envoi push, puis enregistrement avec le transfert :
+- `gerant_prevenu` : vrai seulement si au moins un appareil a reçu la notification ;
+- `alerte_push` : `envoyee`, `echec`, `aucun_abonnement` ou `non_configure` ;
+- `alerte_erreur` : la raison, en cas d'échec.
 
-**Bouton** (facultatif, recommandé) : « Visiter le site web », texte **Ouvrir la boîte de réception**, URL fixe
-`https://pflow-bot-app.vercel.app/inbox`.
+`alerte_voie` n'est plus écrite : elle garde l'historique des anciennes alertes. La voie affichée se déduit de
+`alerte_push` (push ou aucune).
 
-**Exemples à donner à Meta** (obligatoires) :
-- `{{1}}` = `Marc (+590690111111)`
-- `{{2}}` = `+590 691 26 68 53 (PFlow Démo)`
-- `{{3}}` = `Je veux le mien`
-- `{{4}}` = `C'est payant ?`
+## 4. SQL
 
-Règles respectées par le code : chaque variable tient sur **une ligne** (pas de retour à la ligne ni de
-tabulation), est bornée en longueur (80 / 60 / 60 / 200 caractères), et n'est jamais vide (« — »). Le modèle ne
-commence ni ne finit par une variable.
+**Aucune contrainte à changer.** Les colonnes existantes suffisent :
+- `alerte_voie`, `alerte_erreur` : appliquées le 9 novembre 2026 ;
+- `alerte_push` et la table `bot_push_abonnements` : appliquées le 9 novembre 2026, voir
+  `docs/etape-c/notifications-push.md`.
 
-**Étapes chez Meta** (business.facebook.com → WhatsApp Manager) :
-1. Compte WhatsApp de PFlow Démo → **Modèles de message** → **Créer un modèle**.
-2. Catégorie **Utilitaire**, nom `alerte_conversation`, langue **Français**.
-3. Coller le corps ci-dessus, avec les variables `{{1}}` à `{{4}}`. Ajouter le bouton (facultatif). Remplir les exemples.
-4. Envoyer pour examen : la réponse arrive en général en quelques minutes, au plus 24 h.
-5. Une fois le modèle **approuvé**, dans Vercel (projet pflow-bot-app) : `WHATSAPP_ALERTE_MODELE = alerte_conversation`
-   (et `WHATSAPP_ALERTE_LANGUE = fr` si besoin, c'est la valeur par défaut). Puis redéployer.
-6. Test : laisser passer 24 h sans écrire au numéro PFlow Démo depuis 590690938108 (ou utiliser un autre numéro
-   d'alerte), puis déclencher « Je veux le mien » depuis un numéro de test. Page État → « Alertes au gérant » :
-   **WhatsApp (modèle)**.
+La contrainte `bot_transferts_alerte_voie_check` (`texte`, `modele`, `email`, `aucune`) reste telle quelle pour
+l'historique. On n'y ajoute pas `push` puisque la colonne n'est plus écrite.
 
-Si Meta range le modèle en « Marketing », il reste utilisable, mais il coûte plus cher (environ 0,07 à 0,09 € par
-envoi). Il faudra alors demander une révision.
-
-**Coût approximatif** (tarifs Meta par message, novembre 2026, à vérifier sur la page des tarifs de Meta) : modèle
-utilitaire vers un numéro **France** ≈ **0,025 à 0,03 €** par alerte. Le compte de messagerie est en **AED** : environ
-0,10 à 0,12 AED, plus les frais de change de la banque. Un numéro +590 (Guadeloupe) peut être classé ailleurs que
-« France » dans la grille de Meta : vérifier dans WhatsApp Manager → Facturation, ou sur la première facture.
-Depuis le 1er octobre 2026, les messages libres dans la fenêtre de 24 h sont aussi payants. À environ 10 alertes par
-jour, cela fait moins de 10 € par mois.
-
-## 4. L'e-mail de secours
-
-- Le CRM n'envoie aucun e-mail aujourd'hui. PFlow Bots utilise **Resend** (API HTTP, sans dépendance). Offre
-  gratuite : 3 000 e-mails par mois. Sans domaine vérifié, Resend n'envoie **qu'à l'adresse du compte Resend** :
-  c'est justement le cas ici.
-- Étapes Jules :
-  1. Créer un compte sur resend.com avec **jules.pauwels2@gmail.com** ;
-  2. Créer une clé API (droit « Sending access ») ;
-  3. Dans Vercel (pflow-bot-app), ajouter `RESEND_API_KEY` = la clé (variable « Sensitive ») et
-     `ALERTE_EMAIL = jules.pauwels2@gmail.com`. Ne jamais coller la clé ailleurs.
-  Confirmé (doc Resend + test) : sans domaine vérifié, le code envoie depuis `PFlow Bots <onboarding@resend.dev>`
-  vers `ALERTE_EMAIL` ; Resend l'accepte seulement si c'est l'adresse du compte (sinon 403, expliqué sur la page État).
-  Limites de l'offre gratuite : environ 100 e-mails par jour, 3 000 par mois.
-  4. Facultatif, plus tard : vérifier le domaine pflow.fr chez Resend, puis `ALERTE_EMAIL_FROM = PFlow Bots <alertes@pflow.fr>`.
-     Par défaut, l'expéditeur est `PFlow Bots <onboarding@resend.dev>`.
-- Objet : « 🔔 PFlow Bots : <motif> (<nom du contact>) ». Le corps reprend le texte de l'alerte.
-
-## 5. SQL (APPLIQUÉ le 9 novembre 2026, accord de Jules)
-
-Fichier `supabase/migrations/20261109000000_bot_transferts_alerte.sql` : deux colonnes sur la table **bot_**
-`bot_transferts` (aucune table du CRM touchée ; RLS déjà active, inchangée).
-
-```sql
-alter table public.bot_transferts
-  add column if not exists alerte_voie text
-    constraint bot_transferts_alerte_voie_check check (alerte_voie in ('texte', 'modele', 'email', 'aucune')),
-  add column if not exists alerte_erreur text;
-```
-
-Résultat : colonnes `alerte_voie` (text, avec contrainte) et `alerte_erreur` (text) créées, RLS toujours active,
-3 transferts existants intacts (colonnes vides). Le code garde un repli si les colonnes manquaient.
-
-## 6. Variables Vercel (pflow-bot-app)
+## 5. Variables Vercel (pflow-bot-app)
 
 | Variable | Rôle | État |
 |---|---|---|
-| `WHATSAPP_ALERTE_MODELE` | nom du modèle approuvé | à ajouter **après** l'approbation de Meta |
-| `WHATSAPP_ALERTE_LANGUE` | langue du modèle | facultatif (`fr` par défaut) |
-| `RESEND_API_KEY` | e-mail de secours | à créer (Resend) |
-| `ALERTE_EMAIL` | adresse de l'e-mail de secours | `jules.pauwels2@gmail.com` |
-| `ALERTE_EMAIL_FROM` | expéditeur | facultatif |
+| `VAPID_PUBLIC_KEY` | clé publique des notifications | à ajouter (voir `notifications-push.md`, partie 4) |
+| `VAPID_PRIVATE_KEY` | clé privée des notifications | à ajouter, **Sensitive** |
+| `VAPID_SUBJECT` | contact VAPID | **facultatif** : par défaut `PFLOW_BOTS_PUBLIC_URL`, sinon `https://pflow-bot-app.vercel.app` |
 
-**Blocage de l'actif** : pas de passage en actif de PFlow Démo tant que le modèle n'est pas approuvé et
-`WHATSAPP_ALERTE_MODELE` défini, ou au moins l'e-mail de secours en place.
+Plus utilisées (à ne pas créer) : `WHATSAPP_ALERTE_MODELE`, `WHATSAPP_ALERTE_LANGUE`, `RESEND_API_KEY`,
+`ALERTE_EMAIL`, `ALERTE_EMAIL_FROM`.
+
+## 6. Avant de passer PFlow Démo en actif
+
+1. Clés VAPID dans Vercel, puis redéploiement.
+2. Sur l'iPhone de Jules : app installée, notifications activées (étapes dans `notifications-push.md`, partie 3).
+3. Page État → « Envoyer une notification de test » : reçue.
+4. Pas de bandeau rouge sur la page État.
+
+## 7. Tests
+
+`src/channels/core/__tests__/alerts.test.ts` :
+- configuration : les anciennes variables (modèle Meta, Resend) sont ignorées ;
+- un appareil abonné : notification envoyée, voie « push » ;
+- aucun appareil, clés absentes ou push en échec : « aucune », avec la raison ; **aucun appel réseau** (ni Meta, ni
+  Resend) ;
+- de bout en bout (faux Meta) :
+  - **même si Jules vient d'écrire au numéro** (fenêtre de 24 h ouverte), rien ne part vers son numéro ;
+  - la notification ouvre la conversation ;
+  - sans appareil, l'alerte est « non reçue » mais la conversation reste « 🔔 Attend l'équipe » dans la boîte de
+    réception.
+
+`src/demos/__tests__/pflow-number.test.ts` : dans le parcours de démo, les alertes « Je veux le mien », « Parler à
+Jules » et « Question » arrivent en notification ; jamais de message vers le numéro de Jules.

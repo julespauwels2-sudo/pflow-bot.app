@@ -60,7 +60,7 @@ function SupabaseGate({ children }: { children: ReactNode }) {
 
   const onLogin = pathname === LOGIN_PATH;
   useEffect(() => {
-    if (state.status === "signed_out" && !onLogin) router.replace(`${LOGIN_PATH}?suite=${encodeURIComponent(pathname)}`);
+    if (state.status === "signed_out" && !onLogin) router.replace(`${LOGIN_PATH}?suite=${encodeURIComponent(pathname + window.location.search)}`);
   }, [state.status, onLogin, pathname, router]);
 
   if (onLogin) return <>{children}</>;

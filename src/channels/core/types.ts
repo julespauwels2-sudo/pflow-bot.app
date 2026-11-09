@@ -10,13 +10,6 @@ export type EventSource = Plateforme | "pflow_order";
 
 /** Envoi vers une plateforme (API Graph de WhatsApp, API d'Instagram). */
 /** Options d'envoi (WhatsApp). */
-export interface TemplateMessage {
-  name: string;
-  /** Code de langue du modèle (ex. « fr »). */
-  language: string;
-  bodyParams: string[];
-}
-
 export interface SendOptions {
   /**
    * Compte de messagerie qui envoie (et paie) le message (bot_canaux.messaging_account_id, PAS le WABA).
@@ -29,11 +22,6 @@ export interface SendOptions {
 export interface ChannelSender {
   /** Envoie un message et renvoie son identifiant sur la plateforme. */
   send(accountId: string, to: string, message: OutgoingMessage, options?: SendOptions): Promise<string | undefined>;
-  /**
-   * Modèle de message approuvé par Meta (hors fenêtre de 24 h) : alertes au gérant ou à Jules. Absent pour
-   * Instagram. Paramètres du corps dans l'ordre ({{1}}, {{2}}…).
-   */
-  sendTemplate?(accountId: string, to: string, template: TemplateMessage, options?: SendOptions): Promise<string | undefined>;
   /** Accusé de lecture et « en train d'écrire ». */
   markRead(accountId: string, messageId: string, typing: boolean, to?: string): Promise<void>;
   /** Téléchargement d'un média reçu (message vocal). */
@@ -73,7 +61,7 @@ export interface Canal {
   echoPauseHours: number;
   handoffPauseHours: number;
   sessionMinutes: number;
-  /** Numéro du gérant prévenu lors d'un transfert. */
+  /** Numéro du gérant (bot_canaux.tel_alerte). Plus utilisé pour les alertes : elles partent en notification push. */
   telAlerte?: string;
   /** test : ne répond qu'aux numéros de testNumeros ; coupe : ne répond à personne. */
   etat: "test" | "actif" | "coupe";
@@ -116,16 +104,34 @@ export interface Transfert {
   source: "bloc" | "ia" | "limite_ia" | "erreur_ia";
   dernierMessage?: string;
   gerantPrevenu: boolean;
-  /** Par où l'alerte est partie (src/channels/core/alerts.ts) ; absent sur les anciens transferts. */
+  /** Historique seulement (anciennes alertes WhatsApp / e-mail) : plus écrit depuis que l'alerte part en push. */
   alerteVoie?: AlertVoie;
-  /** Erreurs des tentatives (message libre, modèle, e-mail), si une a échoué. */
+  /** Erreurs de l'envoi de l'alerte (push), s'il a échoué. */
   alerteErreur?: string;
+  /** Notification push de l'alerte : la seule voie (src/channels/core/alerts.ts). */
+  alertePush?: AlertPush;
   at: string;
   vuLe?: string;
   resoluLe?: string;
 }
 
-/** Message libre (fenêtre de 24 h ouverte), modèle approuvé, e-mail de secours, ou rien n'est parti. */
+/** Un abonnement Web Push (navigateur ou application installée). Les clés sont celles du navigateur, pas des secrets. */
+export interface PushSubscriptionRecord {
+  userId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  appareil?: string;
+  creeLe?: string;
+  dernierEnvoiLe?: string;
+  dernierEchecLe?: string;
+  dernierEchec?: string;
+}
+
+/** Notification push d'une alerte : partie vers au moins un appareil, en échec, aucun appareil, ou clés VAPID absentes. */
+export type AlertPush = "envoyee" | "echec" | "aucun_abonnement" | "non_configure";
+
+/** Anciennes voies (avant le push seul) : message libre, modèle, e-mail, ou rien. Gardées pour l'historique. */
 export type AlertVoie = "texte" | "modele" | "email" | "aucune";
 
 /** Dates limites de conservation : tout ce qui est plus ancien est supprimé. */
@@ -170,6 +176,10 @@ export interface ChannelStore {
   listMessages(contactId: string, limit?: number): Promise<StoredMessage[]>;
   listTransferts(canalId: string): Promise<Transfert[]>;
   resolveTransferts(contactId: string): Promise<void>;
+  /** Notifications push (Web Push) : abonnements des administrateurs, un par appareil (bot_push_abonnements). */
+  savePushSubscription(subscription: PushSubscriptionRecord): Promise<void>;
+  listPushSubscriptions(userId?: string): Promise<PushSubscriptionRecord[]>;
+  deletePushSubscription(endpoint: string): Promise<void>;
 }
 
 /** Un message reçu par un webhook, prêt pour le moteur. */

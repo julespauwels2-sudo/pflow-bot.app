@@ -6,7 +6,7 @@
  */
 import type { Session } from "@/engine";
 import type { Db, Row } from "@/data/supabase/db";
-import type { Canal, ChannelContact, ChannelStore, StoredMessage, Transfert } from "./types";
+import type { Canal, ChannelContact, ChannelStore, PushSubscriptionRecord, StoredMessage, Transfert } from "./types";
 
 const iso = (v: unknown) => (v ? new Date(String(v)).toISOString() : undefined);
 const eq = (column: string, value: string) => ({ in: { column, values: [value] } });
@@ -84,6 +84,20 @@ function rowToMessage(r: Row): StoredMessage {
   };
 }
 
+function rowToPush(r: Row): PushSubscriptionRecord {
+  return {
+    userId: String(r.user_id),
+    endpoint: String(r.endpoint),
+    p256dh: String(r.p256dh),
+    auth: String(r.auth),
+    ...(r.appareil ? { appareil: String(r.appareil) } : {}),
+    ...(r.cree_le ? { creeLe: iso(r.cree_le) } : {}),
+    ...(r.dernier_envoi_le ? { dernierEnvoiLe: iso(r.dernier_envoi_le) } : {}),
+    ...(r.dernier_echec_le ? { dernierEchecLe: iso(r.dernier_echec_le) } : {}),
+    ...(r.dernier_echec ? { dernierEchec: String(r.dernier_echec) } : {}),
+  };
+}
+
 function rowToTransfert(r: Row): Transfert {
   return {
     id: String(r.id),
@@ -94,6 +108,7 @@ function rowToTransfert(r: Row): Transfert {
     gerantPrevenu: Boolean(r.gerant_prevenu),
     ...(r.alerte_voie ? { alerteVoie: r.alerte_voie as Transfert["alerteVoie"] } : {}),
     ...(r.alerte_erreur ? { alerteErreur: String(r.alerte_erreur) } : {}),
+    ...(r.alerte_push ? { alertePush: r.alerte_push as Transfert["alertePush"] } : {}),
     at: iso(r.cree_le)!,
     ...(r.vu_le ? { vuLe: iso(r.vu_le) } : {}),
     ...(r.resolu_le ? { resoluLe: iso(r.resolu_le) } : {}),
@@ -247,15 +262,29 @@ export function createSupabaseChannelStore(db: Db, newId: () => string = () => c
         gerant_prevenu: t.gerantPrevenu ?? false,
         cree_le: new Date().toISOString(),
       };
-      const alerte: Row = { ...(t.alerteVoie ? { alerte_voie: t.alerteVoie } : {}), ...(t.alerteErreur ? { alerte_erreur: t.alerteErreur.slice(0, 1000) } : {}) };
+      const alerte: Row = {
+        ...(t.alerteVoie ? { alerte_voie: t.alerteVoie } : {}),
+        ...(t.alerteErreur ? { alerte_erreur: t.alerteErreur.slice(0, 1000) } : {}),
+        ...(t.alertePush ? { alerte_push: t.alertePush } : {}),
+      };
       try {
         await db.upsert("bot_transferts", [{ ...row, ...alerte }], "id");
         return rowToTransfert({ ...row, ...alerte });
       } catch (error) {
-        // Colonnes alerte_voie / alerte_erreur pas encore créées (migration 20261109000000) : le transfert passe quand même.
-        if (!Object.keys(alerte).length || !/alerte_(voie|erreur)/.test(error instanceof Error ? error.message : String(error))) throw error;
-        await db.upsert("bot_transferts", [row], "id");
-        return rowToTransfert(row);
+        // Colonne pas encore créée (alerte_push : migration 20261110000000, non appliquée) : on réessaie sans elle,
+        // puis sans aucune colonne d'alerte. Le transfert passe toujours.
+        const message = error instanceof Error ? error.message : String(error);
+        if (!Object.keys(alerte).length || !/alerte_(voie|erreur|push)/.test(message)) throw error;
+        const { alerte_push: _push, ...withoutPush } = alerte;
+        void _push;
+        try {
+          if (!("alerte_push" in alerte) || !/alerte_push/.test(message)) throw error;
+          await db.upsert("bot_transferts", [{ ...row, ...withoutPush }], "id");
+          return rowToTransfert({ ...row, ...withoutPush });
+        } catch {
+          await db.upsert("bot_transferts", [row], "id");
+          return rowToTransfert(row);
+        }
       }
     },
     async listContacts(canalId) {
@@ -271,6 +300,28 @@ export function createSupabaseChannelStore(db: Db, newId: () => string = () => c
     async resolveTransferts(contactId) {
       const rows = (await db.select("bot_transferts", "*", eq("contact_id", contactId))).filter((r) => !r.resolu_le);
       if (rows.length) await db.upsert("bot_transferts", rows.map((r) => ({ ...r, resolu_le: new Date().toISOString() })), "id");
+    },
+    async savePushSubscription(s) {
+      await db.upsert(
+        "bot_push_abonnements",
+        [{
+          user_id: s.userId,
+          endpoint: s.endpoint,
+          p256dh: s.p256dh,
+          auth: s.auth,
+          appareil: s.appareil ?? null,
+          ...(s.dernierEnvoiLe ? { dernier_envoi_le: s.dernierEnvoiLe } : {}),
+          ...(s.dernierEchecLe ? { dernier_echec_le: s.dernierEchecLe } : {}),
+          ...(s.dernierEchec !== undefined ? { dernier_echec: s.dernierEchec || null } : {}),
+        }],
+        "endpoint",
+      );
+    },
+    async listPushSubscriptions(userId) {
+      return (await db.select("bot_push_abonnements", "*", userId ? eq("user_id", userId) : {})).map(rowToPush);
+    },
+    async deletePushSubscription(endpoint) {
+      await db.remove("bot_push_abonnements", "endpoint", [endpoint]);
     },
   };
 }

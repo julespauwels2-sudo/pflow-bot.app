@@ -883,3 +883,39 @@ Retour de test de Jules : le parcours guidé marche ; il faut qu'il avance sans 
   - Voie et erreurs gardées avec le transfert, page État « Alertes au gérant ».
 - **SQL** (2 colonnes sur `bot_transferts`) fourni, **non appliqué** ; le code fonctionne sans.
 - **Tests** : 405. **Rien de créé chez Meta ni chez Resend.**
+
+
+## 9 novembre 2026 — notifications push de la boîte de réception (PR séparée, sur la n° 6)
+
+- **App installable** (`src/app/manifest.ts`, icônes, `public/sw.js`) : écran d'accueil de l'iPhone, ouverture directe
+  sur `/inbox`.
+- **Web Push standard** (bibliothèque `web-push` 3.6.7, clés VAPID dans Vercel ; aucun service payant).
+  - Bouton « Activer les notifications » : boîte de réception et page État.
+  - Abonnements dans `bot_push_abonnements` (SQL montré, **non appliqué**).
+  - Notification : motif, contact, extrait. Toucher ouvre la conversation.
+- **Ordre des alertes** : WhatsApp et push **en parallèle**. E-mail **seulement si les deux échouent**.
+- **Page État** : appareils abonnés, voie push de chaque alerte, « Envoyer une notification de test ».
+- iPhone : iOS 16.4+, app ajoutée à l'écran d'accueil, autorisation après un toucher. Étapes exactes dans
+  `docs/etape-c/notifications-push.md`.
+- 420 tests, dont un qui **déchiffre** la vraie notification chiffrée comme le ferait l'iPhone.
+- Au passage :
+  - menu lisible sur téléphone ;
+  - après connexion, retour à la page demandée avec ses paramètres (`?contact=`) ;
+  - `safeNext` refuse aussi `/\…` (redirection vers un autre site).
+
+
+## 9 novembre 2026 (suite) — alertes : notification push seulement (PR n° 7)
+
+- **SQL push appliqué** (accord de Jules) : `bot_push_abonnements` (RLS active) et `bot_transferts.alerte_push`.
+- **Changement de stratégie** (pas de frais, pas d'e-mail) : la seule voie d'alerte du chatbot est la notification
+  push.
+  - Retirés du code : alerte WhatsApp vers `tel_alerte` (message libre et modèle Meta, `sendTemplate`) et e-mail
+    Resend.
+  - Variables plus utilisées : `WHATSAPP_ALERTE_MODELE`, `RESEND_API_KEY`, `ALERTE_EMAIL`…
+- Sans appareil ou en cas d'échec :
+  - la conversation reste « 🔔 Attend l'équipe » dans la boîte de réception ;
+  - **bandeau rouge** en haut de la page État (alertes non reçues, aucun appareil abonné, clés absentes).
+- `VAPID_SUBJECT` facultatif : par défaut `PFLOW_BOTS_PUBLIC_URL`, sinon `https://pflow-bot-app.vercel.app`.
+- **Aucune contrainte SQL à changer** : `alerte_voie` n'est plus écrite (historique), la voie se déduit de
+  `alerte_push`.
+- Plan, « Plus tard » : notifications push pour le CRM (chantier séparé).
