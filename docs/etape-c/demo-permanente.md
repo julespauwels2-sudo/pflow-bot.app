@@ -19,7 +19,7 @@ le **vrai produit**. Proposition validée par Jules, avec ses ajustements (parti
 | Étape | Déclencheur | Envoyé automatiquement |
 |---|---|---|
 | 1 → 2 | Le prospect valide sa commande sur la page Mint Bun, ouverte par le lien du bot (avec jeton `?j=`) | « ✅ *Commande enregistrée !* » (numéro, récap et options, total, « Paiement sur place », « _Commande de démo : rien n'est préparé._ »), puis l'étape 2/3 [Voir le dashboard] |
-| 2 → 3 | Le prospect ouvre le dashboard par le lien du bot (redirection PFlow Bots) | L'étape 3/3, environ 90 s plus tard (`PFLOW_DEMO_ETAPE3_SECONDES`), envoyée par la tâche à la minute, même onglet fermé |
+| 2 → 3 | Le prospect ouvre le dashboard par le lien du bot (redirection PFlow Bots) | L'étape 3/3, environ **20 s** plus tard (`PFLOW_DEMO_ETAPE3_SECONDES`, 10 au minimum), envoyée par la route du dashboard elle-même (`after`), même onglet fermé ; la tâche à la minute reste le filet de sécurité, jamais de double envoi |
 
 - **Jeton** : chiffré (AES-256-GCM, `PFLOW_BOTS_SECRET`), propre au contact, valable 24 h, sans numéro lisible.
 - **Points d'entrée** : `POST /api/demo/commande` (CORS limité à order.pflow.fr), `GET /api/demo/dashboard/<jeton>`, et `GET /api/cron/demo` (Vercel Cron à la minute, `CRON_SECRET`).

@@ -17,7 +17,7 @@ import { createGraphClient } from "@/channels/whatsapp/graph";
 import { demoDirectory } from "../lifecycle";
 import { DEMO_PERMANENTE, PFLOW_TEXTS } from "../pflow-bot";
 import { createDemoToken, readDemoToken } from "../demo-token";
-import { dashboardUrlWithOrder, etape3Seconds, formatDemoRecap, handleDemoDashboard, handleDemoOrder, runDemoDue, type DemoAutoDeps } from "../demo-auto";
+import { dashboardUrlWithOrder, etape3Seconds, formatDemoRecap, handleDemoDashboard, handleDemoOrder, runDemoDue, sendEtape3WhenDue, type DemoAutoDeps } from "../demo-auto";
 
 const PFLOW_PHONE = "1000000099";
 const SECRET = "secret-pflow-bots";
@@ -121,10 +121,10 @@ describe("démo permanente automatique (faux Meta)", () => {
     const tampered = token.slice(0, 20) + (token[20] === "A" ? "B" : "A") + token.slice(21);
     expect(readDemoToken(tampered, SECRET, now)).toBeNull();
     expect(readDemoToken("pas-un-jeton", SECRET, now)).toBeNull();
-    expect(etape3Seconds(undefined)).toBe(90);
+    expect(etape3Seconds(undefined)).toBe(20);
     expect(etape3Seconds("120")).toBe(120);
-    expect(etape3Seconds("5")).toBe(15);
-    expect(etape3Seconds("abc")).toBe(90);
+    expect(etape3Seconds("5")).toBe(10);
+    expect(etape3Seconds("abc")).toBe(20);
   });
 
   it("commande validée → confirmation (numéro, récap, options, total, paiement sur place, « démo ») puis étape 2/3 ; dashboard → étape 3/3 ~90 s plus tard, une seule fois", async () => {
@@ -299,5 +299,84 @@ describe("démo permanente automatique (faux Meta)", () => {
     const noSecret = { ...t.auto, secret: undefined };
     expect(await handleDemoOrder(noSecret, { jeton: "x".repeat(20), commande: order(1) })).toMatchObject({ ok: false, status: 503 });
     expect((await handleDemoDashboard(noSecret, "x")).redirect).toBe(DEMO_PERMANENTE.dashboardUrl);
+  });
+});
+
+describe("étape 3/3 à ≈ 20 s (depuis la route du dashboard), tâche à la minute en filet", () => {
+  /** Le prospect commande puis ouvre le dashboard : renvoie le résultat de l'ouverture. */
+  async function openDashboard(t: Awaited<ReturnType<typeof setup>>, auto: DemoAutoDeps, who = "590690111111") {
+    const { token } = await t.start(who);
+    const from = sent.length;
+    await handleDemoOrder(auto, { jeton: token, commande: order(7) });
+    const dashLink = t.out(from)[1].interactive!.action.parameters!.url;
+    return handleDemoDashboard(auto, dashLink.split("/").pop()!);
+  }
+  /** Attente simulée : l'horloge avance d'autant. */
+  const sleeper = (clock: { now: Date }, waits: number[]) => async (ms: number) => {
+    waits.push(ms);
+    clock.now = new Date(clock.now.getTime() + ms);
+  };
+
+  it("ouverture du dashboard → étape 3/3 ≈ 20 s plus tard, une seule fois ; la tâche à la minute ne renvoie rien", async () => {
+    const t = await setup();
+    const auto = { ...t.auto, etape3Seconds: 20 };
+    const open = await openDashboard(t, auto);
+    expect(open).toMatchObject({ programmee: true, contactId: expect.any(String) });
+    expect(Date.parse(open.due!) - t.clock.now.getTime()).toBe(20_000);
+
+    const waits: number[] = [];
+    const from = sent.length;
+    const report = await sendEtape3WhenDue(auto, open.contactId!, open.due!, sleeper(t.clock, waits));
+    expect(waits).toEqual([20_250]); // ≈ 20 s, pas une minute
+    expect(report.envoyees).toBe(1);
+    const step3 = t.out(from);
+    expect(step3).toHaveLength(1);
+    expect(step3[0].interactive?.body.text).toBe(PFLOW_TEXTS.step3);
+    // Filet de sécurité (tâche à la minute) et second déclenchement : rien de plus.
+    t.clock.now = new Date(t.clock.now.getTime() + 60_000);
+    expect((await runDemoDue(auto)).envoyees).toBe(0);
+    expect((await sendEtape3WhenDue(auto, open.contactId!, open.due!, sleeper(t.clock, []))).envoyees).toBe(0);
+    expect(t.out(from)).toHaveLength(1);
+  });
+
+  it("route et tâche à la minute en même temps : un seul envoi (clé unique)", async () => {
+    const t = await setup();
+    const auto = { ...t.auto, etape3Seconds: 20 };
+    const open = await openDashboard(t, auto);
+    t.clock.now = new Date(Date.parse(open.due!) + 1000);
+    const from = sent.length;
+    const [a, b] = await Promise.all([sendEtape3WhenDue(auto, open.contactId!, open.due!, async () => {}), runDemoDue(auto)]);
+    expect(a.envoyees + b.envoyees).toBe(1);
+    expect(t.out(from)).toHaveLength(1);
+  });
+
+  it("si la route échoue, la tâche à la minute envoie l'étape 3 (filet) ; Jules reprend la main avant : rien", async () => {
+    const t = await setup();
+    const auto = { ...t.auto, etape3Seconds: 20 };
+    await openDashboard(t, auto); // la route n'envoie rien (fonction arrêtée, par exemple)
+    t.clock.now = new Date(t.clock.now.getTime() + 60_000);
+    let from = sent.length;
+    expect((await runDemoDue(auto)).envoyees).toBe(1);
+    expect(t.out(from)).toHaveLength(1);
+
+    // Un 2e prospect ; Jules reprend la main pendant les 20 s : pas d'étape 3.
+    const open = await openDashboard(t, auto, "590690222222");
+    const contact = await t.contactOf("590690222222");
+    await t.store.saveContact({ ...contact, state: { ...contact.state, pause: { reason: "manuel", until: null } } });
+    from = sent.length;
+    const report = await sendEtape3WhenDue(auto, open.contactId!, open.due!, sleeper(t.clock, []));
+    expect(report.envoyees).toBe(0);
+    expect(report.ignorees[0].raison).toContain("pause");
+    expect(t.out(from)).toHaveLength(0);
+  });
+
+  it("échéance lointaine (réglage de plusieurs minutes) : laissée à la tâche à la minute", async () => {
+    const t = await setup();
+    const auto = { ...t.auto, etape3Seconds: 600 };
+    const open = await openDashboard(t, auto);
+    const waits: number[] = [];
+    const report = await sendEtape3WhenDue(auto, open.contactId!, open.due!, sleeper(t.clock, waits));
+    expect(waits).toEqual([]);
+    expect(report).toMatchObject({ envoyees: 0, ignorees: [{ raison: "échéance lointaine : tâche à la minute" }] });
   });
 });
