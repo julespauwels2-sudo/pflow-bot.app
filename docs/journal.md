@@ -847,6 +847,44 @@ Détail dans `docs/etape-c/demo-permanente.md` (partie 0 ter).
 - Ordre de fusion : CRM n° 80 → CRM n° 81 → PFlow Bots n° 4.
 
 
+## 9 novembre 2026 — démo permanente automatique (PR PFlow Bots n° 5, CRM n° 82)
+
+Retour de test de Jules : le parcours guidé marche ; il faut qu'il avance sans que le prospect écrive.
+- **Confirmation automatique** :
+  - la page Mint Bun, ouverte par le lien du bot (jeton `?j=`), envoie la commande validée à PFlow Bots (`POST /api/demo/commande`) ;
+  - le prospect reçoit « Commande enregistrée » (numéro, récap, options, total, paiement sur place, « commande de démo, rien n'est préparé »), puis l'étape 2/3.
+- **Étape 3 automatique** :
+  - le lien [Voir le dashboard] passe par `/api/demo/dashboard/<jeton>`, qui note l'ouverture, programme l'étape 3 (90 s, réglable) et redirige vers le dashboard avec la commande après le # ;
+  - la tâche Vercel à la minute (`/api/cron/demo`) l'envoie, même onglet fermé.
+- **Garde-fous** :
+  - jeton chiffré, propre au contact, 24 h ;
+  - 3 confirmations par heure au plus ; une commande confirmée une seule fois ;
+  - rien si le contact est en pause ; l'étape 3 jamais deux fois ; canal en test respecté ;
+  - textes nettoyés ; aucun Stripe ni PFlow Order. **Aucun SQL**.
+- **Secours conservés** : « Retour sur WhatsApp » en lien discret (principal si l'envoi échoue), et le rappel [✅ C'est fait].
+- **Tests** : PFlow Bots 399 (faux Meta, de bout en bout) ; CRM 15/15 en navigateur (dont le format exact de la commande, accepté des deux côtés).
+- **Variables Vercel vérifiées** (noms seulement) : `PFLOW_BOTS_SECRET` et `CRON_SECRET` présents en production. Facultatives : `PFLOW_DEMO_ETAPE3_SECONDES`, `PFLOW_BOTS_PUBLIC_URL`, `PFLOW_DEMO_ORIGINES`.
+
+
+## 9 novembre 2026 — alertes à Jules (PR PFlow Bots n° 6)
+
+- **État des fusions** :
+  - CRM n° 80 et n° 81 : fusionnées.
+  - CRM n° 82 : ouverte, construite sur `main` à jour.
+  - PFlow Bots n° 4 : fusionnée.
+  - PFlow Bots n° 5 : ouverte, construite sur la base après la n° 4.
+  - PFlow Bots n° 6 : ouverte, construite sur la branche de la n° 5.
+- **Avant** : alertes en message libre depuis le numéro du canal (PFlow Démo) vers 590690938108, refusées par Meta hors
+  fenêtre de 24 h (cas normal en production) ; personne n'était prévenu.
+- **Après** :
+  - message libre si la fenêtre est ouverte ;
+  - sinon modèle utilitaire approuvé `alerte_conversation` (à créer par Jules ; texte, catégorie, coût ≈ 0,025-0,03 € et étapes dans `docs/etape-c/alertes-jules.md`) ;
+  - sinon e-mail de secours (Resend, à créer).
+  - Voie et erreurs gardées avec le transfert, page État « Alertes au gérant ».
+- **SQL** (2 colonnes sur `bot_transferts`) fourni, **non appliqué** ; le code fonctionne sans.
+- **Tests** : 405. **Rien de créé chez Meta ni chez Resend.**
+
+
 ## 9 novembre 2026 — notifications push de la boîte de réception (PR séparée, sur la n° 6)
 
 - **App installable** (`src/app/manifest.ts`, icônes, `public/sw.js`) : écran d'accueil de l'iPhone, ouverture directe

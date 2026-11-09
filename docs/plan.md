@@ -55,6 +55,13 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   - **parcours guidé** (retour de test de Jules, 8 novembre) : PFlow Bots n° 4
     (https://github.com/julespauwels2-sudo/pflow-bot.app/pull/4) et CRM n° 81
     (https://github.com/julespauwels2-sudo/Pflow-Crm/pull/81, après la n° 80), à fusionner par Jules.
+  - **Démo automatique** (confirmation de commande et étape 3 sans action du prospect) : PFlow Bots n° 5
+    (https://github.com/julespauwels2-sudo/pflow-bot.app/pull/5) et CRM n° 82
+    (https://github.com/julespauwels2-sudo/Pflow-Crm/pull/82), à fusionner par Jules (n° 82 puis n° 5).
+  - **Alertes à Jules** (bloquant pour l'actif) : PFlow Bots n° 6 (https://github.com/julespauwels2-sudo/pflow-bot.app/pull/6,
+    après la n° 5) ; modèle `alerte_conversation` à créer chez Meta et e-mail de secours Resend
+    (`docs/etape-c/alertes-jules.md`) ; SQL `bot_transferts` (alerte_voie, alerte_erreur) à valider.
+  - **Ordre de fusion** : CRM n° 82 → PFlow Bots n° 5 → PFlow Bots n° 6 (CRM n° 80 et n° 81, PFlow Bots n° 4 : fusionnées).
   - **Test réel à faire** : boutons « Retour sur WhatsApp » (wa.me + texte prérempli) depuis le navigateur intégré de
     WhatsApp, sur iPhone ET Android. Secours déjà codé : rappel de l'étape avec [✅ C'est fait].
   Ensuite : test sur iPhone et Android avec les 3 numéros de test (590690938108, 590690748247, 590690635359),
