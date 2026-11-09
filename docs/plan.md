@@ -102,8 +102,8 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   - API pour les fonctions IA `annuler_commande` et `suivre_commande`, et pour marquer un panier
     « laissé tomber ».
 - Bouton « Retour sur WhatsApp » (`wa.me`) sur la page de confirmation de PFlow Order.
-- Transfert humain : alerte dans la boîte de réception + WhatsApp au gérant si sa fenêtre de 24 h est
-  ouverte. Notification par e-mail (présente dans le template UChat) : proposer une solution gratuite.
+- Transfert humain : alerte dans la boîte de réception + **notification push** (seule voie depuis le 9 novembre
+  2026 : ni WhatsApp vers le gérant, ni modèle Meta, ni e-mail ; `docs/etape-c/alertes-jules.md`).
 - ~~Décision Vercel~~ : Vercel Pro pris le 8 novembre 2026 (équipe « Pflow » : CRM, site, PFlow Bots).
 
 ### Avant la bascule de chaque resto (noté le 7 novembre 2026)
@@ -124,6 +124,8 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   tard, PR séparée). Sous-test « un réel avec son tendance ne part jamais par l'API : notification avec le son,
   relance, « C'est posté » » ; les 3 autres passent. Sans rapport avec la démo permanente (même échec sur `main`).
   Lancer : `cd repo && node --test tests/sons-tendance.test.js`.
+- **Notifications push pour le CRM** (noté le 9 novembre 2026, chantier séparé) : même principe que la boîte de
+  réception de PFlow Bots (app installée, Web Push, clés VAPID), pour les alertes du CRM. Pas maintenant.
 
 ### Phase 2
 - ~~Fonctions IA `annuler_commande` et `suivre_commande`~~ : faites le 7 novembre 2026 (C5, pont existant

@@ -14,7 +14,8 @@ interface SystemStatus {
   services: { stockage: "supabase" | "memory"; ia: { active: boolean; modele: string }; transcription: { active: boolean; service?: string }; deploiement: string };
   comptes: { id: string; plateforme: string; etat: string; numero: string; role: string; resto: string; testNumeros: number }[];
   evenements: { source: string; cle: string; at: string; erreur?: string }[];
-  alertes?: { at: string; canal: string; source: string; prevenu: boolean; voie?: string; push?: string; erreur?: string }[];
+  alertes?: { at: string; canal: string; source: string; prevenu: boolean; voie: string; push?: string; erreur?: string; ouverte: boolean }[];
+  push?: { configure: boolean; appareils: number };
   erreurCanaux?: string;
 }
 
@@ -71,6 +72,8 @@ export default function SystemStatusPage() {
           Actualiser
         </Button>
       </div>
+
+      {server.status === "ready" && <AlertesBanner data={server.data} />}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2" data-testid="etat">
         <Card title="Bots">
@@ -196,12 +199,54 @@ function ServerCards({ data }: { data: SystemStatus }) {
   );
 }
 
-const VOIES: Record<string, string> = { texte: "WhatsApp (message libre)", modele: "WhatsApp (modèle)", email: "e-mail de secours", aucune: "NON ENVOYÉE" };
+/** Voie de l'alerte : push, ou rien. Les anciennes alertes (avant le push seul) gardent leur voie d'origine. */
+const VOIES: Record<string, string> = {
+  push: "notification push",
+  aucune: "NON REÇUE",
+  texte: "WhatsApp (ancienne voie)",
+  modele: "WhatsApp, modèle (ancienne voie)",
+  email: "e-mail (ancienne voie)",
+  ancienne: "envoyée (ancienne voie)",
+};
+
+/**
+ * Bandeau rouge en haut de la page État : alertes non reçues (aucun appareil abonné, push en échec), ou aucune alerte
+ * ne peut partir (clés VAPID absentes, aucun appareil). Les conversations concernées restent dans la boîte de réception.
+ */
+function AlertesBanner({ data }: { data: SystemStatus }) {
+  const alertes = data.alertes ?? [];
+  const nonRecues = alertes.filter((a) => !a.prevenu);
+  const ouvertes = nonRecues.filter((a) => a.ouverte).length;
+  const canaux = data.comptes.length > 0;
+  const lignes: string[] = [];
+  if (nonRecues.length) {
+    lignes.push(
+      `${nonRecues.length} alerte${nonRecues.length > 1 ? "s" : ""} non reçue${nonRecues.length > 1 ? "s" : ""} parmi les ${alertes.length} dernières` +
+        (ouvertes ? ` : ${ouvertes} client${ouvertes > 1 ? "s attendent" : " attend"} peut-être encore une réponse.` : "."),
+    );
+  }
+  if (canaux && data.push && !data.push.configure) lignes.push("Notifications push non configurées (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY dans Vercel) : aucune alerte ne peut partir.");
+  else if (canaux && data.push && data.push.appareils === 0) lignes.push("Aucun appareil abonné aux notifications : aucune alerte ne peut vous joindre. Active-les ci-dessous (encadré « Notifications push »).");
+  if (!lignes.length) return null;
+  return (
+    <div role="alert" data-testid="alertes-bandeau" className="mt-6 rounded-2xl border-2 border-coral bg-coral/10 p-4 text-[#9F1F1F]">
+      <p className="text-lg font-bold">🚨 Alertes : personne n&apos;est prévenu</p>
+      <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm font-semibold">
+        {lignes.map((l) => (
+          <li key={l}>{l}</li>
+        ))}
+      </ul>
+      <a href="/inbox" className="mt-2 inline-block text-sm font-bold underline">
+        Ouvrir la boîte de réception (conversations « 🔔 Attend l&apos;équipe »)
+      </a>
+    </div>
+  );
+}
 const PUSH: Record<string, { label: string; tone: "success" | "warning" | "neutral" }> = {
   envoyee: { label: "push envoyée", tone: "success" },
   echec: { label: "push en échec", tone: "warning" },
-  aucun_abonnement: { label: "push : aucun appareil", tone: "neutral" },
-  non_configure: { label: "push non configurée", tone: "neutral" },
+  aucun_abonnement: { label: "aucun appareil abonné", tone: "warning" },
+  non_configure: { label: "push non configurée", tone: "warning" },
 };
 
 /** Alertes au gérant (« un client attend une réponse ») : par où elles sont parties, et les échecs. */
@@ -210,8 +255,8 @@ function AlertesCard({ alertes }: { alertes: NonNullable<SystemStatus["alertes"]
   return (
     <Card title="Alertes au gérant (un client attend une réponse)" className="lg:col-span-2">
       <p className="mb-2 text-xs text-muted">
-        WhatsApp (message libre si le destinataire a écrit au numéro dans les 24 h, sinon modèle approuvé par Meta) et notification push en
-        parallèle ; e-mail de secours seulement si les deux ont échoué.
+        Une seule voie : la notification push sur les appareils abonnés. Sans appareil ou en cas d&apos;échec, l&apos;alerte reste visible
+        dans la boîte de réception (« 🔔 Attend l&apos;équipe ») et le bandeau rouge s&apos;affiche en haut de cette page. Ni WhatsApp, ni e-mail.
       </p>
       {echecs.length > 0 && (
         <div className="mb-2" data-testid="alertes-echecs">
@@ -226,9 +271,9 @@ function AlertesCard({ alertes }: { alertes: NonNullable<SystemStatus["alertes"]
             <li key={a.at + a.canal} className="flex flex-wrap items-baseline gap-2 py-1">
               <span className="text-muted">{time(a.at)}</span>
               <span>{a.canal}</span>
-              {a.voie && a.voie !== "aucune" ? <Badge tone="success">{VOIES[a.voie] ?? a.voie}</Badge> : a.prevenu ? null : <Badge>{VOIES.aucune}</Badge>}
-              {!a.voie && a.prevenu && <Badge tone="success">envoyée</Badge>}
-              {a.push && PUSH[a.push] && <Badge tone={PUSH[a.push].tone}>{PUSH[a.push].label}</Badge>}
+              {a.prevenu ? <Badge tone="success">{VOIES[a.voie] ?? a.voie}</Badge> : <Badge tone="warning">{VOIES.aucune}</Badge>}
+              {!a.prevenu && a.push && PUSH[a.push] && <Badge tone={PUSH[a.push].tone}>{PUSH[a.push].label}</Badge>}
+              {!a.prevenu && a.ouverte && <span className="text-xs font-semibold text-coral">à traiter dans la boîte de réception</span>}
               {a.erreur && <span className="text-xs text-coral">{a.erreur}</span>}
             </li>
           ))}

@@ -279,7 +279,7 @@ const howItWorks: Flow = {
   ],
 };
 
-/** « Je veux le mien » : transfert à Jules, avec alerte (WhatsApp + boîte de réception), bot en pause pour ce contact. */
+/** « Je veux le mien » : transfert à Jules, avec alerte (notification push + boîte de réception), bot en pause pour ce contact. */
 const wantMine: Flow = {
   id: PFLOW_FLOWS.mien,
   name: "PFlow — je veux le mien",

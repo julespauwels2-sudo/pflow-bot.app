@@ -7,6 +7,7 @@ import { maskId } from "@/channels/core/privacy";
 import { getChannelsRuntime } from "@/channels/core/runtime";
 import { checkBotAdmin } from "@/lib/server-auth";
 import { channelStatuses, keyStatuses, servicesStatus } from "@/lib/system-status";
+import { pushConfigFromEnv } from "@/channels/core/push";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,8 +20,10 @@ export async function GET(request: Request) {
   let evenements: { source: string; cle: string; at: string; erreur?: string }[] = [];
   let comptes: { id: string; plateforme: string; etat: string; numero: string; role: string; resto: string; testNumeros: number }[] = [];
   let erreurCanaux: string | undefined;
-  /** Les dernières alertes au gérant (transferts) : par où elles sont parties, et les échecs. */
-  let alertes: { at: string; canal: string; source: string; prevenu: boolean; voie?: string; push?: string; erreur?: string }[] = [];
+  /** Les dernières alertes au gérant (transferts) : notification push partie ou non, erreurs, encore ouvertes. */
+  let alertes: { at: string; canal: string; source: string; prevenu: boolean; voie: string; push?: string; erreur?: string; ouverte: boolean }[] = [];
+  /** Notifications push : clés présentes, appareils abonnés (tous comptes). */
+  const push = { configure: Boolean(pushConfigFromEnv((name) => process.env[name]?.trim() || "")), appareils: 0 };
   if (canaux.some((c) => c.configure)) {
     try {
       const rt = await getChannelsRuntime();
@@ -46,17 +49,20 @@ export async function GET(request: Request) {
           canal,
           source: t.source,
           prevenu: t.gerantPrevenu,
-          ...(t.alerteVoie ? { voie: t.alerteVoie } : {}),
+          // Voie : « push » ou « aucune » ; les anciennes alertes (WhatsApp, e-mail) gardent leur voie d'origine.
+          voie: t.alertePush ? (t.alertePush === "envoyee" ? "push" : "aucune") : (t.alerteVoie ?? (t.gerantPrevenu ? "ancienne" : "aucune")),
           ...(t.alertePush ? { push: t.alertePush } : {}),
+          ouverte: !t.resoluLe,
           ...(t.alerteErreur ? { erreur: maskId(t.alerteErreur) } : {}),
         }));
+      push.appareils = (await rt.store.listPushSubscriptions().catch(() => [])).length;
     } catch (error) {
       erreurCanaux = error instanceof Error ? error.message : String(error);
     }
   }
 
   return NextResponse.json(
-    { cles: keyStatuses(), canaux, services: servicesStatus(), comptes, evenements, alertes, ...(erreurCanaux ? { erreurCanaux } : {}) },
+    { cles: keyStatuses(), canaux, services: servicesStatus(), comptes, evenements, alertes, push, ...(erreurCanaux ? { erreurCanaux } : {}) },
     { headers: { "cache-control": "no-store" } },
   );
 }

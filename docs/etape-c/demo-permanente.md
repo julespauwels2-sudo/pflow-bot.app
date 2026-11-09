@@ -123,7 +123,7 @@ Proposition d'origine :
 
 **Suites**
 - **🙋 Je veux le mien** → transfert humain : « Super ! Jules, de PFlow, vous recontacte très vite 🙂 Dites-nous
-  déjà le nom de votre resto. » + **alerte** à Jules (WhatsApp + boîte de réception), bot en pause 24 h pour ce
+  déjà le nom de votre resto. » + **alerte** à Jules (notification push + boîte de réception), bot en pause 24 h pour ce
   contact. Comme « Obtenir ma démo » aujourd'hui.
 - **🍔 Découvrir PFlow** → présentation (inchangée), avec **[😋 Tester la démo]  [🎁 Obtenir ma démo]**.
 - **🎁 Obtenir ma démo** → transfert + alerte (inchangé).

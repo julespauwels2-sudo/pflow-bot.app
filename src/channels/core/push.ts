@@ -1,8 +1,9 @@
 /**
  * Notifications push de la boîte de réception (Web Push standard, clés VAPID ; aucun service payant).
  *
- * - Les clés VAPID sont dans les variables Vercel (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT), jamais dans
- *   le code. Sans elles : « non_configure », les alertes partent comme avant (WhatsApp, puis e-mail).
+ * - Les clés VAPID sont dans les variables Vercel (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY ; VAPID_SUBJECT facultatif),
+ *   jamais dans le code. Sans elles : « non_configure », l'alerte reste visible dans la boîte de réception et la page
+ *   État affiche un bandeau rouge.
  * - Chaque appareil abonné (bot_push_abonnements) reçoit la notification ; le contenu est chiffré de bout en bout
  *   (seul le navigateur abonné peut le lire), le service push d'Apple / Google / Mozilla ne le voit pas.
  * - Un abonnement expiré ou révoqué (404 / 410 du service push) est supprimé.
@@ -25,8 +26,9 @@ export function pushConfigFromEnv(env: (name: string) => string): PushConfig | u
   const publicKey = env("VAPID_PUBLIC_KEY");
   const privateKey = env("VAPID_PRIVATE_KEY");
   if (!publicKey || !privateKey) return undefined;
-  const email = env("ALERTE_EMAIL");
-  return { publicKey, privateKey, subject: env("VAPID_SUBJECT") || (email ? `mailto:${email}` : DEFAULT_BOTS_URL) };
+  // VAPID_SUBJECT facultatif : par défaut, l'adresse publique de PFlow Bots (une adresse https est acceptée par Apple,
+  // Google et Mozilla, comme un « mailto: »).
+  return { publicKey, privateKey, subject: env("VAPID_SUBJECT") || env("PFLOW_BOTS_PUBLIC_URL") || DEFAULT_BOTS_URL };
 }
 
 /** Ce que reçoit le service worker (public/sw.js). Court : la limite d'Apple est de 4 Ko. */

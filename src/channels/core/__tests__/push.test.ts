@@ -14,7 +14,7 @@ import { createMemoryChannelStore } from "@/channels/core/memory-store";
 import { processWebhookPayload } from "@/channels/core/processor";
 import type { Canal, ChannelSender } from "@/channels/core/types";
 import { demoDirectory } from "@/demos/lifecycle";
-import { alertDelivered, sendAlert, type AlertConfig } from "../alerts";
+import type { AlertConfig } from "../alerts";
 import { alertPushPayload, pushConfigFromEnv, sendPushToAll, type PushConfig } from "../push";
 import { deviceLabel, vapidKeyBytes } from "@/components/pwa";
 
@@ -66,34 +66,13 @@ const canal: Canal = {
 };
 const input = { canal, motif: "Je veux le mien", contactName: "Marc", contactId: "590690111111", extrait: "Bonjour,\nc'est combien ?", conversationId: "contact-42" };
 
-/** WhatsApp factice : OK, ou refusé (fenêtre fermée, modèle absent). */
-const whatsapp = (ok: boolean, log: string[] = []): ChannelSender => ({
-  async markRead() {},
-  async send() {
-    throw new Error("fenêtre fermée");
-  },
-  async sendTemplate() {
-    log.push("whatsapp");
-    if (!ok) throw new Error("modèle refusé");
-    return "wamid.modele";
-  },
-});
-
-function fakeEmail() {
-  const calls: unknown[] = [];
-  const doFetch = (async (_url: string | URL | Request, init?: RequestInit) => {
-    calls.push(JSON.parse(String(init?.body)));
-    return new Response(JSON.stringify({ id: "mail" }), { status: 200 });
-  }) as typeof fetch;
-  return { calls, email: { apiKey: "re_test", to: "jules@example.com", from: "PFlow Bots <onboarding@resend.dev>" }, doFetch };
-}
-
 describe("notifications push", () => {
   it("configuration lue dans l'environnement : rien sans les deux clés ; contact VAPID par défaut", () => {
     const env = (vars: Record<string, string>) => (name: string) => vars[name] ?? "";
     expect(pushConfigFromEnv(env({ VAPID_PUBLIC_KEY: "pub" }))).toBeUndefined();
-    expect(pushConfigFromEnv(env({ VAPID_PUBLIC_KEY: "pub", VAPID_PRIVATE_KEY: "priv", ALERTE_EMAIL: "j@example.com" }))).toEqual({ publicKey: "pub", privateKey: "priv", subject: "mailto:j@example.com" });
-    expect(pushConfigFromEnv(env({ VAPID_PUBLIC_KEY: "pub", VAPID_PRIVATE_KEY: "priv" }))?.subject).toBe("https://pflow-bot-app.vercel.app");
+    // VAPID_SUBJECT facultatif : adresse publique de PFlow Bots par défaut.
+    expect(pushConfigFromEnv(env({ VAPID_PUBLIC_KEY: "pub", VAPID_PRIVATE_KEY: "priv" }))).toEqual({ publicKey: "pub", privateKey: "priv", subject: "https://pflow-bot-app.vercel.app" });
+    expect(pushConfigFromEnv(env({ VAPID_PUBLIC_KEY: "pub", VAPID_PRIVATE_KEY: "priv", PFLOW_BOTS_PUBLIC_URL: "https://bots.pflow.fr" }))?.subject).toBe("https://bots.pflow.fr");
     expect(pushConfigFromEnv(env({ VAPID_PUBLIC_KEY: "pub", VAPID_PRIVATE_KEY: "priv", VAPID_SUBJECT: "mailto:x@example.com" }))?.subject).toBe("mailto:x@example.com");
   });
 
@@ -167,106 +146,12 @@ describe("notifications push", () => {
   });
 });
 
-describe("alertes : WhatsApp et push en parallèle, e-mail seulement si les deux échouent", () => {
-  async function storeWithDevice() {
-    const store = createMemoryChannelStore([canal]);
-    const browser = fakeBrowser();
-    await store.savePushSubscription({ userId: "jules", endpoint: browser.endpoint, p256dh: browser.p256dh, auth: browser.auth, appareil: "iPhone (Safari)" });
-    return store;
-  }
-  const template = { name: "alerte_conversation", language: "fr" };
-
-  it("WhatsApp OK et push OK : les deux partent, pas d'e-mail", async () => {
-    const store = await storeWithDevice();
-    const push = capture();
-    const mail = fakeEmail();
-    const res = await sendAlert({ store, graph: whatsapp(true), config: { template, push: push.config, email: mail.email, fetch: mail.doFetch }, now: new Date() }, input);
-    expect(res).toEqual({ voie: "modele", push: "envoyee", erreurs: [] });
-    expect(push.requests).toHaveLength(1);
-    expect(mail.calls).toHaveLength(0);
-  });
-
-  it("WhatsApp en échec, push OK : prévenu par push, PAS d'e-mail", async () => {
-    const store = await storeWithDevice();
-    const push = capture();
-    const mail = fakeEmail();
-    const res = await sendAlert({ store, graph: whatsapp(false), config: { template, push: push.config, email: mail.email, fetch: mail.doFetch }, now: new Date() }, input);
-    expect(res.voie).toBe("aucune");
-    expect(res.push).toBe("envoyee");
-    expect(alertDelivered(res)).toBe(true);
-    expect(res.erreurs.join()).toContain("modèle : modèle refusé");
-    expect(mail.calls).toHaveLength(0);
-  });
-
-  it("WhatsApp OK, push en échec : WhatsApp suffit, pas d'e-mail, l'échec push est noté", async () => {
-    const store = await storeWithDevice();
-    const push = capture(() => 500);
-    const mail = fakeEmail();
-    const res = await sendAlert({ store, graph: whatsapp(true), config: { template, push: push.config, email: mail.email, fetch: mail.doFetch }, now: new Date() }, input);
-    expect(res).toMatchObject({ voie: "modele", push: "echec" });
-    expect(res.erreurs.join()).toContain("push (iPhone (Safari)) : 500");
-    expect(mail.calls).toHaveLength(0);
-  });
-
-  it("WhatsApp ET push en échec (ou push sans appareil) : e-mail de secours", async () => {
-    const store = await storeWithDevice();
-    const mail = fakeEmail();
-    let res = await sendAlert({ store, graph: whatsapp(false), config: { template, push: capture(() => 500).config, email: mail.email, fetch: mail.doFetch }, now: new Date() }, input);
-    expect(res).toMatchObject({ voie: "email", push: "echec" });
-    expect(mail.calls).toHaveLength(1);
-    res = await sendAlert({ store: createMemoryChannelStore([canal]), graph: whatsapp(false), config: { template, push: capture().config, email: mail.email, fetch: mail.doFetch }, now: new Date() }, input);
-    expect(res).toMatchObject({ voie: "email", push: "aucun_abonnement" });
-    expect(res.erreurs.join()).toContain("aucun appareil abonné");
-    expect(mail.calls).toHaveLength(2);
-  });
-
-  it("vraiment en parallèle : WhatsApp attend la fin du push pour répondre, et le push attend que WhatsApp ait commencé", async () => {
-    // En séquentiel, l'un des deux attendrait l'autre indéfiniment : chaque attente est bornée à 1 s (échec du test).
-    const deferred = () => {
-      let resolve!: () => void;
-      const promise = new Promise<void>((r) => (resolve = r));
-      return { promise, resolve };
-    };
-    const within = (p: Promise<void>, what: string) => Promise.race([p, new Promise<void>((_, reject) => setTimeout(() => reject(new Error(`${what} : pas en parallèle`)), 1000))]);
-    const whatsappStarted = deferred();
-    const pushDone = deferred();
-    const order: string[] = [];
-    const store = await storeWithDevice();
-    const graph: ChannelSender = {
-      ...whatsapp(true),
-      sendTemplate: async () => {
-        order.push("whatsapp:debut");
-        whatsappStarted.resolve();
-        await within(pushDone.promise, "WhatsApp attend le push");
-        order.push("whatsapp:fin");
-        return "wamid";
-      },
-    };
-    const push = capture();
-    const send = push.config.send;
-    const config: AlertConfig = {
-      template,
-      push: {
-        ...push.config,
-        send: async (...args) => {
-          await within(whatsappStarted.promise, "le push attend WhatsApp");
-          order.push("push");
-          const r = await send(...args);
-          pushDone.resolve();
-          return r;
-        },
-      },
-    };
-    const res = await sendAlert({ store, graph, config, now: new Date() }, input);
-    expect(res).toMatchObject({ voie: "modele", push: "envoyee", erreurs: [] });
-    expect(order).toEqual(["whatsapp:debut", "push", "whatsapp:fin"]);
-  });
-
-  it("de bout en bout : « Je veux le mien » → notification vers la conversation, transfert noté « push envoyée », gérant prévenu sans WhatsApp", async () => {
+describe("alerte en push (de bout en bout)", () => {
+  it("de bout en bout : « Je veux le mien » → notification chiffrée vers la conversation, transfert noté « push envoyée »", async () => {
     const repos = createLocalRepositories(createMemoryStore(), { now: () => new Date("2026-11-09T15:00:00Z") });
     await createMasterTemplate(repos);
     const data = await repos.workspace.exportAll();
-    const store = await storeWithDevice();
+    const store = createMemoryChannelStore([canal]);
     const browser = fakeBrowser();
     await store.savePushSubscription({ userId: "jules", endpoint: browser.endpoint, p256dh: browser.p256dh, auth: browser.auth });
     const push = capture();
@@ -285,7 +170,7 @@ describe("alertes : WhatsApp et push en parallèle, e-mail seulement si les deux
       loadDemos: async () => demoDirectory(data),
       now: () => new Date("2026-11-09T15:00:00Z"),
       sleep: async () => {},
-      // Pas de modèle WhatsApp, pas d'e-mail : seul le push peut prévenir Jules.
+      // Seule voie d'alerte : le push.
       alerts: { push: push.config } as AlertConfig,
     };
     const report = await processWebhookPayload(
@@ -297,7 +182,10 @@ describe("alertes : WhatsApp et push en parallèle, e-mail seulement si les deux
     );
     expect(report.errors).toEqual([]);
     const [transfert] = await store.listTransferts("pflow");
-    expect(transfert).toMatchObject({ gerantPrevenu: true, alerteVoie: "aucune", alertePush: "envoyee" });
+    expect(transfert).toMatchObject({ gerantPrevenu: true, alertePush: "envoyee" });
+    expect(transfert.alerteVoie).toBeUndefined();
+    // Rien sur WhatsApp à part la réponse au prospect (aucune alerte vers le numéro de Jules).
+    expect(sent.length).toBeGreaterThan(0);
     const notification = JSON.parse(browser.decrypt(push.requests.find((r) => r.endpoint === browser.endpoint)!.body));
     expect(notification).toEqual({ title: "🔔 Je veux le mien", body: "Marc attend une réponse.", url: `/inbox?contact=${transfert.contactId}`, tag: `conversation-${transfert.contactId}` });
   });

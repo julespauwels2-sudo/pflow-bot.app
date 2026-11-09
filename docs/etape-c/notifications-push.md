@@ -1,35 +1,36 @@
 # Notifications push de la boîte de réception (iPhone, ordinateur)
 
-Préparé le 9 novembre 2026, PR séparée construite sur la n° 6 (alertes). **SQL à valider par Jules, non appliqué.**
-Rien dans le CRM. Aucun service payant : Web Push standard, clés VAPID.
+Préparé le 9 novembre 2026, PR séparée construite sur la n° 6 (alertes). **SQL appliqué le 9 novembre 2026** (accord
+de Jules). Rien dans le CRM. Aucun service payant : Web Push standard, clés VAPID.
+
+**Depuis le 9 novembre 2026, c'est la SEULE voie d'alerte** : plus de WhatsApp vers le numéro d'alerte, plus de
+modèle Meta, plus d'e-mail (`docs/etape-c/alertes-jules.md`).
 
 ## 1. Ce que ça fait
 
 - Chaque alerte (« Je veux le mien », « Parler à Jules », question en plein parcours, transfert de l'assistant) part
-  **aussi** en notification sur les appareils abonnés : iPhone (app installée), ordinateur (Chrome, Safari, Edge, Firefox).
+  en notification sur les appareils abonnés : iPhone (app installée), ordinateur (Chrome, Safari, Edge, Firefox).
 - La notification affiche le **motif** en titre, puis le **nom du contact** et un **extrait** du message.
   Exemple : « 🔔 Je veux le mien » / « Marc : « C'est combien par mois ? » ».
 - **Toucher la notification ouvre la conversation** dans la boîte de réception (`/inbox?contact=…`). Sur téléphone,
   la page descend jusqu'à la conversation.
 - Les notifications d'une même conversation se remplacent (une par conversation sur l'écran verrouillé).
 
-## 2. Ordre des alertes
+## 2. Une seule voie : le push
 
-`src/channels/core/alerts.ts` :
-
-1. **En parallèle** :
-   - **WhatsApp** : message libre si la fenêtre de 24 h est ouverte, sinon le modèle approuvé.
-   - **Push** : vers tous les appareils abonnés.
-2. **E-mail de secours**, seulement si WhatsApp **et** push ont échoué tous les deux. « Push sans appareil abonné » ou
-   « clés absentes » compte comme un échec.
-3. Le transfert garde la voie WhatsApp / e-mail (`alerte_voie`), la voie push (`alerte_push`) et les erreurs. « Gérant
-   prévenu » = WhatsApp, e-mail **ou** push parti.
+`src/channels/core/alerts.ts` : la notification part vers tous les appareils abonnés. C'est tout : ni WhatsApp, ni
+e-mail.
+- Au moins un appareil atteint : « gérant prévenu », voie **push**.
+- Sinon (aucun appareil, clés absentes, échec) : voie **aucune**. La conversation reste « 🔔 Attend l'équipe » dans la
+  boîte de réception, et la page État affiche un **bandeau rouge** en haut.
+- Le transfert garde `alerte_push` (`envoyee`, `echec`, `aucun_abonnement`, `non_configure`) et l'erreur.
 
 Page **État** :
 - encadré **« Notifications push »** : bouton « Activer les notifications », appareils abonnés (dernière
   notification, dernier échec, « Retirer »), bouton **« Envoyer une notification de test »** ;
-- encadré **« Alertes au gérant »** : pour chaque alerte, la voie WhatsApp / e-mail et la voie push (« push
-  envoyée », « push en échec », « push : aucun appareil », « push non configurée »).
+- **bandeau rouge** en haut de la page : alertes non reçues, aucun appareil abonné ou clés absentes ;
+- encadré **« Alertes au gérant »** : pour chaque alerte, « notification push » ou « NON REÇUE », avec la raison
+  (« aucun appareil abonné », « push en échec », « push non configurée »).
 
 Un appareil dont l'abonnement a expiré (réponse 404 ou 410 du service push, par exemple les notifications coupées) est
 **supprimé automatiquement**. Une autre erreur est notée sur l'appareil (page État).
@@ -91,7 +92,7 @@ Les clés **ne passent jamais** par le code, Git ou une conversation.
    |---|---|---|
    | `VAPID_PUBLIC_KEY` | la clé publique | normale (elle n'est pas secrète, le navigateur la reçoit) |
    | `VAPID_PRIVATE_KEY` | la clé privée | **Sensitive** |
-   | `VAPID_SUBJECT` | `mailto:jules.pauwels2@gmail.com` | normale, facultative (par défaut : `mailto:` + `ALERTE_EMAIL`) |
+   | `VAPID_SUBJECT` | facultative : `mailto:…` ou adresse https | normale. **Absente** : `PFLOW_BOTS_PUBLIC_URL`, sinon `https://pflow-bot-app.vercel.app` |
 
 3. **Redéployer** (Deployments → … → Redeploy) : les variables ne s'appliquent qu'au déploiement suivant.
 4. Page État → « Clés détectées » : `VAPID_PUBLIC_KEY` et `VAPID_PRIVATE_KEY` « présente ».
@@ -99,13 +100,21 @@ Les clés **ne passent jamais** par le code, Git ou une conversation.
 Ne change pas les clés ensuite : tous les appareils abonnés devraient se réabonner. En cas de fuite de la clé privée :
 nouvelles clés dans Vercel, puis sur chaque appareil « Désactiver » et « Activer ».
 
-Sans clés : le bouton dit « Clés VAPID absentes », les alertes partent par WhatsApp puis e-mail, comme avant.
+Sans clés : le bouton dit « Clés VAPID absentes », **aucune alerte ne part**. Elles restent visibles dans la boîte
+de réception, et le bandeau rouge s'affiche sur la page État.
 
-## 5. SQL (à valider, NON appliqué)
+## 5. SQL (APPLIQUÉ le 9 novembre 2026, accord de Jules)
 
 Fichier : `supabase/migrations/20261110000000_bot_push.sql`. Tables `bot_` uniquement ; aucune table ni donnée du
-CRM touchée. Le code marche sans cette migration : le transfert est enregistré sans `alerte_push` (repli
-automatique). Seul l'abonnement échoue (« Activer les notifications » en erreur).
+CRM touchée.
+
+Résultat (9 novembre 2026) :
+- table `bot_push_abonnements` créée, **RLS active**, politique « ses abonnements (admins du bot) » pour
+  `authenticated`, 0 ligne ;
+- contraintes : clé primaire, `endpoint` unique, `user_id` lié à `auth.users` (suppression en cascade) ;
+- colonne `alerte_push` (text) sur `bot_transferts`, avec sa contrainte ; RLS toujours active ; les 3 transferts
+  existants sont intacts (`alerte_push` vide) ;
+- conseiller de sécurité Supabase : aucune alerte sur la nouvelle table.
 
 ```sql
 -- 1. Les abonnements push (un par appareil et par navigateur) des administrateurs du bot.
@@ -152,17 +161,14 @@ service push d'Apple ou de Google ne le lit pas.
 
 ## 7. Tests
 
-`src/channels/core/__tests__/push.test.ts`, 13 tests. Aucun vrai service push : les clés VAPID sont générées pour le
+`src/channels/core/__tests__/push.test.ts`. Aucun vrai service push : les clés VAPID sont générées pour le
 test.
 - **Vrai chiffrement Web Push** : la requête est construite par `web-push` (aes128gcm, signature VAPID, urgence haute,
   durée 24 h). Le test la **déchiffre comme l'iPhone** et retrouve exactement la notification.
-- Ordre des alertes :
-  - WhatsApp et push partent **en même temps** (test qui bloquerait s'ils partaient l'un après l'autre) ;
-  - WhatsApp en échec mais push envoyée : **pas d'e-mail** ;
-  - les deux en échec, ou push sans appareil : **e-mail**.
 - Abonnement expiré (410) supprimé ; autre erreur notée ; un compte ne vise que ses appareils.
 - De bout en bout : « Je veux le mien » sur PFlow Démo, puis notification qui ouvre la bonne conversation ; transfert
-  noté « push envoyée », gérant prévenu sans WhatsApp.
+  noté « push envoyée », gérant prévenu sans WhatsApp. Les tests des alertes elles-mêmes (push seul, aucun envoi
+  WhatsApp ni e-mail) sont dans `alerts.test.ts`.
 - Routes : sans clés, 503 ; abonnements invalides refusés ; liste ; test (échec noté sur l'appareil) ; retrait. La
   clé privée n'apparaît jamais dans les réponses.
 

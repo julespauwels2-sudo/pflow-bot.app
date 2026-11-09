@@ -7,7 +7,7 @@
  *   directement son flux, quelle que soit la longueur du message ;
  * - « c'est fait », « ok »… fait passer à l'étape suivante (étapes 1 et 2) ;
  * - une QUESTION en plein parcours (« ? », ou plus de 4 mots) : « Bonne question ! Jules vous répond très vite »,
- *   Jules est prévenu (WhatsApp + boîte de réception, avec la question ; une alerte au plus toutes les 30 min par
+ *   Jules est prévenu (notification push + boîte de réception, avec la question ; une alerte au plus toutes les 30 min par
  *   contact), le bot n'est PAS mis en pause, puis l'étape en cours est rappelée ;
  * - tout autre message (salutation comprise) RAPPELLE l'étape en cours, avec son bouton : le prospect ne se
  *   perd jamais. Chaque rappel propose aussi [💬 Parler à Jules]. Sans parcours : l'accueil.

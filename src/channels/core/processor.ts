@@ -38,7 +38,7 @@ export interface ProcessorDeps {
   maxTypingMs?: number;
   /** Secret partagé avec PFlow Order : jeton de pré-remplissage dans le lien « Commander ». */
   pflowBotsSecret?: string;
-  /** Alertes au gérant : modèle approuvé et e-mail de secours (src/channels/core/alerts.ts). */
+  /** Alertes au gérant : notification push (src/channels/core/alerts.ts). */
   alerts?: AlertConfig;
   /** Adresse publique de PFlow Bots (lien du dashboard de la démo permanente). Défaut : DEFAULT_BOTS_URL. */
   demoBotsUrl?: string;
@@ -258,9 +258,9 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     report.errors.push(`Conversation de ${event.waId} modifiée en parallèle : état gardé tel quel`);
   }
 
-  // Alertes au gérant (Jules pour PFlow Démo) : message libre si sa fenêtre de 24 h est ouverte, sinon modèle
-  // approuvé, sinon e-mail (src/channels/core/alerts.ts). La voie et les erreurs restent avec le transfert (page État).
-  const alertDeps = { store, graph, config: deps.alerts, now };
+  // Alertes au gérant (Jules pour PFlow Démo) : notification push seulement (src/channels/core/alerts.ts). Le
+  // transfert ouvert garde l'alerte visible dans la boîte de réception, même si le push n'est pas parti.
+  const alertDeps = { store, config: deps.alerts, now };
   const flowsStarted = result.events.flatMap((e) => (e.type === "flow_started" ? [e.flowId] : []));
   for (const e of result.events) {
     if (e.type !== "handoff") continue;
@@ -331,7 +331,6 @@ function message(error: unknown): string {
 function alertFields(alert: AlertResult) {
   return {
     gerantPrevenu: alertDelivered(alert),
-    alerteVoie: alert.voie,
     alertePush: alert.push,
     ...(alert.erreurs.length ? { alerteErreur: alert.erreurs.join(" | ") } : {}),
   };

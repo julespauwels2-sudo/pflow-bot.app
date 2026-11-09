@@ -864,3 +864,20 @@ Détail dans `docs/etape-c/demo-permanente.md` (partie 0 ter).
   - menu lisible sur téléphone ;
   - après connexion, retour à la page demandée avec ses paramètres (`?contact=`) ;
   - `safeNext` refuse aussi `/\…` (redirection vers un autre site).
+
+
+## 9 novembre 2026 (suite) — alertes : notification push seulement (PR n° 7)
+
+- **SQL push appliqué** (accord de Jules) : `bot_push_abonnements` (RLS active) et `bot_transferts.alerte_push`.
+- **Changement de stratégie** (pas de frais, pas d'e-mail) : la seule voie d'alerte du chatbot est la notification
+  push.
+  - Retirés du code : alerte WhatsApp vers `tel_alerte` (message libre et modèle Meta, `sendTemplate`) et e-mail
+    Resend.
+  - Variables plus utilisées : `WHATSAPP_ALERTE_MODELE`, `RESEND_API_KEY`, `ALERTE_EMAIL`…
+- Sans appareil ou en cas d'échec :
+  - la conversation reste « 🔔 Attend l'équipe » dans la boîte de réception ;
+  - **bandeau rouge** en haut de la page État (alertes non reçues, aucun appareil abonné, clés absentes).
+- `VAPID_SUBJECT` facultatif : par défaut `PFLOW_BOTS_PUBLIC_URL`, sinon `https://pflow-bot-app.vercel.app`.
+- **Aucune contrainte SQL à changer** : `alerte_voie` n'est plus écrite (historique), la voie se déduit de
+  `alerte_push`.
+- Plan, « Plus tard » : notifications push pour le CRM (chantier séparé).

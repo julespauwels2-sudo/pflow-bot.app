@@ -242,7 +242,7 @@ export function PushControls({ compact = false, onChange }: { compact?: boolean;
   const { server, permission, endpoint } = view;
   const thisDevice = endpoint ? server.appareils.find((a) => a.endpoint === endpoint) : undefined;
   if (!server.configure) {
-    return compact ? null : <Notice tone="info">Clés VAPID absentes : ajoute VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY et VAPID_SUBJECT dans Vercel (voir la doc).</Notice>;
+    return compact ? null : <Notice tone="info">Clés VAPID absentes : ajoute VAPID_PUBLIC_KEY et VAPID_PRIVATE_KEY dans Vercel (VAPID_SUBJECT facultatif ; voir la doc).</Notice>;
   }
   if (compact && thisDevice) return noticeBox || null;
 
@@ -298,7 +298,7 @@ export function PushControls({ compact = false, onChange }: { compact?: boolean;
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted">Aucun appareil abonné : les alertes partent seulement par WhatsApp (et e-mail en secours).</p>
+            <p className="text-sm text-muted">Aucun appareil abonné : aucune alerte ne peut vous joindre (elles restent seulement visibles dans la boîte de réception).</p>
           )}
           {server.appareils.length > 0 && !thisDevice && (
             <Button variant="secondary" onClick={test} disabled={busy}>
