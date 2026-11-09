@@ -79,7 +79,7 @@ function SupabaseGate({ children }: { children: ReactNode }) {
           Le compte <strong>{state.email}</strong> est bien connecté, mais il n&apos;est pas administrateur de PFlow Bots. Pour l&apos;autoriser,
           exécute dans Supabase (SQL Editor) :
         </p>
-        <pre className="mt-3 overflow-x-auto rounded-xl bg-page p-3 text-xs">{`insert into public.bot_admins (user_id)\nselect id from auth.users where email = '${state.email}';`}</pre>
+        <pre className="mt-3 overflow-x-auto rounded-xl bg-white/5 p-3 text-xs">{`insert into public.bot_admins (user_id)\nselect id from auth.users where email = '${state.email}';`}</pre>
       </Blocked>
     );
   }

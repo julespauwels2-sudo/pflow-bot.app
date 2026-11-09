@@ -4,7 +4,7 @@ import Link from "next/link";
  * Logo PFlow Bots, dans l'esprit du logo PFlow Order : le P en verre liquide (icône du site), « flow » en rose, et un
  * badge « BOTS » comme le badge ORDER. `tone="dark"` : sur fond navy.
  */
-export function Logo({ tone = "light", size = "md", href = "/" }: { tone?: "light" | "dark"; size?: "md" | "lg"; href?: string | null }) {
+export function Logo({ tone = "dark", size = "md", href = "/" }: { tone?: "light" | "dark"; size?: "md" | "lg"; href?: string | null }) {
   const big = size === "lg";
   const content = (
     <>

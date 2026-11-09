@@ -18,13 +18,13 @@ export function AccountMenu() {
           Importer
         </Link>
       )}
-      <Link href="/etat" className="rounded-full px-3 py-1.5 hover:bg-navy/5" title="État du système">
+      <Link href="/etat" className="rounded-full px-3 py-1.5 hover:bg-white/5" title="État du système">
         État
       </Link>
       <span className="hidden text-xs font-normal text-muted sm:inline" title={email}>
         {email}
       </span>
-      <button type="button" className="rounded-full px-3 py-1.5 hover:bg-navy/5" onClick={() => void signOut()}>
+      <button type="button" className="rounded-full px-3 py-1.5 hover:bg-white/5" onClick={() => void signOut()}>
         Déconnexion
       </button>
     </span>

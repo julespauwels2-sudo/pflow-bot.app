@@ -78,7 +78,7 @@ export default function DemosPage() {
             (données du bot seulement, jamais le CRM), sauf si le resto est passé signé ou actif.
           </p>
         </div>
-        <Link href="/simulateur?numero=pflow" className="rounded-full bg-navy px-4 py-2 text-sm font-semibold text-white hover:opacity-90" data-testid="demos-simuler">
+        <Link href="/simulateur?numero=pflow" className="rounded-full bg-navy-2 px-4 py-2 text-sm font-semibold text-white hover:opacity-90" data-testid="demos-simuler">
           📱 Simuler le numéro PFlow
         </Link>
       </div>
@@ -149,7 +149,7 @@ export default function DemosPage() {
             <ul className="space-y-1 text-sm text-muted">
               {ended.map(({ client, demo }) => (
                 <li key={client.id}>
-                  <strong className="text-navy">{client.nomResto}</strong> · mot-clé « {demo!.keyword} » · bot supprimé le {date(demo!.deletedAt!)}. Un
+                  <strong className="text-ink">{client.nomResto}</strong> · mot-clé « {demo!.keyword} » · bot supprimé le {date(demo!.deletedAt!)}. Un
                   prospect qui écrit ce mot-clé reçoit un message poli.
                 </li>
               ))}
@@ -219,7 +219,7 @@ function DemoRow({
           )}
         </form>
         <span className="text-muted">
-          Expire le <strong className="text-navy">{date(demo.expiresAt)}</strong> ({demo.days} j)
+          Expire le <strong className="text-ink">{date(demo.expiresAt)}</strong> ({demo.days} j)
         </span>
         <span className="text-muted" data-testid="demo-conversations">
           {conversations === null ? "— conversation" : `${conversations} conversation${conversations > 1 ? "s" : ""}`}

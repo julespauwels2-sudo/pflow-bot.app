@@ -68,7 +68,7 @@ export function FlowView({
         ...e,
         sourceHandle: e.sourceHandle ?? "next",
         animated: trail.has(e.source) && (trail.has(e.target) || e.target === activeNodeId),
-        style: { stroke: trail.has(e.source) && (trail.has(e.target) || e.target === activeNodeId) ? "#FF4FB5" : "#94a3c4", strokeWidth: 2 },
+        style: { stroke: trail.has(e.source) && (trail.has(e.target) || e.target === activeNodeId) ? "#FF4FB5" : "rgba(243,238,230,0.45)", strokeWidth: 2 },
       })),
     [flow, trail, activeNodeId],
   );
@@ -77,6 +77,7 @@ export function FlowView({
     <EditorContext.Provider value={ctx}>
       <ReactFlowProvider>
         <ReactFlow<RFNode>
+          colorMode="dark"
           key={flow.id}
           nodes={nodes}
           edges={edges}
@@ -90,7 +91,7 @@ export function FlowView({
           minZoom={0.15}
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Dots} gap={20} size={1.4} color="#cfd3e6" />
+          <Background variant={BackgroundVariant.Dots} gap={20} size={1.4} color="rgba(243,238,230,0.14)" />
           <FitOnReady />
         </ReactFlow>
       </ReactFlowProvider>

@@ -11,7 +11,7 @@ export function DeletableEdge(props: EdgeProps) {
 
   return (
     <>
-      <BaseEdge id={id} path={path} markerEnd={markerEnd} style={{ ...style, strokeWidth: selected ? 2.5 : 2, stroke: selected ? "#FF4FB5" : "#94a3c4" }} />
+      <BaseEdge id={id} path={path} markerEnd={markerEnd} style={{ ...style, strokeWidth: selected ? 2.5 : 2, stroke: selected ? "#FF4FB5" : "rgba(243,238,230,0.45)" }} />
       {selected && (
         <EdgeLabelRenderer>
           <button

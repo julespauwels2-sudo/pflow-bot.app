@@ -9,9 +9,10 @@ type Variant = "primary" | "secondary" | "ghost" | "danger";
 
 const variants: Record<Variant, string> = {
   primary: "bg-brand text-white shadow-bouton hover:brightness-105 active:translate-y-px",
-  secondary: "bg-white text-navy border border-line shadow-card hover:border-navy/25",
-  ghost: "text-navy hover:bg-navy/5",
-  danger: "bg-white text-coral border border-coral/40 hover:bg-coral/10",
+  // Bouton discret de pflow.fr (« ghost ») : fond crème à 4 %, trait crème à 14 %.
+  secondary: "bg-white/[0.04] text-ink border border-line hover:bg-white/10 hover:border-white/25",
+  ghost: "text-ink hover:bg-white/8",
+  danger: "bg-coral/10 text-coral border border-coral/40 hover:bg-coral/20",
 };
 
 // Téléphone (max-md) : 44 px de haut au moins, pour le doigt. Ordinateur : inchangé.
@@ -51,11 +52,11 @@ export function FileButton({ accept, onFile, children, variant = "secondary" }: 
 
 export function Card({ title, description, actions, children, className }: { title?: ReactNode; description?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={cx("rounded-[var(--radius-card)] border border-rule bg-white p-5 shadow-card sm:p-6", className)}>
+    <section className={cx("bg-verre rounded-[var(--radius-card)] border border-white/10 p-5 shadow-card sm:p-6", className)}>
       {(title || actions) && (
         <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            {title && <h2 className="text-lg font-semibold">{title}</h2>}
+            {title && <h2 className="font-title text-xl font-bold text-ink">{title}</h2>}
             {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}
           </div>
           {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
@@ -77,7 +78,7 @@ export function Field({ label, hint, error, children, className }: { label: stri
 }
 
 const inputBase =
-  "w-full rounded-[var(--radius-field)] border border-line bg-white px-3 py-2 text-sm text-navy placeholder:text-muted/60 focus:border-pink focus:outline-none focus:ring-4 focus:ring-pink/15";
+  "w-full rounded-[var(--radius-field)] border border-line bg-white/[0.06] px-3 py-2 text-sm text-ink placeholder:text-muted/70 focus:border-pink focus:bg-white/[0.09] focus:outline-none focus:ring-4 focus:ring-pink/20";
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cx(inputBase, className)} {...props} />;
@@ -93,10 +94,10 @@ export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectE
 
 type Tone = "neutral" | "success" | "warning" | "info";
 const tones: Record<Tone, string> = {
-  neutral: "bg-navy/5 text-muted",
-  success: "bg-wa/15 text-green-700",
-  warning: "bg-pink/10 text-pink",
-  info: "bg-blue/10 text-blue",
+  neutral: "bg-white/10 text-ink/85 ring-1 ring-white/10",
+  success: "bg-wa/15 text-emerald-300 ring-1 ring-wa/30",
+  warning: "bg-pink/15 text-pink-2 ring-1 ring-pink/30",
+  info: "bg-cyan/15 text-cyan ring-1 ring-cyan/30",
 };
 
 export function Badge({ tone = "neutral", children }: { tone?: Tone; children: ReactNode }) {
@@ -105,15 +106,15 @@ export function Badge({ tone = "neutral", children }: { tone?: Tone; children: R
 
 export function Notice({ tone = "info", children, onClose }: { tone?: "info" | "error" | "success"; children: ReactNode; onClose?: () => void }) {
   const styles = {
-    info: "border-blue/30 bg-blue/5",
-    error: "border-coral/40 bg-coral/10",
-    success: "border-wa/40 bg-wa/10",
+    info: "border-cyan/30 bg-cyan/10 text-ink",
+    error: "border-coral/50 bg-coral/15 text-ink",
+    success: "border-wa/40 bg-wa/12 text-ink",
   }[tone];
   return (
     <div role={tone === "error" ? "alert" : "status"} className={cx("flex items-start justify-between gap-3 rounded-2xl border px-4 py-3 text-sm", styles)}>
       <div>{children}</div>
       {onClose && (
-        <button type="button" onClick={onClose} className="text-muted hover:text-navy" aria-label="Fermer">
+        <button type="button" onClick={onClose} className="text-muted hover:text-ink" aria-label="Fermer">
           ✕
         </button>
       )}

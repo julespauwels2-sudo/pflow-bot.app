@@ -12,7 +12,7 @@ import { Badge, Button, ButtonLink, Card, Notice } from "./ui";
 
 const LEVEL_STYLE = {
   error: "text-coral font-semibold",
-  warning: "text-amber-700",
+  warning: "text-amber-300",
   info: "text-muted",
 } as const;
 const LEVEL_ICON = { error: "⚠", warning: "•", info: "ℹ︎" } as const;
@@ -142,7 +142,7 @@ export function BotCard({
         <div>
           <h3 className="text-sm font-semibold">À vérifier pour ce client</h3>
           {!checklist.some((item) => item.level !== "info") && (
-            <p className="mt-1 rounded-xl bg-wa/10 p-2.5 text-sm font-semibold text-green-700">Tout est prêt : il ne reste qu&apos;à connecter le numéro WhatsApp (étape C).</p>
+            <p className="mt-1 rounded-xl bg-wa/10 p-2.5 text-sm font-semibold text-emerald-300">Tout est prêt : il ne reste qu&apos;à connecter le numéro WhatsApp (étape C).</p>
           )}
           {checklist.length > 0 && (
             <ul className="mt-1 space-y-1 text-sm" data-testid="checklist">
@@ -160,7 +160,7 @@ export function BotCard({
           <div className="mt-2 space-y-3">
             {folders.map((name) => (
               <div key={name} className="rounded-2xl border border-rule" data-bot-folder={name}>
-                <p className="rounded-t-2xl bg-page px-3 py-2 text-sm font-semibold">📁 {name}</p>
+                <p className="rounded-t-2xl bg-white/5 px-3 py-2 text-sm font-semibold">📁 {name}</p>
                 <ul className="divide-y divide-rule px-3">
                   {fromTemplate
                     .filter((e) => (e.folderName ?? "Sans dossier") === name)

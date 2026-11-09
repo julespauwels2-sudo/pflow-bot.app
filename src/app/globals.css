@@ -12,32 +12,40 @@
   --color-pink: #ff4fb5;
   --color-pink-2: #ff7ccb;
   --color-pink-3: #f03ca5;
-  --color-blue: #2a8bff;
+  /* Bleu lumineux de pflow.fr/demo (lisible sur le navy). */
+  --color-blue: #2aabff;
   --color-cyan: #74ddfb;
   --color-coral: #ff6b6b;
   --color-wa: #22c55e;
-  --color-page: #f8f7fb;
-  --color-muted: #5e6690;
-  --color-line: rgb(16 27 77 / 0.12);
-  --color-rule: rgb(16 27 77 / 0.08);
-  --color-bulle-bot: #e8f1ff;
-  --color-bulle-humain: #ffe8f5;
-  --color-chat: #f1eff8;
+  /* Thème sombre de pflow.fr/demo : fond navy profond, texte crème, traits crème translucides. */
+  --color-fond: #0a1236;
+  --color-page: #0a1236;
+  --color-ink: #f3eee6;
+  --color-muted: rgb(243 238 230 / 0.72);
+  --color-line: rgb(243 238 230 / 0.16);
+  --color-rule: rgb(243 238 230 / 0.09);
+  /* Surfaces : cartes légèrement translucides sur le fond navy. */
+  --color-surface: rgb(255 255 255 / 0.05);
+  --color-surface-2: rgb(255 255 255 / 0.08);
+  --color-bulle-bot: rgb(42 171 255 / 0.2);
+  --color-bulle-humain: rgb(255 79 181 / 0.22);
+  --color-chat: #0d1640;
 
   /* Polices (fichiers du site, src/app/fonts) */
   --font-title: var(--font-fredoka), ui-rounded, system-ui, sans-serif;
   --font-sans: var(--font-manrope), system-ui, sans-serif;
 
   /* Arrondis */
-  --radius-card: 24px;
+  --radius-card: 26px;
   --radius-field: 14px;
   --radius-sheet: 28px;
 
   /* Ombres */
-  --shadow-card: 0 12px 30px rgb(16 27 77 / 0.08);
-  --shadow-pop: 0 24px 60px rgb(16 27 77 / 0.14);
-  --shadow-bouton: 0 14px 30px -10px rgb(255 79 181 / 0.6), inset 0 1px 0 rgb(255 255 255 / 0.55);
-  --shadow-bloc: 0 30px 70px -28px rgb(16 27 77 / 0.75);
+  --shadow-card: 0 24px 60px -28px rgb(0 0 0 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.06);
+  --shadow-pop: 0 30px 80px -30px rgb(0 0 0 / 0.7);
+  /* Bouton rose de pflow.fr : grande ombre rose diffuse et reflet en haut. */
+  --shadow-bouton: 0 18px 40px -12px rgb(255 79 181 / 0.75), inset 0 1px 0 rgb(255 255 255 / 0.35);
+  --shadow-bloc: 0 30px 70px -28px rgb(0 0 0 / 0.75);
 }
 
 /* Dégradés du site (boutons roses, blocs navy, filet de marque) */
@@ -59,13 +67,20 @@
 }
 /* Fond de conversation : léger motif de points, comme un papier peint WhatsApp aux couleurs PFlow */
 @utility bg-chat-motif {
-  background-color: #f1eff8;
-  background-image: radial-gradient(rgb(16 27 77 / 0.06) 1px, transparent 1.2px);
+  background-color: #0d1640;
+  background-image: radial-gradient(rgb(243 238 230 / 0.05) 1px, transparent 1.2px);
   background-size: 18px 18px;
+}
+/* Carte « verre » : translucide sur le fond navy, flou derrière. */
+@utility bg-verre {
+  background-color: rgb(255 255 255 / 0.05);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 html {
-  color-scheme: light;
+  /* Contrôles natifs (listes déroulantes, cases, barres de défilement) en sombre. */
+  color-scheme: dark;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -78,16 +93,43 @@ html {
   }
 }
 
+/* Fond de pflow.fr/demo : navy profond et deux halos (bleu en haut à gauche, rose à droite), fixes au défilement. */
 body {
-  background: var(--color-page);
-  color: var(--color-navy);
+  background-color: var(--color-fond);
+  background-image:
+    radial-gradient(520px 520px at 8% -8%, rgb(42 171 255 / 0.3), transparent 70%),
+    radial-gradient(480px 480px at 100% 38%, rgb(255 79 181 / 0.18), transparent 70%),
+    radial-gradient(600px 400px at 30% 110%, rgb(116 221 251 / 0.08), transparent 70%);
+  background-attachment: fixed;
+  color: var(--color-ink);
   font-family: var(--font-sans);
+}
+
+::selection {
+  background: rgb(255 79 181 / 0.35);
 }
 
 h1,
 h2,
 h3 {
   font-family: var(--font-title);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Éditeur de flux (React Flow) en sombre : fond, poignées, commandes, mini-carte. */
+.react-flow {
+  --xy-background-color: transparent;
+  --xy-background-pattern-color: rgb(243 238 230 / 0.12);
+  --xy-edge-stroke: rgb(243 238 230 / 0.45);
+  --xy-edge-stroke-selected: #ff4fb5;
+  --xy-controls-button-background-color: #141e4a;
+  --xy-controls-button-background-color-hover: #1b2a6b;
+  --xy-controls-button-color: #f3eee6;
+  --xy-controls-button-border-color: rgb(243 238 230 / 0.14);
+  --xy-minimap-background-color: #0d1640;
+  --xy-minimap-mask-background-color: rgb(10 18 54 / 0.6);
+  --xy-attribution-background-color: transparent;
 }
 
 /* Simulateur : surlignage du bloc en cours et des blocs exécutés */

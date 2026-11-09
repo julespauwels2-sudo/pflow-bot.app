@@ -41,7 +41,7 @@ export default function ClientPage() {
 
   const breadcrumb = (
     <>
-      <Link href="/clients" className="hover:text-navy">
+      <Link href="/clients" className="hover:text-ink">
         Clients
       </Link>
       {state.status === "ready" && state.data && <> / {state.data.client.nomResto}</>}
@@ -132,7 +132,7 @@ function ClientSettings({ client, onSaved }: { client: BotClient; onSaved: () =>
   return (
     <Card title="Infos client" className="h-fit">
       <form onSubmit={save} className="space-y-4">
-        {isCrmMode && <p className="rounded-xl bg-page p-2.5 text-[11px] text-muted">Nom, slug, fuseau et options payantes viennent du CRM : à modifier là-bas.</p>}
+        {isCrmMode && <p className="rounded-xl bg-white/5 p-2.5 text-[11px] text-muted">Nom, slug, fuseau et options payantes viennent du CRM : à modifier là-bas.</p>}
         <Field label="Nom du resto" hint="Variable {{nom_resto}} dans les messages.">
           <Input required disabled={isCrmMode} value={form.nomResto} onChange={(e) => setForm({ ...form, nomResto: e.target.value })} />
         </Field>

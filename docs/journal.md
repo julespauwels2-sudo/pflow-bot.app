@@ -1051,3 +1051,11 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
 - **Runbook de migration** (`docs/etape-c/migration-3-clients.md`) : canaux déjà créés, il ne reste par resto que
   5 étapes (abonner l'app, pause UChat pour le numéro de Jules, tester, désactiver UChat, passer en actif).
 
+
+## 9 novembre 2026 (nuit) — refonte sombre de PFlow Bots (PR séparée, sans fusion)
+
+- Toutes les pages, ordinateur et iPhone, aux couleurs de pflow.fr/demo : fond navy et halos, cartes translucides,
+  titres Fredoka, boutons roses en pilule, badges colorés, éditeur de flux et boîte de réception en sombre.
+- Contrastes vérifiés ; aucun changement de fonctionnement (452 tests). Captures avant/après de chaque page :
+  `docs/captures/da-sombre/`. Détail : `docs/etape-c/direction-artistique.md`.
+

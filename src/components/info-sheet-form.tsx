@@ -104,7 +104,7 @@ export function InfoSheetForm({
                   <span className="w-24 text-sm font-semibold capitalize">{WEEKDAY_LABELS[jour]}</span>
                   {plages.length === 0 && <span className="text-sm text-muted">Fermé</span>}
                   {plages.map((plage, i) => (
-                    <span key={i} className="flex items-center gap-1 rounded-xl bg-page px-2 py-1">
+                    <span key={i} className="flex items-center gap-1 rounded-xl bg-white/5 px-2 py-1">
                       <input
                         type="time"
                         aria-label={`${WEEKDAY_LABELS[jour]} ouverture`}
@@ -177,7 +177,7 @@ export function InfoSheetForm({
                   Paiement
                   <CrmTag />
                 </p>
-                <p className="mt-1 rounded-xl bg-page px-3 py-2 text-sm text-muted">{paymentSentence(sheet)}</p>
+                <p className="mt-1 rounded-xl bg-white/5 px-3 py-2 text-sm text-muted">{paymentSentence(sheet)}</p>
                 {sheet.paiementEnLigne.aConfigurer && (
                   <p className={`mt-1 text-xs ${isDemo ? "text-muted" : "text-coral"}`}>Paiement en ligne pas encore configuré (SumUp ou Stripe).</p>
                 )}
@@ -350,7 +350,7 @@ function DeliveryEditor({
         </div>
       )}
       {forcedPlanning && (
-        <p className="rounded-xl bg-pink/10 p-2 text-xs text-navy" data-testid="planning-force">
+        <p className="rounded-xl bg-pink/10 p-2 text-xs text-ink" data-testid="planning-force">
           Il reste {upcoming!.size} tournée{upcoming!.size > 1 ? "s" : ""} à venir : le bot reste « sur planning » tant qu&apos;elles existent
           (les zones ne sont pas annoncées). Supprime-les pour revenir aux zones.
         </p>
@@ -420,7 +420,7 @@ function FixedDaysEditor({ sheet, onChange }: { sheet: InfoSheet; onChange: (s: 
                     type="button"
                     aria-pressed={on}
                     aria-label={`${r.zone || "Zone"} : ${WEEKDAY_LABELS[jour]}`}
-                    className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${on ? "bg-pink text-white" : "bg-navy/5 text-muted hover:bg-navy/10"}`}
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${on ? "bg-pink text-white" : "bg-white/5 text-muted hover:bg-white/10"}`}
                     onClick={() => update(r.id, { jours: on ? r.jours.filter((d) => d !== jour) : [...r.jours, jour].sort((a, b) => a - b) })}
                   >
                     {WEEKDAY_LABELS[jour].slice(0, 3)}
@@ -453,7 +453,7 @@ function VariablesPreview({ sheet, timezone }: { sheet: InfoSheet; timezone: str
   if (minute === null) return null;
   const vars = infoSheetVariables(sheet, new Date(minute * 60_000), timezone);
   return (
-    <details className="rounded-2xl border border-rule bg-page p-3">
+    <details className="rounded-2xl border border-rule bg-white/5 p-3">
       <summary className="cursor-pointer text-sm font-semibold">Aperçu des variables utilisables dans les messages</summary>
       <dl className="mt-3 space-y-3">
         {Object.entries(vars).map(([name, value]) => (
@@ -462,7 +462,7 @@ function VariablesPreview({ sheet, timezone }: { sheet: InfoSheet; timezone: str
               <span className="font-mono font-semibold text-pink">{`{{${name}}}`}</span>
               <span className="text-muted"> · {INFO_VARIABLE_LABELS.get(name)}</span>
             </dt>
-            <dd className="mt-1 rounded-xl bg-white px-3 py-2 text-sm whitespace-pre-wrap">{value || <span className="text-muted italic">(vide)</span>}</dd>
+            <dd className="mt-1 rounded-xl bg-verre px-3 py-2 text-sm whitespace-pre-wrap">{value || <span className="text-muted italic">(vide)</span>}</dd>
           </div>
         ))}
       </dl>

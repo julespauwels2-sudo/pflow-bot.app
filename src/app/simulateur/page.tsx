@@ -72,7 +72,7 @@ function ClientSimulatorLoader() {
     return (
       <Centered>
         <h1 className="text-2xl font-semibold">Simulateur</h1>
-        <Link href="/simulateur?numero=pflow" className="block rounded-2xl border border-line bg-white p-3 text-sm font-semibold hover:bg-page" data-testid="sim-pflow">
+        <Link href="/simulateur?numero=pflow" className="block rounded-2xl border border-line bg-verre p-3 text-sm font-semibold hover:bg-white/5" data-testid="sim-pflow">
           📱 Numéro PFlow (démos) : tester les mots-clés de démo
         </Link>
         {clients.length === 0 ? (

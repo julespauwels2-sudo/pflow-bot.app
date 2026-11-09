@@ -75,7 +75,7 @@ export function MobileInboxList({
       {rows.length === 0 ? (
         <p className="py-10 text-center text-base text-muted">Aucune conversation pour le moment.</p>
       ) : (
-        <ul className="divide-y divide-rule overflow-hidden rounded-[var(--radius-card)] border border-rule bg-white shadow-card">
+        <ul className="divide-y divide-rule overflow-hidden rounded-[var(--radius-card)] border border-white/10 bg-verre shadow-card">
           {rows.map(({ canal, conv }) => {
             const name = who(canal, conv);
             const unread = isUnread(conv, seen);
@@ -95,14 +95,14 @@ export function MobileInboxList({
                       <span className={`shrink-0 text-xs ${unread ? "font-bold text-pink-3" : "text-muted"}`}>{shortTime(lastAt(conv))}</span>
                     </span>
                     <span className="flex items-center gap-2">
-                      <span className={`min-w-0 flex-1 truncate text-sm ${unread ? "font-semibold text-navy" : "text-muted"}`}>
+                      <span className={`min-w-0 flex-1 truncate text-sm ${unread ? "font-semibold text-ink" : "text-muted"}`}>
                         {conv.dernierMessage ? `${conv.dernierMessage.sens === "entrant" ? "" : "↪ "}${plainExtract(conv.dernierMessage.texte)}` : "—"}
                       </span>
                       {unread && <span className="bg-brand size-2.5 shrink-0 rounded-full" aria-label="non lu" />}
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-1.5">
                       {conv.transfertOuvert && <span className="bg-brand rounded-full px-2.5 py-0.5 text-xs font-bold text-white">🔔 Attend l&apos;équipe</span>}
-                      {pause && !conv.transfertOuvert && <span className="rounded-full bg-navy/10 px-2 py-0.5 text-xs font-semibold">⏸ {pause}</span>}
+                      {pause && !conv.transfertOuvert && <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-semibold">⏸ {pause}</span>}
                       <span className="truncate text-xs text-muted">
                         {canal.plateforme === "instagram" ? "📸" : "💬"} {canal.nomResto}
                         {conv.demoEnCours ? ` · démo ${conv.demoEnCours}` : ""}
@@ -217,7 +217,7 @@ export function MobileConversation({
               Rendre au bot
             </button>
           ) : (
-            <button type="button" onClick={() => void onTakeOver()} className="min-h-11 rounded-full bg-white px-4 text-sm font-bold text-navy" data-testid="mobile-reprendre">
+            <button type="button" onClick={() => void onTakeOver()} className="min-h-11 rounded-full bg-verre px-4 text-sm font-bold text-ink" data-testid="mobile-reprendre">
               Reprendre la main
             </button>
           )}
@@ -252,7 +252,7 @@ export function MobileConversation({
             <div key={m.id} className={`flex ${m.sens === "entrant" ? "justify-start" : "justify-end"}`}>
               <div
                 className={`max-w-[85%] overflow-hidden rounded-2xl px-3 py-1.5 text-base leading-snug break-words whitespace-pre-wrap shadow-sm ${
-                  m.sens === "entrant" ? "rounded-tl-sm bg-white" : m.auteur === "humain" || m.sens === "echo" ? "rounded-tr-sm bg-bulle-humain" : "rounded-tr-sm bg-bulle-bot"
+                  m.sens === "entrant" ? "rounded-tl-sm bg-verre" : m.auteur === "humain" || m.sens === "echo" ? "rounded-tr-sm bg-bulle-humain" : "rounded-tr-sm bg-bulle-bot"
                 }`}
               >
                 {m.sens !== "entrant" && (
@@ -276,7 +276,7 @@ export function MobileConversation({
       </div>
 
       <form
-        className={`flex shrink-0 items-end gap-2 rounded-t-[var(--radius-card)] bg-white px-2 pt-2 shadow-[0_-10px_30px_rgb(16_27_77/0.06)] ${keyboard ? "pb-2" : "pb-[max(0.5rem,env(safe-area-inset-bottom))]"}`}
+        className={`flex shrink-0 items-end gap-2 rounded-t-[var(--radius-card)] bg-verre px-2 pt-2 shadow-[0_-10px_30px_rgb(16_27_77/0.06)] ${keyboard ? "pb-2" : "pb-[max(0.5rem,env(safe-area-inset-bottom))]"}`}
         onSubmit={(e) => {
           e.preventDefault();
           void send();
@@ -291,7 +291,7 @@ export function MobileConversation({
               value={texte}
               onChange={(e) => setTexte(e.target.value)}
               placeholder={conv.pause ? "Message" : "Message (le bot se met en pause)"}
-              className="max-h-[132px] min-h-11 flex-1 resize-none rounded-3xl border border-line bg-page px-4 py-2.5 text-base leading-snug outline-none focus:border-pink focus:ring-4 focus:ring-pink/15"
+              className="max-h-[132px] min-h-11 flex-1 resize-none rounded-3xl border border-line bg-white/5 px-4 py-2.5 text-base leading-snug outline-none focus:border-pink focus:ring-4 focus:ring-pink/15"
               data-testid="mobile-reponse"
             />
             <button

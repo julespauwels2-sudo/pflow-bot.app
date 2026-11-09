@@ -118,7 +118,7 @@ export function MobileTabBar() {
     <nav
       aria-label="Navigation"
       data-testid="mobile-tabs"
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-rule bg-white/90 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgb(16_27_77/0.06)] backdrop-blur-xl md:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-fond/85 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgb(0_0_0/0.35)] backdrop-blur-xl md:hidden"
     >
       <ul className="flex px-2">
         {TABS.map((tab) => {
@@ -128,9 +128,9 @@ export function MobileTabBar() {
               <Link
                 href={tab.href}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs font-bold ${active ? "text-pink-3" : "text-muted"}`}
+                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs font-bold ${active ? "text-pink-2" : "text-muted"}`}
               >
-                <span className={`grid h-8 w-14 place-items-center rounded-full transition ${active ? "bg-pink/12" : ""}`}>
+                <span className={`grid h-8 w-14 place-items-center rounded-full transition ${active ? "bg-pink/20" : ""}`}>
                   <svg viewBox="0 0 24 24" className="size-6" aria-hidden>
                     {tab.icon}
                   </svg>

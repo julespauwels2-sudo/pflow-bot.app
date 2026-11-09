@@ -244,8 +244,8 @@ function AlertesBanner({ data }: { data: SystemStatus }) {
   else if (canaux && data.push && data.push.appareils === 0) lignes.push("Aucun appareil abonné aux notifications : aucune alerte ne peut vous joindre. Active-les ci-dessous (encadré « Notifications push »).");
   if (!lignes.length) return null;
   return (
-    <div role="alert" data-testid="alertes-bandeau" className="mt-6 rounded-2xl border-2 border-coral bg-coral/10 p-4 text-[#9F1F1F]">
-      <p className="text-lg font-bold">🚨 Alertes : personne n&apos;est prévenu</p>
+    <div role="alert" data-testid="alertes-bandeau" className="mt-6 rounded-2xl border-2 border-coral bg-coral/15 p-4 text-ink shadow-[0_0_40px_-10px_rgb(255_107_107/0.6)]">
+      <p className="text-lg font-bold text-coral">🚨 Alertes : personne n&apos;est prévenu</p>
       <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm font-semibold">
         {lignes.map((l) => (
           <li key={l}>{l}</li>
@@ -448,7 +448,7 @@ function WhatsAppAccountsCard() {
       <label className="mb-3 block text-sm">
         <span className="font-semibold">Comptes à interroger directement (facultatif)</span>
         <textarea
-          className="mt-1 block min-h-20 w-full rounded-[var(--radius-field)] border border-line bg-white px-3 py-2 font-mono text-sm focus:border-pink focus:ring-4 focus:ring-pink/15 focus:outline-none"
+          className="mt-1 block min-h-20 w-full rounded-[var(--radius-field)] border border-line bg-verre px-3 py-2 font-mono text-sm focus:border-pink focus:ring-4 focus:ring-pink/15 focus:outline-none"
           placeholder={"1120744623676139 ag pizza\n1678321033943134 Mexico\n2577158539379673 cookies an nou"}
           value={saisis}
           onChange={(e) => setSaisis(e.target.value)}
@@ -517,7 +517,7 @@ function WhatsAppAccountsCard() {
                   <p className="text-xs text-muted">
                     {p.numero} → {p.resto ?? "resto à choisir"}
                   </p>
-                  <pre className="mt-1 overflow-x-auto rounded-xl bg-page p-3 text-xs">{p.sql}</pre>
+                  <pre className="mt-1 overflow-x-auto rounded-xl bg-white/5 p-3 text-xs">{p.sql}</pre>
                 </div>
               ))}
             </div>

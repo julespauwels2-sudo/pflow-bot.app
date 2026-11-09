@@ -14,21 +14,21 @@ export { Logo };
 export function AppShell({ children, breadcrumb, mobile = false }: { children: ReactNode; breadcrumb?: ReactNode; mobile?: boolean }) {
   const page = (
     <div className="min-h-screen">
-      <header className={`relative border-b border-rule bg-white/85 backdrop-blur ${mobile ? "hidden md:block" : ""}`}>
+      <header className={`sticky top-0 z-20 border-b border-white/10 bg-fond/70 backdrop-blur-xl ${mobile ? "hidden md:block" : ""}`}>
         <div className="bg-filet absolute inset-x-0 bottom-0 h-[2px] opacity-70" aria-hidden />
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
           <Logo />
           <nav className="flex max-w-full items-center gap-1 overflow-x-auto text-sm font-semibold whitespace-nowrap">
-            <Link href="/modele" className="rounded-full px-3 py-1.5 transition hover:bg-pink/10 hover:text-pink-3">
+            <Link href="/modele" className="rounded-full px-3.5 py-2 text-ink/85 transition hover:bg-white/10 hover:text-white">
               Modèle maître
             </Link>
-            <Link href="/clients" className="rounded-full px-3 py-1.5 transition hover:bg-pink/10 hover:text-pink-3">
+            <Link href="/clients" className="rounded-full px-3.5 py-2 text-ink/85 transition hover:bg-white/10 hover:text-white">
               Clients
             </Link>
-            <Link href="/demos" className="rounded-full px-3 py-1.5 transition hover:bg-pink/10 hover:text-pink-3">
+            <Link href="/demos" className="rounded-full px-3.5 py-2 text-ink/85 transition hover:bg-white/10 hover:text-white">
               Démos
             </Link>
-            <Link href="/inbox" className="rounded-full px-3 py-1.5 transition hover:bg-pink/10 hover:text-pink-3">
+            <Link href="/inbox" className="rounded-full px-3.5 py-2 text-ink/85 transition hover:bg-white/10 hover:text-white">
               Boîte de réception
             </Link>
             <AccountMenu />

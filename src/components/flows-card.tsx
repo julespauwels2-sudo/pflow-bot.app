@@ -187,7 +187,7 @@ function FolderSection({
 
   return (
     <details open className="group/folder rounded-2xl border border-rule" data-folder={title}>
-      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 rounded-2xl bg-page px-3 py-2">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 rounded-2xl bg-white/5 px-3 py-2">
         <span className="text-muted transition group-open/folder:rotate-90" aria-hidden>
           ▸
         </span>
@@ -196,18 +196,18 @@ function FolderSection({
         <Badge>{flows.length}</Badge>
         {folder && !renaming && (
           <span className="flex gap-0.5 text-xs font-semibold" onClick={(e) => e.preventDefault()}>
-            <button type="button" className="rounded px-1.5 py-0.5 text-muted hover:bg-white hover:text-navy" onClick={() => setRenaming(true)}>
+            <button type="button" className="rounded px-1.5 py-0.5 text-muted hover:bg-white/10 hover:text-ink" onClick={() => setRenaming(true)}>
               Renommer
             </button>
-            <button type="button" aria-label={`Monter ${title}`} disabled={isFirst} className="rounded px-1.5 py-0.5 text-muted hover:bg-white disabled:opacity-30" onClick={() => run(() => repos().folders.move(folder.id, -1))}>
+            <button type="button" aria-label={`Monter ${title}`} disabled={isFirst} className="rounded px-1.5 py-0.5 text-muted hover:bg-white/10 disabled:opacity-30" onClick={() => run(() => repos().folders.move(folder.id, -1))}>
               ↑
             </button>
-            <button type="button" aria-label={`Descendre ${title}`} disabled={isLast} className="rounded px-1.5 py-0.5 text-muted hover:bg-white disabled:opacity-30" onClick={() => run(() => repos().folders.move(folder.id, 1))}>
+            <button type="button" aria-label={`Descendre ${title}`} disabled={isLast} className="rounded px-1.5 py-0.5 text-muted hover:bg-white/10 disabled:opacity-30" onClick={() => run(() => repos().folders.move(folder.id, 1))}>
               ↓
             </button>
             <button
               type="button"
-              className="rounded px-1.5 py-0.5 text-coral hover:bg-white"
+              className="rounded px-1.5 py-0.5 text-coral hover:bg-white/10"
               onClick={() => {
                 const what = flows.length ? ` Ses ${flows.length} flux passeront dans « Sans dossier ».` : "";
                 if (window.confirm(`Supprimer le dossier « ${title} » ?${what}`)) run(() => repos().folders.delete(folder.id), `Dossier « ${title} » supprimé.`);

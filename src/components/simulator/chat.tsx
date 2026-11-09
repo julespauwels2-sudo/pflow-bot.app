@@ -110,7 +110,7 @@ export function Chat({
   }, [entries.length, typing]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#efeae2]">
+    <div className="flex h-full min-h-0 flex-col bg-[#efeae2] text-[#111b21] [color-scheme:light]">
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3" data-testid="chat">
         {entries.length === 0 && empty}
         {entries.map((e) => {
@@ -161,7 +161,7 @@ export function Chat({
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Écrire comme le client…"
-          className="min-w-0 flex-1 rounded-full bg-white px-4 py-2 text-sm focus:outline-none"
+          className="min-w-0 flex-1 rounded-full bg-white px-4 py-2 text-sm text-[#111b21] [color-scheme:light] placeholder:text-[#667781] focus:outline-none"
         />
         <button type="submit" disabled={busy || !text.trim()} className="rounded-full bg-[#00a884] px-4 text-sm font-semibold text-white disabled:opacity-40">
           Envoyer

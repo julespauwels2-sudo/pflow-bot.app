@@ -193,12 +193,12 @@ export function Simulator({ client, infoSheet, templateFlows, clientFlows, templ
   return (
     <div className="flex min-h-dvh flex-col lg:h-dvh">
       {/* Barre du haut */}
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-rule bg-white px-3 py-2 sm:px-4">
-        <Link href={`/clients/${client.id}`} className="text-sm font-semibold text-muted hover:text-navy">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-rule bg-verre px-3 py-2 sm:px-4">
+        <Link href={`/clients/${client.id}`} className="text-sm font-semibold text-muted hover:text-ink">
           ← {client.nomResto}
         </Link>
         <h1 className="font-title text-lg font-semibold">Simulateur</h1>
-        <span className="rounded-full bg-page px-2.5 py-0.5 text-xs text-muted">
+        <span className="rounded-full bg-white/5 px-2.5 py-0.5 text-xs text-muted">
           {resolved.flows.length} flux actifs{client.template ? " · modèle + flux du client" : ""}
         </span>
         <label className="flex items-center gap-1.5 text-xs font-semibold">
@@ -239,7 +239,7 @@ export function Simulator({ client, infoSheet, templateFlows, clientFlows, templ
           <input type="time" aria-label="Heure simulée" className="rounded-lg border border-line px-1.5 py-0.5 text-xs" value={clockTime} onChange={(e) => setClockTime(e.target.value)} />
           <button
             type="button"
-            className="rounded-full border border-line px-2.5 py-1 text-xs font-semibold hover:border-navy/30"
+            className="rounded-full border border-line px-2.5 py-1 text-xs font-semibold hover:border-white/30"
             onClick={() => {
               const target = zonedToUtc(clockDate, clockTime, tz);
               if (Number.isNaN(target.getTime())) return;
@@ -253,7 +253,7 @@ export function Simulator({ client, infoSheet, templateFlows, clientFlows, templ
               key={a.label}
               type="button"
               title={a.hint ? `Avancer le temps (${a.hint})` : "Avancer le temps"}
-              className="rounded-full bg-navy/5 px-2.5 py-1 text-xs font-semibold hover:bg-navy/10"
+              className="rounded-full bg-white/5 px-2.5 py-1 text-xs font-semibold hover:bg-white/10"
               onClick={() => advance(a.minutes)}
             >
               {a.label}
@@ -280,7 +280,7 @@ export function Simulator({ client, infoSheet, templateFlows, clientFlows, templ
                 <div className="mx-auto mt-6 max-w-[90%] rounded-xl bg-white/80 p-3 text-center text-[13px] text-[#54656f]">
                   Écris comme un client (ex. « bonjour », « commander »).{" "}
                   {focusFlow && (
-                    <button type="button" className="mt-2 block w-full rounded-lg bg-white py-1.5 font-semibold text-[#027eb5]" onClick={() => send({ kind: "start_flow", flowId: focusFlow.id })}>
+                    <button type="button" className="mt-2 block w-full rounded-lg bg-verre py-1.5 font-semibold text-[#027eb5]" onClick={() => send({ kind: "start_flow", flowId: focusFlow.id })}>
                       ▶ Lancer « {focusFlow.name} »
                     </button>
                   )}
@@ -289,15 +289,15 @@ export function Simulator({ client, infoSheet, templateFlows, clientFlows, templ
             />
           </div>
           {/* Autres actions */}
-          <div className="space-y-2 border-t border-rule bg-white p-2">
+          <div className="space-y-2 border-t border-rule bg-verre p-2">
             <div className="flex flex-wrap gap-1.5">
-              <button type="button" disabled={busy} className="rounded-full bg-navy/5 px-2.5 py-1 text-xs font-semibold hover:bg-navy/10" onClick={() => send({ kind: "unsupported", mediaType: "audio" })}>
+              <button type="button" disabled={busy} className="rounded-full bg-white/5 px-2.5 py-1 text-xs font-semibold hover:bg-white/10" onClick={() => send({ kind: "unsupported", mediaType: "audio" })}>
                 🎤 Vocal
               </button>
               <button
                 type="button"
                 disabled={busy}
-                className="rounded-full bg-navy/5 px-2.5 py-1 text-xs font-semibold hover:bg-navy/10"
+                className="rounded-full bg-white/5 px-2.5 py-1 text-xs font-semibold hover:bg-white/10"
                 onClick={() => {
                   const text = window.prompt("Message du gérant (depuis l'appli WhatsApp Business) :", "Je m'en occupe 👍");
                   if (text !== null) send({ kind: "echo", text });
@@ -305,12 +305,12 @@ export function Simulator({ client, infoSheet, templateFlows, clientFlows, templ
               >
                 👩‍💼 Le gérant répond
               </button>
-              <button type="button" disabled={busy} className="rounded-full bg-navy/5 px-2.5 py-1 text-xs font-semibold hover:bg-navy/10" onClick={() => setEventOpen((o) => !o)}>
+              <button type="button" disabled={busy} className="rounded-full bg-white/5 px-2.5 py-1 text-xs font-semibold hover:bg-white/10" onClick={() => setEventOpen((o) => !o)}>
                 📦 Événement PFlow Order
               </button>
               <select
                 aria-label="Lancer un flux"
-                className="rounded-full bg-navy/5 px-2 py-1 text-xs font-semibold"
+                className="rounded-full bg-white/5 px-2 py-1 text-xs font-semibold"
                 value=""
                 disabled={busy}
                 onChange={(e) => e.target.value && send({ kind: "start_flow", flowId: e.target.value })}
@@ -374,8 +374,8 @@ export function Simulator({ client, infoSheet, templateFlows, clientFlows, templ
         </div>
 
         {/* Tableau blanc (lecture seule) */}
-        <div className="flex h-[60dvh] min-h-0 flex-col bg-page lg:h-auto">
-          <div className="flex flex-wrap items-center gap-2 border-b border-rule bg-white px-3 py-2 text-xs">
+        <div className="flex h-[60dvh] min-h-0 flex-col bg-white/5 lg:h-auto">
+          <div className="flex flex-wrap items-center gap-2 border-b border-rule bg-verre px-3 py-2 text-xs">
             <span className="font-semibold">Flux affiché</span>
             <select aria-label="Flux affiché" className="rounded-lg border border-line px-2 py-1 text-xs" value={shownFlowId ?? ""} onChange={(e) => setViewFlowId(e.target.value || undefined)}>
               {resolved.flows.map((f) => (
@@ -403,7 +403,7 @@ export function Simulator({ client, infoSheet, templateFlows, clientFlows, templ
         </div>
 
         {/* État + journal */}
-        <aside className="space-y-6 overflow-y-auto border-t border-rule bg-white p-4 lg:border-t-0 lg:border-l">
+        <aside className="space-y-6 overflow-y-auto border-t border-rule bg-verre p-4 lg:border-t-0 lg:border-l">
           <StatePanel
             now={now}
             timezone={tz}

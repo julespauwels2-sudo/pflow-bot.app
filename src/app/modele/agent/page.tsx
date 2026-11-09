@@ -25,7 +25,7 @@ export default function AgentPage() {
 
   const breadcrumb = (
     <>
-      <Link href="/modele" className="hover:text-navy">
+      <Link href="/modele" className="hover:text-ink">
         Modèle maître
       </Link>{" "}
       / Agent IA
@@ -152,7 +152,7 @@ function AgentForm({
         </Notice>
       )}
       {issues.length > 0 && (
-        <ul className="space-y-1 rounded-2xl border border-line bg-white p-4 text-sm" data-testid="agent-issues">
+        <ul className="space-y-1 rounded-2xl border border-line bg-verre p-4 text-sm" data-testid="agent-issues">
           {issues.map((i) => (
             <li key={i.message} className={i.level === "error" ? "font-semibold text-coral" : "text-muted"}>
               {i.level === "error" ? "✕" : "⚠"} {i.message}
@@ -278,7 +278,7 @@ function AgentForm({
               <li>
                 <details>
                   <summary className="cursor-pointer font-semibold">Règles PFlow</summary>
-                  <pre className="mt-2 max-h-80 overflow-auto rounded-xl bg-page p-2 text-[11px] whitespace-pre-wrap">{PFLOW_RULES}</pre>
+                  <pre className="mt-2 max-h-80 overflow-auto rounded-xl bg-white/5 p-2 text-[11px] whitespace-pre-wrap">{PFLOW_RULES}</pre>
                 </details>
               </li>
               <li>

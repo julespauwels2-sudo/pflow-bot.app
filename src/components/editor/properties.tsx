@@ -22,12 +22,12 @@ import { useEditor } from "./context";
 import { VariableField } from "./variable-field";
 
 const inputCls =
-  "w-full rounded-xl border border-line bg-white px-3 py-2 text-sm text-navy placeholder:text-muted/60 focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue/20";
+  "w-full rounded-xl border border-line bg-verre px-3 py-2 text-sm text-ink placeholder:text-muted/60 focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue/20";
 
 function Row({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
   return (
     <div>
-      <p className="mb-1 text-xs font-semibold text-navy">{label}</p>
+      <p className="mb-1 text-xs font-semibold text-ink">{label}</p>
       {children}
       {hint && <p className="mt-1 text-[11px] text-muted">{hint}</p>}
     </div>
@@ -88,7 +88,7 @@ function OptionsEditor({
             <button
               type="button"
               disabled={i === 0}
-              className="text-muted hover:text-navy disabled:opacity-30"
+              className="text-muted hover:text-ink disabled:opacity-30"
               onClick={() => {
                 const next = [...options];
                 [next[i - 1], next[i]] = [next[i], next[i - 1]];
@@ -192,7 +192,7 @@ function RuleEditor({ rule, onChange, onRemove, variables }: { rule: ConditionRu
                 key={d}
                 type="button"
                 aria-pressed={on}
-                className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${on ? "bg-navy text-white" : "bg-navy/5 text-muted"}`}
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${on ? "bg-navy-2 text-white" : "bg-white/5 text-muted"}`}
                 onClick={() => onChange({ ...rule, jours: on ? rule.jours.filter((x) => x !== d) : [...rule.jours, d].sort() })}
               >
                 {WEEKDAY_LABELS[d].slice(0, 3)}
@@ -260,13 +260,13 @@ function MessageFields({ node }: { node: Extract<FlowNode, { type: "message" }> 
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold">Bulle {i + 1}</p>
               <div className="flex gap-2 text-[11px] font-semibold">
-                <button type="button" disabled={i === 0} className="text-muted hover:text-navy disabled:opacity-30" onClick={() => update(moveBubble(data, bubble.id, -1), "bubble:move")}>
+                <button type="button" disabled={i === 0} className="text-muted hover:text-ink disabled:opacity-30" onClick={() => update(moveBubble(data, bubble.id, -1), "bubble:move")}>
                   ↑
                 </button>
                 <button
                   type="button"
                   disabled={i === data.bubbles.length - 1}
-                  className="text-muted hover:text-navy disabled:opacity-30"
+                  className="text-muted hover:text-ink disabled:opacity-30"
                   onClick={() => update(moveBubble(data, bubble.id, 1), "bubble:move")}
                 >
                   ↓
@@ -302,7 +302,7 @@ function MessageFields({ node }: { node: Extract<FlowNode, { type: "message" }> 
                   </button>
                 </div>
               ) : (
-                <div key={b.id} className="space-y-1.5 rounded-xl bg-page p-2">
+                <div key={b.id} className="space-y-1.5 rounded-xl bg-white/5 p-2">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs" title="Bouton lien">🔗</span>
                     <input
@@ -376,7 +376,7 @@ function MessageFields({ node }: { node: Extract<FlowNode, { type: "message" }> 
       <button
         type="button"
         disabled={!canAddBubble(data)}
-        className="w-full rounded-xl border border-dashed border-line py-2 text-sm font-semibold text-muted hover:border-navy/30 hover:text-navy disabled:opacity-40"
+        className="w-full rounded-xl border border-dashed border-line py-2 text-sm font-semibold text-muted hover:border-white/30 hover:text-ink disabled:opacity-40"
         onClick={() => update(addBubble(data), "bubble:add")}
       >
         + Ajouter une bulle
@@ -424,7 +424,7 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
                   ))}
                 </select>
               </Row>
-              <p className="rounded-xl bg-page p-2.5 text-[11px] text-muted">
+              <p className="rounded-xl bg-white/5 p-2.5 text-[11px] text-muted">
                 Envoyé seulement si le client a écrit au bot depuis moins de 24 h (sinon : rien). Envoyé même si le bot est en pause pour ce
                 contact, sans relancer la conversation. Branchement avec PFlow Order à l&apos;étape C.
               </p>
@@ -615,7 +615,7 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
       };
       return (
         <>
-          <p className="rounded-xl bg-page p-2.5 text-[11px] text-muted">
+          <p className="rounded-xl bg-white/5 p-2.5 text-[11px] text-muted">
             Le bot reste sur ce bloc : l&apos;IA répond à chaque message avec la fiche d&apos;infos du client, jusqu&apos;à une fonction, un transfert,
             un mot-clé ou le délai d&apos;inactivité.
           </p>
@@ -749,7 +749,7 @@ export function NodeProperties({ node, onDuplicate, onDelete }: { node: FlowNode
       {nodeIssues.length > 0 && (
         <ul className="space-y-1 rounded-xl bg-coral/5 p-2.5 text-xs">
           {nodeIssues.map((i, k) => (
-            <li key={k} className={i.level === "error" ? "font-semibold text-coral" : "text-amber-700"}>
+            <li key={k} className={i.level === "error" ? "font-semibold text-coral" : "text-amber-300"}>
               {i.level === "error" ? "⚠" : "•"} {i.message}
             </li>
           ))}
@@ -760,7 +760,7 @@ export function NodeProperties({ node, onDuplicate, onDelete }: { node: FlowNode
 
       {node.type !== "trigger" && (
         <div className="flex gap-2 border-t border-rule pt-3">
-          <button type="button" className="flex-1 rounded-full border border-line py-1.5 text-sm font-semibold hover:border-navy/30" onClick={onDuplicate}>
+          <button type="button" className="flex-1 rounded-full border border-line py-1.5 text-sm font-semibold hover:border-white/30" onClick={onDuplicate}>
             Dupliquer
           </button>
           <button type="button" className="flex-1 rounded-full border border-coral/40 py-1.5 text-sm font-semibold text-coral hover:bg-coral/10" onClick={onDelete}>

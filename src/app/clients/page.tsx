@@ -182,9 +182,9 @@ export default function ClientsPage() {
                   aria-selected={tab === id}
                   data-testid={`onglet-${id}`}
                   onClick={() => chooseTab(id)}
-                  className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold ${tab === id ? "border-pink text-navy" : "border-transparent text-muted hover:text-navy"}`}
+                  className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold ${tab === id ? "border-pink text-ink" : "border-transparent text-muted hover:text-ink"}`}
                 >
-                  {label} <span className="ml-1 rounded-full bg-navy/5 px-2 py-0.5 text-xs">{counts[id]}</span>
+                  {label} <span className="ml-1 rounded-full bg-white/5 px-2 py-0.5 text-xs">{counts[id]}</span>
                 </button>
               ))}
             </div>
@@ -198,7 +198,7 @@ export default function ClientsPage() {
                 <li key={client.id}>
                   <Link
                     href={`/clients/${client.id}`}
-                    className="block h-full rounded-[var(--radius-card)] border border-rule bg-white p-5 shadow-card transition hover:-translate-y-0.5 hover:shadow-pop"
+                    className="block h-full rounded-[var(--radius-card)] border border-white/10 bg-verre p-5 shadow-card transition hover:-translate-y-0.5 hover:shadow-pop"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <h2 className="text-lg font-semibold">{client.nomResto}</h2>
@@ -301,7 +301,7 @@ function BotStatus({ client, checklist }: { client: import("@/data/types").BotCl
     return <p className="mt-2 text-xs text-muted">{client.hasBotRecord ? "Bot détaché du modèle" : "Pas encore de bot"}</p>;
   }
   const blocking = checklist.filter((i) => i.level !== "info");
-  if (!blocking.length) return <p className="mt-2 text-xs font-semibold text-green-700">✓ Bot prêt (lié au modèle)</p>;
+  if (!blocking.length) return <p className="mt-2 text-xs font-semibold text-emerald-300">✓ Bot prêt (lié au modèle)</p>;
   return (
     <div className="mt-2 text-xs" data-testid="client-checklist">
       <p className="font-semibold text-coral">

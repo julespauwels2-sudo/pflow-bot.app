@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Logo } from "@/components/logo";
 import { DesktopOnly } from "@/components/mobile";
 
 type StepState = "fait" | "en_cours" | "a_venir";
@@ -13,35 +14,23 @@ const steps: { id: string; title: string; detail: string; state: StepState }[] =
 ];
 
 const STATE_LABELS: Record<StepState, { label: string; className: string }> = {
-  fait: { label: "Fait", className: "bg-wa/15 text-green-700" },
-  en_cours: { label: "En cours", className: "bg-pink/10 text-pink" },
-  a_venir: { label: "À venir", className: "bg-navy/5 text-muted" },
+  fait: { label: "Fait", className: "bg-wa/15 text-emerald-300 ring-1 ring-wa/30" },
+  en_cours: { label: "En cours", className: "bg-pink/15 text-pink-2 ring-1 ring-pink/30" },
+  a_venir: { label: "À venir", className: "bg-white/10 text-ink/80 ring-1 ring-white/10" },
 };
 
 export default function Home() {
   return (
     <DesktopOnly>
     <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-      <header className="flex items-center gap-3">
-        <div className="grid size-11 place-items-center rounded-2xl bg-navy text-pink shadow-card">
-          <svg viewBox="0 0 64 64" className="size-7" aria-hidden>
-            <path
-              d="M18 22a8 8 0 0 1 8-8h14a8 8 0 0 1 8 8v12a8 8 0 0 1-8 8H30l-9 7v-7.5A8 8 0 0 1 18 34Z"
-              fill="currentColor"
-            />
-          </svg>
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold leading-none">
-            PFlow <span className="text-pink">Bots</span>
-          </h1>
-          <p className="mt-1 text-sm text-muted">Chatbots WhatsApp des restos PFlow</p>
-        </div>
+      <header className="flex flex-col items-start gap-2">
+        <Logo size="lg" href={null} />
+        <p className="text-sm text-muted">Chatbots WhatsApp des restos PFlow</p>
       </header>
 
-      <section className="mt-10 overflow-hidden rounded-[var(--radius-card)] bg-navy p-8 text-white shadow-pop">
+      <section className="bg-navy-grad mt-10 overflow-hidden rounded-[var(--radius-sheet)] border border-white/10 p-8 text-white shadow-pop sm:p-10">
         <p className="text-sm font-semibold tracking-wide text-cyan uppercase">Phase 1 · Étape B</p>
-        <h2 className="mt-2 text-3xl font-semibold sm:text-4xl">
+        <h2 className="mt-2 font-title text-3xl font-bold sm:text-5xl">
           Un bot par resto, <span className="text-pink-2">branché sur le CRM</span>.
         </h2>
         <p className="mt-3 max-w-2xl text-white/75">
@@ -50,7 +39,7 @@ export default function Home() {
         </p>
         <Link
           href="/clients"
-          className="mt-6 inline-flex rounded-full bg-pink px-5 py-2.5 text-sm font-semibold text-white hover:bg-pink-2"
+          className="bg-brand shadow-bouton mt-7 inline-flex rounded-full px-6 py-3 text-base font-extrabold text-white hover:brightness-105"
         >
           Gérer les clients →
         </Link>
@@ -60,7 +49,7 @@ export default function Home() {
         {steps.map((step) => (
           <article
             key={step.id}
-            className="rounded-[var(--radius-card)] border border-rule bg-white p-5 shadow-card"
+            className="rounded-[var(--radius-card)] border border-white/10 bg-verre p-5 shadow-card"
           >
             <div className="flex items-center justify-between">
               <span className="font-title text-sm font-semibold text-blue">{step.id}</span>

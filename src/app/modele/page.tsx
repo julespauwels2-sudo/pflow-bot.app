@@ -120,7 +120,7 @@ export default function TemplatePage() {
                     </li>
                   </ul>
                 ) : (
-                  <p className="rounded-xl bg-page p-3 text-sm text-muted">Pas encore configuré : une configuration par défaut (ta consigne UChat) est prête.</p>
+                  <p className="rounded-xl bg-white/5 p-3 text-sm text-muted">Pas encore configuré : une configuration par défaut (ta consigne UChat) est prête.</p>
                 )}
                 <ButtonLink href="/modele/agent" variant="secondary" className="mt-3">
                   Configurer l&apos;agent IA

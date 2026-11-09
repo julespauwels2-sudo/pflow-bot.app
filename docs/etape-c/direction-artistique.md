@@ -45,3 +45,30 @@ Un seul endroit : `src/app/globals.css` (bloc `@theme` + utilitaires). Les compo
 
 **À vérifier sur l'iPhone** : l'écran de lancement et la nouvelle icône n'apparaissent qu'après avoir **supprimé puis
 réinstallé** l'app (Partager → Sur l'écran d'accueil). Les notifications push sont à réactiver après la réinstallation.
+
+## Refonte sombre (9 novembre 2026, soir) : toutes les pages comme pflow.fr/demo
+
+Styles relevés dans le navigateur sur `demo.html` et `index.html` du dépôt du site (pflow.fr n'est pas joignable
+depuis la session) :
+- fond `#0A1236` avec halos : bleu `rgba(42,171,255,.3)` en haut à gauche, rose `rgba(255,79,181,.18)` à droite ;
+- texte crème `#F3EEE6`, secondaire à 72 %, traits crème à 14 % ;
+- titres Fredoka 700 ; texte Manrope ;
+- bouton rose : dégradé `#FF74C6 → #FF4FB5 → #F03CA5`, rayon 999 px, ombre `0 18px 40px -12px rgba(255,79,181,.75)` ;
+- bouton secondaire : fond crème à 4 %, trait crème à 14 %.
+
+Appliqué à **toutes** les pages (Accueil, Clients, fiche client, Modèle maître, Agent IA, Démos, Import, État, Boîte de
+réception, Simulateur, éditeur de flux, Connexion), ordinateur et iPhone :
+- thème central (`src/app/globals.css`) : fond navy + halos fixes, jetons `ink`, `muted`, `line`, `rule`, `surface`
+  passés en clair-sur-sombre, contrôles natifs en sombre (`color-scheme: dark`), éditeur de flux React Flow en sombre ;
+- cartes « verre » (translucides, flou derrière, coins de 26 px), badges colorés (Fait, En cours, Actif, Test…) ;
+- en-tête collant en verre sombre avec le logo PFlow BOTS, navigation lisible ;
+- formulaires, tableaux, éditeur, boîte de réception (bulles bot bleues, tes réponses roses) harmonisés ;
+- le **téléphone du simulateur** garde volontairement le rendu clair de WhatsApp (c'est un aperçu de téléphone).
+
+**Contrastes** (WCAG, sur une carte du fond navy) : texte crème 14,1:1 ; texte secondaire 7,9:1 ; cyan 10,4:1 ; vert
+10,6:1 ; rose clair 7,0:1 ; bleu 6,5:1 ; corail 5,8:1 ; rose 5,4:1. Blanc sur le bouton rose : 3,0:1, comme sur
+pflow.fr (suffisant pour du texte gras de grande taille, pas pour du petit texte : les boutons roses restent en gras).
+
+Aucun changement de fonctionnement. Captures avant/après de chaque page : `docs/captures/da-sombre/` (1280 px et
+390 px).
+

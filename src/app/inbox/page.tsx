@@ -228,7 +228,7 @@ export default function InboxPage() {
                           <li key={conv.contactId}>
                             <button
                               type="button"
-                              className={`w-full rounded-xl px-2 py-2 text-left hover:bg-page ${selected === conv.contactId ? "bg-page" : ""}`}
+                              className={`w-full rounded-xl px-2 py-2 text-left hover:bg-white/5 ${selected === conv.contactId ? "bg-white/5" : ""}`}
                               onClick={() => show(conv.contactId)}
                             >
                               <span className="flex items-center gap-1.5">
@@ -310,12 +310,12 @@ function ConversationView({
         )}
         <span className="ml-auto text-xs text-muted">{conv.fenetreOuverte ? "Fenêtre de 24 h ouverte" : "Fenêtre de 24 h fermée"}</span>
       </div>
-      <div className="max-h-[60vh] space-y-1.5 overflow-y-auto rounded-2xl bg-[#efeae2] p-3">
+      <div className="max-h-[60vh] space-y-1.5 overflow-y-auto rounded-2xl bg-chat-motif p-3 ring-1 ring-white/10">
         {thread.messages.map((m) => (
           <div key={m.id} className={`flex ${m.sens === "entrant" ? "justify-start" : "justify-end"}`}>
             <div
               className={`max-w-[80%] overflow-hidden rounded-xl px-3 py-1.5 text-sm whitespace-pre-wrap shadow-sm ${
-                m.sens === "entrant" ? "bg-white" : m.auteur === "humain" ? "bg-[#d9fdd3]" : "bg-[#e7f0ff]"
+                m.sens === "entrant" ? "bg-white/10" : m.auteur === "humain" ? "bg-bulle-humain" : "bg-bulle-bot"
               }`}
             >
               <span className="mb-0.5 block text-[10px] font-semibold text-muted">
@@ -360,7 +360,7 @@ function SimulateForm({ plateformes, onSent, onError }: { plateformes: InboxCana
   const [nom, setNom] = useState("Léa");
   return (
     <form
-      className="flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] border border-dashed border-pink/40 bg-white p-3 text-sm shadow-card"
+      className="flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] border border-dashed border-pink/40 bg-verre p-3 text-sm shadow-card"
       onSubmit={async (e) => {
         e.preventDefault();
         try {

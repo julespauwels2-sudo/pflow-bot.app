@@ -83,16 +83,16 @@ export function StatePanel({
               En pause ({pauseLabel[contact.pause!.reason]}){contact.pause!.until ? ` jusqu'à ${format(contact.pause!.until)}` : ""}
             </span>
           ) : (
-            <span className="text-green-700">Actif</span>
+            <span className="text-emerald-300">Actif</span>
           )}
         </Row>
         {pauseActive && (
-          <button type="button" className="w-full rounded-full border border-line py-1 text-xs font-semibold hover:border-navy/30" onClick={onLiftPause}>
+          <button type="button" className="w-full rounded-full border border-line py-1 text-xs font-semibold hover:border-white/30" onClick={onLiftPause}>
             Relancer le bot (lever la pause)
           </button>
         )}
         <Row label="Fenêtre de 24 h">
-          {windowOpen ? <span className="text-green-700">Ouverte jusqu&apos;à {format(windowEnd!)}</span> : <span className="text-coral">Fermée</span>}
+          {windowOpen ? <span className="text-emerald-300">Ouverte jusqu&apos;à {format(windowEnd!)}</span> : <span className="text-coral">Fermée</span>}
         </Row>
         <Row label="Appels IA aujourd'hui">
           {aiCalls} / {aiLimit}
@@ -152,7 +152,7 @@ export function StatePanel({
   );
 }
 
-const TONE = { ok: "text-green-700", skip: "text-coral", warn: "text-amber-700", info: "text-muted" } as const;
+const TONE = { ok: "text-emerald-300", skip: "text-coral", warn: "text-amber-300", info: "text-muted" } as const;
 const ICON = { ok: "✓", skip: "⦸", warn: "⚠", info: "·" } as const;
 
 /** Journal : pourquoi le bot a réagi (ou non), tour par tour. */
