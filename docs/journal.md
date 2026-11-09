@@ -1037,3 +1037,17 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
 - À faire par Jules : supprimer puis réinstaller l'app sur l'iPhone (nouvelle icône, écran de lancement), puis
   réactiver les notifications.
 
+
+## 9 novembre 2026 (soir) — canaux des 3 restos, diagnostic des apps abonnées, runbook
+
+- **SQL des 3 canaux** (validé par Jules, généré par le diagnostic) : à appliquer dès que Jules m'en transmet le texte
+  exact (les identifiants des numéros ne sont lisibles qu'avec le jeton du serveur, pas depuis la session).
+- **Diagnostic** : lecture des apps abonnées avec un délai de 25 s et un nouvel essai ; comptes lus en parallèle ;
+  message clair quand Meta ne répond pas (au lieu de « Meta injoignable »). Bouton « Abonner PFlow Bots » : délai de
+  25 s aussi.
+- **Canaux en test sans effet sur le trafic** (vérifié dans le code) : PFlow Bots n'est pas abonné à ces comptes ;
+  un canal en test ne répond qu'à 590690938108 ; le CRM n'appelle PFlow Bots que pour un canal actif (qg87), et PFlow
+  Bots refuse un événement pour un canal en test.
+- **Runbook de migration** (`docs/etape-c/migration-3-clients.md`) : canaux déjà créés, il ne reste par resto que
+  5 étapes (abonner l'app, pause UChat pour le numéro de Jules, tester, désactiver UChat, passer en actif).
+

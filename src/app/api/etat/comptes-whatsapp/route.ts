@@ -11,6 +11,8 @@ import { tooManyRequests } from "@/lib/request-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/** Lecture chez Meta de plusieurs comptes (apps abonnées : jusqu'à 2 × 25 s par compte, en parallèle). */
+export const maxDuration = 120;
 
 /** Numéro de Jules, premier numéro de test de chaque nouveau canal. */
 const TEST_NUMERO = "590690938108";
