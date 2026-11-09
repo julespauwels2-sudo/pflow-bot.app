@@ -66,7 +66,7 @@ const vue = (c: Connexion, nomResto: string) => ({
 export async function GET(request: Request, ctx: Ctx) {
   const a = await charger(request, ctx, 60);
   if (a.error) return a.error;
-  const nomResto = (await a.rt.workspace()).clients.find((x) => x.id === a.c.restaurantId)?.nomResto ?? "votre restaurant";
+  const nomResto = a.c.libelle ?? (await a.rt.workspace()).clients.find((x) => x.id === a.c.restaurantId)?.nomResto ?? "votre restaurant";
   const meta = metaAppConfig();
   return NextResponse.json(
     { ...vue(a.c, nomResto), meta: meta ? { appId: meta.appId, configId: meta.configId, version: meta.version } : null },
@@ -79,7 +79,7 @@ export async function POST(request: Request, ctx: Ctx) {
   if (a.error) return a.error;
   const body = await request.json().catch(() => null);
   const etat = etatEffectif(a.c);
-  const nomResto = (await a.rt.workspace()).clients.find((x) => x.id === a.c.restaurantId)?.nomResto ?? "votre restaurant";
+  const nomResto = a.c.libelle ?? (await a.rt.workspace()).clients.find((x) => x.id === a.c.restaurantId)?.nomResto ?? "votre restaurant";
 
   const inc = incident.safeParse(body);
   if (inc.success) {

@@ -6,12 +6,17 @@
 -- 1. Une demande de connexion : le lien unique envoyé au gérant, puis le déroulé (étapes, erreurs).
 create table if not exists public.bot_connexions_whatsapp (
   id uuid primary key default gen_random_uuid(),
+  -- Resto du CRM ; pour un « client test » hors CRM (vidéo de l'examen Meta), un identifiant propre, qui ne correspond à
+  -- aucun resto (rien côté CRM ni PFlow Order ne le voit).
   restaurant_id uuid not null,
+  client_test boolean not null default false,
+  -- Nom affiché (client test : « Cedyan Energy » ; resto : vide, le nom vient du CRM).
+  libelle text,
   -- Empreinte SHA-256 du jeton du lien : le jeton lui-même n'est jamais gardé (le lien ne se retrouve pas en base).
   jeton_hash text not null unique,
   expire_le timestamptz not null,
   etat text not null default 'lien_envoye'
-    check (etat in ('lien_envoye', 'en_cours', 'terminee', 'erreur', 'annulee', 'expiree')),
+    check (etat in ('lien_envoye', 'en_cours', 'terminee', 'erreur', 'annulee', 'expiree', 'debranchee')),
   -- Ce que Meta renvoie à la fin du parcours (identifiants, pas des secrets).
   business_id text,
   waba_id text,

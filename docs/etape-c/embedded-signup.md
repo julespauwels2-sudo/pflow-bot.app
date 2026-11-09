@@ -84,25 +84,93 @@ testeur). Donc **le même code** tourne dès maintenant avec tes comptes, sans a
 
 Sans accès avancé, un vrai client (sans rôle sur l'app) voit l'erreur `#2655111` : c'est normal avant l'examen.
 
-## 2 bis. Les 10 modèles de la livraison sur TON compte (une seule fois)
+## 2 bis. Les 10 modèles de la livraison, compte par compte
 
-Contrat livraison (version du commit ad59937) : les 10 modèles se créent **une fois** sur ton compte WhatsApp Business
-commun (celui de tous tes numéros). En base, le compte du numéro PFlow Démo est le **1808772226929443** : c'est
-celui-là, sauf si tu me dis le contraire. Textes : identiques au mot près à `docs/livraison/GUIDE-MODELES-WHATSAPP.md`
-(vérifié automatiquement le 9 novembre).
+Le diagnostic du 9 novembre a montré que le compte 1808772226929443 répond « Authorization Error » au jeton de
+pflow-bots-serveur : **ce n'est pas un compte commun utilisable**. Chaque resto a son compte WhatsApp (son compte de
+messagerie), et un modèle appartient à un compte : il faut **les 10 modèles sur le compte de chaque resto**.
 
-- **Par l'API, en un clic (après fusion de cette PR)** : page **État** → « Modèles WhatsApp de la livraison » → « Voir
-  les modèles » (statut de chacun chez Meta) → « Créer les N manquants et les soumettre ». Le serveur utilise le jeton
-  général déjà dans Vercel (`WHATSAPP_TOKEN`) ; un modèle existant n'est jamais modifié. Il faut que ce jeton ait
-  l'autorisation `whatsapp_business_management` sur ce compte (c'est le cas d'un jeton d'utilisateur système « Admin »
-  créé avec les deux autorisations WhatsApp ; sinon Meta répond une erreur de permission, affichée telle quelle).
-- **À la main (sans attendre la fusion)** : business.facebook.com → ton portefeuille → WhatsApp Manager → Gestion des
-  comptes → **Modèles de message** → Créer un modèle, puis pour chacun : catégorie **Utilitaire**, nom exact, langue
-  **Français** (code `fr`), corps exact, variables de type « Nombre » avec les exemples du guide, bouton **Accéder au
-  site web** « Suivre ma livraison », URL **dynamique** `https://order.pflow.fr/suivi/{{1}}`, exemple
-  `https://order.pflow.fr/suivi/0b6f2c1e-1111-4222-8333-444455556666`, puis **Envoyer**. Pas à pas complet :
-  `docs/livraison/GUIDE-MODELES-WHATSAPP.md` (branche Livraison du CRM).
-- Réponse de Meta : souvent quelques heures, parfois 1 à 2 jours. Un refus s'affiche avec son motif sur la page État.
+- **Page État → « Modèles WhatsApp de la livraison (par compte) »** (après fusion) : pour chaque canal de resto, le
+  statut des 10 chez Meta, un bouton « Créer les N manquants » par compte, et « Créer les manquants sur tous les
+  comptes ». Identifiant utilisé : le compte de messagerie du canal s'il est connu (nouveau modèle de Meta), sinon le
+  WABA ; jeton : celui du client (resto connecté par l'Embedded Signup) ou le jeton général. Jamais de modification
+  d'un modèle existant.
+- Les restos connectés par l'Embedded Signup les reçoivent **automatiquement** à la fin de la connexion.
+- Pour ag pizza, Mexico Sainte-Rose et Cookies An Nou : d'abord leurs canaux (diagnostic avec les IDs saisis, SQL à
+  valider), puis le bouton.
+- **À la main** (sans attendre) : dans WhatsApp Manager **de chaque compte**, Modèles de message → Créer : catégorie
+  Utilitaire, nom exact, langue Français (`fr`), corps exact, variables « Nombre » avec les exemples, bouton « Accéder
+  au site web » « Suivre ma livraison », URL dynamique `https://order.pflow.fr/suivi/{{1}}`. Textes :
+  `docs/livraison/GUIDE-MODELES-WHATSAPP.md` (branche Livraison du CRM), identiques au mot près (vérifié).
+- Réponse de Meta : quelques heures, parfois 1 à 2 jours ; un refus s'affiche avec son motif.
+- **Pour la route de livraison** (à construire) : le modèle se cherche sur le compte du canal du resto.
+
+## 2 ter. La vidéo de l'examen avec le numéro de Cedyan Energy
+
+**Qui fait le parcours : toi**, avec ton compte Facebook.
+- Ton compte a déjà un rôle sur l'app PFlow Bots (admin) : en mode développement, l'Embedded Signup marche pour lui.
+- Il doit être **administrateur (contrôle total) du portefeuille Meta de Cedyan** : ton père t'ajoute dans
+  business.facebook.com → Paramètres → Utilisateurs → Personnes → Ajouter → ton e-mail → accès **Contrôle total**
+  (admin) → tu acceptes l'invitation.
+- Le **téléphone de Cedyan** (appli WhatsApp Business à jour) doit être à côté de toi : Meta demande une
+  confirmation dans l'appli (code ou QR code) pendant le parcours.
+- Variante : ton père le fait lui-même. Il faut alors l'ajouter comme **testeur** de l'app (App Dashboard → Rôles de
+  l'app → Testeurs → son compte Facebook ; il accepte dans developers.facebook.com → Demandes) : plus long, et la
+  vidéo doit de toute façon montrer PFlow Bots, donc c'est plus simple que ce soit toi.
+
+**Préparer** :
+1. PR n° 17 fusionnée, SQL appliqué, variables Vercel (dont `META_ES_CONFIG_ID`), domaine et configuration v4 faits.
+2. Page État → « Lien pour un client test » → « Cedyan Energy » : identifiant propre, **relié à aucun resto**
+   (rien côté CRM ni PFlow Order).
+3. À la fin, le canal est **en test** avec **ton seul numéro (590690938108)** en liste de test : aucune réponse
+   automatique aux vrais clients de Cedyan. (Et comme il n'est relié à aucun resto, il n'a pas de bot : il ne répond
+   à personne ; tu peux répondre à la main depuis la boîte de réception.)
+
+**Déroulé de la vidéo `whatsapp_business_management`** (environ 2 min, écran d'ordinateur, sous-titres en anglais) :
+1. **PFlow Bots → page État**, carte « Connecter le WhatsApp d'un resto » : saisir « Cedyan Energy », « Lien pour un
+   client test », le lien s'affiche. *L'examinateur voit : l'outil de PFlow qui lance l'onboarding d'un client.*
+2. **Ouvrir le lien** : la page « Connecter votre WhatsApp » (nom « Cedyan Energy », étapes, bouton). *Il voit : ce que
+   reçoit le client, en clair.*
+3. **« Connecter mon WhatsApp »** → fenêtre Meta : **connexion Facebook** (ton compte). *Il voit : le login Facebook
+   officiel (Facebook Login for Business).*
+4. **Choix du portefeuille** : celui de Cedyan Energy. *Il voit : le client choisit son propre portefeuille.*
+5. **Connecter l'appli WhatsApp Business** : choix du **numéro de Cedyan**, confirmation dans l'appli sur le téléphone
+   (filmer le téléphone un instant, ou le dire en sous-titre). *Il voit : la coexistence, le numéro du client.*
+6. **Autorisations** demandées par PFlow Bots (gestion du compte WhatsApp, messagerie) → Confirmer. *Il voit : la
+   permission whatsapp_business_management demandée et accordée.*
+7. **Fin du parcours** : retour sur la page, « C'est connecté ✅ », le numéro, la liste des étapes (accès gardé,
+   réception des messages, contacts, conversations, bot en test, messages de suivi de livraison), puis « Dernière étape :
+   votre carte chez Meta ». *Il voit : ce que PFlow fait avec la permission.*
+8. **Retour sur PFlow Bots → page État** : la connexion « Connecté (canal en test) », le déroulé ; la carte « Canaux »
+   avec le **canal créé** (numéro de Cedyan, état test). *Il voit : le compte du client géré dans PFlow Bots.*
+9. **Carte « Modèles WhatsApp de la livraison (par compte) »** : le compte de Cedyan avec les 10 modèles **créés par
+   PFlow Bots** (« En examen ») ; puis WhatsApp Manager de Cedyan → Modèles de message, où ils apparaissent. *Il voit :
+   la création de modèles, cœur de whatsapp_business_management.*
+
+**Vidéo `whatsapp_business_messaging`** (séparée, environ 1 min) : depuis ton téléphone (590690938108), écrire au
+numéro de Cedyan ; dans PFlow Bots → boîte de réception, ouvrir la conversation, répondre ; montrer la réponse
+**reçue dans WhatsApp** sur ton téléphone.
+
+**Débrancher Cedyan après la vidéo** (si tu veux) :
+1. **PFlow Bots → page État** → la connexion Cedyan → « Débrancher ce numéro » : l'app est désabonnée du compte de
+   Cedyan, le canal est coupé (le bot ne répond plus à personne) et le jeton est effacé. Les modèles créés restent sur
+   le compte de Cedyan (sans effet ; ton père peut les supprimer dans WhatsApp Manager).
+2. **Côté Meta** (pour retirer tout accès) : business.facebook.com de Cedyan → Paramètres → **Partenaires** (ou
+   Intégrations → Applications connectées) → retirer PFlow Bots / PFlow.
+3. **Dans l'appli WhatsApp Business** de Cedyan : rien à faire, le numéro reste dans l'appli. Pour couper aussi
+   l'API : Paramètres → Compte → Plateforme Business (intitulé *à vérifier*) → Déconnecter. Les conversations restent.
+
+## 2 quater. Faut-il l'autorisation `business_management` sur le jeton de pflow-bots-serveur ?
+
+**Non, pas maintenant.** Elle sert seulement à **lister** les entreprises et leurs comptes (`me/businesses`, d'où
+l'erreur « Missing Permission » du diagnostic). Envoyer, lire les numéros, s'abonner, créer des modèles se fait **avec
+l'ID du compte**, et le diagnostic accepte maintenant des IDs saisis à la main (PR « diagnostic »). Si un compte saisi
+répond lui aussi « permission » (et pas seulement la liste des entreprises), alors :
+1. Business Manager → Utilisateurs système → pflow-bots-serveur → Générer un nouveau jeton, avec
+   `whatsapp_business_management`, `whatsapp_business_messaging` et `business_management` ;
+2. Vercel → `WHATSAPP_TOKEN` = le nouveau jeton (Sensitive) → redéployer ;
+3. l'ancien jeton reste valide jusqu'à ce que tu le révoques (même écran) : le révoquer une fois le nouveau vérifié.
+Inconvénient : une autorisation de plus sur un jeton permanent (accès à tout le portefeuille).
 
 ## 3. Ce qu'il faut dire aux restos (coexistence)
 
@@ -119,7 +187,8 @@ celui-là, sauf si tu me dis le contraire. Textes : identiques au mot près à `
 ## 4. Points d'attention
 
 - **Contrat livraison** (`INTERFACE-PFLOW-BOTS.md`, version du commit ad59937) : il dit que tous les numéros sont dans
-  **ton** compte WhatsApp Business, et que les 10 modèles s'y créent une fois. C'est vrai pour les restos migrés dans ton
+  **ton** compte WhatsApp Business, et que les 10 modèles s'y créent une fois. Le diagnostic montre que non : un compte
+  par resto. Les modèles se créent donc compte par compte (2 bis). C'est vrai pour les restos migrés dans ton
   compte. Un resto connecté par **l'Embedded Signup** garde **son propre** compte (qu'il paie) : les 10 modèles doivent
   exister sur **son** compte. C'est ce que fait l'étape 7 automatiquement. La route de livraison devra donc chercher le
   modèle sur le compte du canal du resto.

@@ -6,7 +6,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Db, Row } from "@/data/supabase/db";
 
-export type ConnexionEtat = "lien_envoye" | "en_cours" | "terminee" | "erreur" | "annulee" | "expiree";
+export type ConnexionEtat = "lien_envoye" | "en_cours" | "terminee" | "erreur" | "annulee" | "expiree" | "debranchee";
 
 export interface ConnexionEtape {
   etape: string;
@@ -18,6 +18,9 @@ export interface ConnexionEtape {
 export interface Connexion {
   id: string;
   restaurantId: string;
+  /** Client test hors CRM (vidéo de l'examen Meta) : son nom ; le canal n'est relié à aucun resto. */
+  clientTest?: boolean;
+  libelle?: string;
   jetonHash: string;
   expireLe: string;
   etat: ConnexionEtat;
@@ -42,6 +45,8 @@ export interface ConnexionStore {
   saveJeton(wabaId: string, restaurantId: string, chiffre: string, type?: string): Promise<void>;
   /** Le jeton chiffré du compte WhatsApp (null : on utilise le jeton général de PFlow). */
   jetonChiffre(wabaId: string): Promise<string | null>;
+  /** Débranchement : le jeton du client est effacé (plus aucun accès à son compte). */
+  deleteJeton(wabaId: string): Promise<void>;
 }
 
 /** Jeton du lien : 32 octets aléatoires (base64url). Seule son empreinte est gardée. */
@@ -84,6 +89,9 @@ export function createMemoryConnexionStore(): ConnexionStore {
     async jetonChiffre(wabaId) {
       return jetons.get(wabaId)?.chiffre ?? null;
     },
+    async deleteJeton(wabaId) {
+      jetons.delete(wabaId);
+    },
   };
 }
 
@@ -94,6 +102,8 @@ function rowToConnexion(r: Row): Connexion {
   return {
     id: String(r.id),
     restaurantId: String(r.restaurant_id),
+    ...(r.client_test ? { clientTest: true } : {}),
+    libelle: opt(r.libelle),
     jetonHash: String(r.jeton_hash),
     expireLe: iso(r.expire_le)!,
     etat: String(r.etat) as ConnexionEtat,
@@ -115,6 +125,8 @@ function connexionToRow(c: Connexion): Row {
   return {
     id: c.id,
     restaurant_id: c.restaurantId,
+    client_test: Boolean(c.clientTest),
+    libelle: c.libelle ?? null,
     jeton_hash: c.jetonHash,
     expire_le: c.expireLe,
     etat: c.etat,
@@ -162,6 +174,9 @@ export function createSupabaseConnexionStore(db: Db): ConnexionStore {
     async jetonChiffre(wabaId) {
       const [row] = await db.select("bot_jetons_whatsapp", "jeton_chiffre", eq("waba_id", wabaId));
       return row ? String(row.jeton_chiffre) : null;
+    },
+    async deleteJeton(wabaId) {
+      await db.remove("bot_jetons_whatsapp", "waba_id", [wabaId]);
     },
   };
 }

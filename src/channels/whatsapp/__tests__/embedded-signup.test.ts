@@ -41,6 +41,7 @@ beforeAll(async () => {
       if (path.startsWith("oauth/access_token")) return json(200, { access_token: CLIENT_TOKEN, token_type: "bearer" });
       if (path.startsWith("1234567890?fields=")) return json(200, { display_phone_number: "+590 690 12 34 56", verified_name: "Bokit An Nou", is_on_biz_app: true, platform_type: "CLOUD_API" });
       if (path === "9876543210/subscribed_apps") return json(200, { success: true });
+      if (path.startsWith("1808772226929443/")) return json(400, { error: { message: "Authorization Error", code: 100, error_subcode: 2388339 } });
       if (path === "1234567890/smb_app_data") return json(200, { request_id: "r1" });
       if (/^\d+\/message_templates\?/.test(path)) return json(200, { data: existingTemplates.map((name) => ({ name, status: "APPROVED", language: "fr" })) });
       if (/^\d+\/message_templates$/.test(path)) return json(200, { id: "t1", status: "PENDING", category: "UTILITY" });
@@ -149,7 +150,7 @@ describe("fin du parcours (coexistence)", () => {
     expect(JSON.stringify(await connexions.list())).not.toContain(CLIENT_TOKEN);
 
     const [canal] = await store.listCanaux();
-    expect(canal).toMatchObject({ restaurantId: "resto-1", accountId: "1234567890", wabaId: "9876543210", etat: "test", coexistence: true, role: "resto" });
+    expect(canal).toMatchObject({ restaurantId: "resto-1", accountId: "1234567890", wabaId: "9876543210", etat: "test", coexistence: true, role: "resto", testNumeros: ["590690938108"] });
     expect(done.canalId).toBe(canal.id);
     expect(done.etapes.find((e) => e.etape === "modeles_livraison")?.detail).toBe("9 créé(s), 1 déjà là");
   });
@@ -272,44 +273,86 @@ describe("routes « Connecter votre WhatsApp » (mode mémoire)", () => {
   });
 });
 
-describe("modèles de la livraison sur le compte commun (page État)", () => {
+describe("page État : modèles compte par compte, client test hors CRM, débranchement", () => {
   const saved = { ...process.env };
   afterEach(() => {
     process.env = { ...saved };
     (globalThis as { __pflowChannels?: unknown }).__pflowChannels = undefined;
   });
-
-  it("statut des 10, puis création des seuls manquants avec le jeton général ; compte inconnu refusé", async () => {
-    Object.assign(process.env, { CHANNELS_STORE: "memory", WHATSAPP_APP_SECRET: "s", WHATSAPP_VERIFY_TOKEN: "v", WHATSAPP_TOKEN: "jeton-general-pflow", WHATSAPP_GRAPH_BASE: base });
+  const env = () => {
+    Object.assign(process.env, {
+      CHANNELS_STORE: "memory", WHATSAPP_APP_SECRET: "secret-app", WHATSAPP_VERIFY_TOKEN: "v", WHATSAPP_TOKEN: "jeton-general-pflow",
+      WHATSAPP_GRAPH_BASE: base, META_APP_ID: "111", META_ES_CONFIG_ID: "222", BOT_JETONS_CLE: KEY.toString("base64"),
+    });
     delete process.env.NEXT_PUBLIC_SUPABASE_URL;
     delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     delete process.env.VERCEL;
     (globalThis as { __pflowChannels?: unknown }).__pflowChannels = undefined;
-    const route = await import("@/app/api/etat/modeles-livraison/route");
-    existingTemplates = ["pflow_livraison_en_route", "pflow_livraison_annulee"];
+  };
+  const canal = (accountId: string, wabaId: string, messagingAccountId?: string) => ({
+    restaurantId: "r", role: "resto" as const, plateforme: "whatsapp" as const, accountId, wabaId, ...(messagingAccountId ? { messagingAccountId } : {}),
+    triggerMode: "toujours" as const, coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "test" as const, testNumeros: [],
+  });
 
-    // Le compte du canal de démo (mode mémoire) : « waba-demo » n'est pas un identifiant Meta ; on en ajoute un vrai.
+  it("modèles : un compte par resto, le compte de messagerie d'abord (le WABA du nouveau modèle refuse), seuls les manquants créés", async () => {
+    env();
+    const route = await import("@/app/api/etat/modeles-livraison/route");
     const { getChannelsRuntime } = await import("@/channels/core/runtime");
     const rt = await getChannelsRuntime();
-    await rt.store.ensureCanal({ restaurantId: "r", role: "resto", plateforme: "whatsapp", accountId: "5550001111", wabaId: "1808772226929443", triggerMode: "toujours", coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "test", testNumeros: [] });
+    // Comme en production : WABA 1808… refusé (nouveau modèle), compte de messagerie 4170… qui répond.
+    await rt.store.ensureCanal(canal("5550001111", "1808772226929443", "4170754433058228"));
+    existingTemplates = ["pflow_livraison_en_route", "pflow_livraison_annulee"];
 
-    const lu = await (await route.GET(new Request("http://localhost/api/etat/modeles-livraison?waba=1808772226929443"))).json();
-    expect(lu.etat).toHaveLength(10);
-    expect(lu.etat.filter((t: { status: string | null }) => t.status === "APPROVED").map((t: { name: string }) => t.name).sort()).toEqual(["pflow_livraison_annulee", "pflow_livraison_en_route"]);
-    expect(calls.every((c) => c.method === "GET")).toBe(true);
+    const lu = await (await route.GET(new Request("http://localhost/x"))).json();
+    const compte = lu.comptes.find((c: { canalId: string; compteId: string }) => c.compteId === "4170754433058228");
+    expect(compte.etat).toHaveLength(10);
+    expect(compte.jeton).toBe("general");
+    // Le canal de démo du mode mémoire n'a pas d'identifiant Meta : signalé, pas d'appel.
+    expect(lu.comptes.find((c: { error?: string }) => c.error?.includes("Aucun identifiant"))).toBeTruthy();
 
     calls.length = 0;
-    const cree = await (await route.POST(new Request("http://localhost/x", { method: "POST", body: JSON.stringify({ wabaId: "1808772226929443" }) }))).json();
-    expect(cree.crees).toHaveLength(8);
-    expect(cree.echecs).toEqual([]);
+    const cree = await (await route.POST(new Request("http://localhost/x", { method: "POST", body: JSON.stringify({ canalId: compte.canalId }) }))).json();
+    expect(cree.comptes[0].crees).toHaveLength(8);
     const posts = calls.filter((c) => c.method === "POST");
-    expect(posts).toHaveLength(8);
-    expect(posts.every((c) => c.path === "1808772226929443/message_templates" && c.auth === "Bearer jeton-general-pflow")).toBe(true);
+    expect(posts.every((c) => c.path === "4170754433058228/message_templates" && c.auth === "Bearer jeton-general-pflow")).toBe(true);
     expect(posts.map((c) => c.body?.name)).not.toContain("pflow_livraison_en_route");
     expect(JSON.stringify(cree)).not.toContain("jeton-general-pflow");
+    // Sans compte de messagerie et WABA refusé : erreur affichée, rien créé.
+    await rt.store.ensureCanal(canal("5550002222", "1808772226929443"));
+    const tous = await (await route.POST(new Request("http://localhost/x", { method: "POST", body: JSON.stringify({ tous: true }) }))).json();
+    expect(tous.comptes.find((c: { libelle: string }) => c.libelle.includes("5550002222")).error).toContain("Authorization Error");
+  });
 
-    const refus = await route.POST(new Request("http://localhost/x", { method: "POST", body: JSON.stringify({ wabaId: "1111111111" }) }));
-    expect(refus.status).toBe(400);
+  it("client test hors CRM (Cedyan) : lien, connexion, canal en test relié à aucun resto, seul Jules en test ; puis débranchement", async () => {
+    env();
+    const admin = await import("@/app/api/connexions-whatsapp/route");
+    const page = await import("@/app/api/connecter/[jeton]/route");
+    const { getChannelsRuntime } = await import("@/channels/core/runtime");
+    const rt = await getChannelsRuntime();
+    const restosAvant = (await rt.workspace()).clients.length;
+
+    const cree = await (await admin.POST(new Request("http://localhost/x", { method: "POST", body: JSON.stringify({ clientTest: { nom: "Cedyan Energy" } }) }))).json();
+    expect(cree).toMatchObject({ nomResto: "Cedyan Energy", clientTest: true });
+    const jeton = cree.url.split("/connecter/")[1];
+    const ctx = { params: Promise.resolve({ jeton }) };
+    expect((await (await page.GET(new Request("http://localhost/x"), ctx)).json()).nomResto).toBe("Cedyan Energy");
+    const fin = await (await page.POST(new Request("http://localhost/x", { method: "POST", body: JSON.stringify({ type: "termine", ...input }) }), ctx)).json();
+    expect(fin.etat).toBe("terminee");
+
+    const c = (await rt.store.listCanaux()).find((x) => x.accountId === "1234567890")!;
+    expect(c).toMatchObject({ etat: "test", testNumeros: ["590690938108"] });
+    expect((await rt.workspace()).clients.some((x) => x.id === c.restaurantId)).toBe(false); // relié à aucun resto
+    expect((await rt.workspace()).clients.length).toBe(restosAvant); // rien créé côté restos
+
+    const liste = await (await admin.GET(new Request("http://localhost/x"))).json();
+    const ligne = liste.connexions.find((x: { nomResto: string }) => x.nomResto === "Cedyan Energy");
+    expect(ligne).toMatchObject({ clientTest: true, etat: "terminee" });
+
+    calls.length = 0;
+    const deb = await (await admin.POST(new Request("http://localhost/x", { method: "POST", body: JSON.stringify({ action: "debrancher", id: ligne.id }) }))).json();
+    expect(deb.etat).toBe("debranchee");
+    expect(calls[0]).toMatchObject({ method: "DELETE", path: "9876543210/subscribed_apps", auth: `Bearer ${CLIENT_TOKEN}` });
+    expect((await rt.store.listCanaux()).find((x) => x.accountId === "1234567890")!.etat).toBe("coupe");
+    expect(await rt.connexions.jetonChiffre("9876543210")).toBeNull();
   });
 });
-

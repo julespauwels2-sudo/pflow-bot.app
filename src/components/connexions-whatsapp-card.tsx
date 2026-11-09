@@ -13,7 +13,8 @@ import { accessToken } from "@/lib/supabase";
 interface Ligne {
   id: string;
   nomResto: string;
-  etat: "lien_envoye" | "en_cours" | "terminee" | "erreur" | "annulee" | "expiree";
+  etat: "lien_envoye" | "en_cours" | "terminee" | "erreur" | "annulee" | "expiree" | "debranchee";
+  clientTest?: boolean;
   expireLe: string;
   creeLe: string;
   termineLe: string | null;
@@ -31,6 +32,7 @@ interface Donnees {
 }
 
 const ETATS: Record<Ligne["etat"], { texte: string; ton: "neutral" | "success" | "warning" | "info" }> = {
+  debranchee: { texte: "Débranché", ton: "neutral" },
   lien_envoye: { texte: "Lien envoyé", ton: "info" },
   en_cours: { texte: "En cours", ton: "info" },
   terminee: { texte: "Connecté (canal en test)", ton: "success" },
@@ -45,6 +47,7 @@ export function ConnexionsWhatsAppCard() {
   const [data, setData] = useState<Donnees | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [resto, setResto] = useState("");
+  const [nomTest, setNomTest] = useState("");
   const [lien, setLien] = useState<{ url: string; nomResto: string; expireLe: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -81,11 +84,25 @@ export function ConnexionsWhatsAppCard() {
     };
   }, [appel]);
 
-  async function generer() {
+  async function debrancher(c: Ligne) {
+    if (!window.confirm(`Débrancher ${c.nomResto}${c.numeroAffiche ? ` (${c.numeroAffiche})` : ""} ? L'app PFlow Bots est désabonnée de son compte, le canal est coupé (le bot ne répond plus) et son jeton est effacé. Le gérant garde son appli et son numéro.`)) return;
     setBusy(true);
     setErreur(null);
     try {
-      setLien(await appel({ method: "POST", body: JSON.stringify({ restaurantId: resto }) }));
+      await appel({ method: "POST", body: JSON.stringify({ action: "debrancher", id: c.id }) });
+      charger();
+    } catch (e) {
+      setErreur(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function generer(test = false) {
+    setBusy(true);
+    setErreur(null);
+    try {
+      setLien(await appel({ method: "POST", body: JSON.stringify(test ? { clientTest: { nom: nomTest } } : { restaurantId: resto }) }));
       charger();
     } catch (e) {
       setErreur(errorText(e));
@@ -122,9 +139,25 @@ export function ConnexionsWhatsAppCard() {
                 </option>
               ))}
             </Select>
-            <Button onClick={generer} disabled={!resto || busy || data.tableAbsente} data-testid="connexion-generer">
+            <Button onClick={() => void generer()} disabled={!resto || busy || data.tableAbsente} data-testid="connexion-generer">
               {busy ? "Création…" : "Créer le lien"}
             </Button>
+          </div>
+        )}
+        {data && (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              aria-label="Nom du client test"
+              placeholder="Client test hors CRM (ex. Cedyan Energy)"
+              value={nomTest}
+              onChange={(e) => setNomTest(e.target.value)}
+              className="w-full max-w-xs rounded-[var(--radius-field)] border border-line bg-white px-3 py-2 text-sm focus:border-pink focus:ring-4 focus:ring-pink/15 focus:outline-none"
+              data-testid="connexion-test-nom"
+            />
+            <Button variant="secondary" onClick={() => void generer(true)} disabled={nomTest.trim().length < 2 || busy || data.tableAbsente} data-testid="connexion-test">
+              Lien pour un client test
+            </Button>
+            <span className="text-xs text-muted">Relié à aucun resto ; son canal reste en test, seul ton numéro reçoit des réponses.</span>
           </div>
         )}
         {lien && (
@@ -148,6 +181,7 @@ export function ConnexionsWhatsAppCard() {
                 <div className="flex flex-wrap items-center gap-2">
                   <strong>{c.nomResto}</strong>
                   <Badge tone={ETATS[c.etat].ton}>{ETATS[c.etat].texte}</Badge>
+                  {c.clientTest && <Badge tone="info">Client test</Badge>}
                   {c.numeroAffiche && <span className="text-muted">{c.numeroAffiche}</span>}
                   <span className="text-xs text-muted">
                     créé le {date(c.creeLe)}
@@ -155,6 +189,11 @@ export function ConnexionsWhatsAppCard() {
                   </span>
                 </div>
                 {c.erreur && <p className="text-xs text-coral">{c.erreur}</p>}
+                {c.etat === "terminee" && (
+                  <button type="button" className="text-xs font-semibold text-muted underline hover:text-coral" disabled={busy} onClick={() => void debrancher(c)}>
+                    Débrancher ce numéro
+                  </button>
+                )}
                 {c.etapes.length > 0 && (
                   <details>
                     <summary className="cursor-pointer text-xs text-muted">Déroulé ({c.etapes.length} étapes)</summary>
@@ -177,10 +216,12 @@ export function ConnexionsWhatsAppCard() {
   );
 }
 
-interface ModelesData {
-  comptes: string[];
-  wabaId?: string;
-  etat: { name: string; status: string | null; motif?: string }[];
+interface CompteModeles {
+  canalId: string;
+  libelle: string;
+  compteId: string | null;
+  jeton: "client" | "general";
+  etat?: { name: string; status: string | null; motif?: string }[];
   crees?: string[];
   echecs?: { name: string; erreur: string }[];
   error?: string;
@@ -196,32 +237,30 @@ const STATUTS: Record<string, { texte: string; ton: "neutral" | "success" | "war
 };
 
 /**
- * Page État : les 10 modèles WhatsApp de la livraison sur le compte commun (contrat livraison §8) : leur statut chez
- * Meta, et un bouton qui crée les manquants et les soumet à l'examen (une seule fois ; jamais de modification).
+ * Page État : les 10 modèles WhatsApp de la livraison, COMPTE PAR COMPTE (chaque resto a son compte WhatsApp ; un
+ * modèle appartient à un compte). Statut chez Meta, et création des manquants (soumis à l'examen), jamais de
+ * modification.
  */
 export function ModelesLivraisonCard() {
-  const [data, setData] = useState<ModelesData | null>(null);
-  const [waba, setWaba] = useState("");
+  const [comptes, setComptes] = useState<CompteModeles[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const appel = useCallback(async (init?: RequestInit, compte?: string) => {
+  async function appel(init?: RequestInit) {
     const token = await accessToken();
-    const url = `/api/etat/modeles-livraison${compte ? `?waba=${encodeURIComponent(compte)}` : ""}`;
-    const r = await fetch(url, { ...init, headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) } });
-    const body = (await r.json().catch(() => ({}))) as ModelesData;
-    if (!r.ok && !body.comptes) throw new Error(body.error ?? `Erreur ${r.status}`);
-    return body;
-  }, []);
+    const r = await fetch("/api/etat/modeles-livraison", { ...init, headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) } });
+    const body = (await r.json().catch(() => ({}))) as { comptes?: CompteModeles[]; error?: string };
+    if (!r.ok) throw new Error(body.error ?? `Erreur ${r.status}`);
+    return body.comptes ?? [];
+  }
 
-  async function lire(compte?: string) {
+  async function lancer(init?: RequestInit, confirmer?: string) {
+    if (confirmer && !window.confirm(confirmer)) return;
     setBusy(true);
     setErreur(null);
     try {
-      const d = await appel(undefined, compte);
-      setData(d);
-      setWaba(d.wabaId ?? d.comptes[0] ?? "");
-      if (d.error) setErreur(d.error);
+      const recus = await appel(init);
+      setComptes((old) => (init && old ? old.map((c) => recus.find((r) => r.canalId === c.canalId) ?? c) : recus));
     } catch (e) {
       setErreur(errorText(e));
     } finally {
@@ -229,26 +268,12 @@ export function ModelesLivraisonCard() {
     }
   }
 
-  async function creer() {
-    if (!window.confirm(`Créer les modèles manquants sur le compte ${waba} et les soumettre à l'examen de Meta ?`)) return;
-    setBusy(true);
-    setErreur(null);
-    try {
-      const d = await appel({ method: "POST", body: JSON.stringify({ wabaId: waba }) });
-      setData(d);
-      if (d.error) setErreur(d.error);
-    } catch (e) {
-      setErreur(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const manquants = data?.etat.filter((t) => !t.status).length ?? 0;
+  const manquants = (c: CompteModeles) => c.etat?.filter((t) => !t.status).length ?? 0;
+  const total = comptes?.reduce((n, c) => n + manquants(c), 0) ?? 0;
   return (
     <Card
-      title="Modèles WhatsApp de la livraison"
-      description="Les 10 modèles du contrat livraison, créés une seule fois sur le compte WhatsApp Business commun (ils servent à tous ses numéros). Hors fenêtre de 24 h, la livraison ne peut prévenir le client qu'avec un modèle approuvé."
+      title="Modèles WhatsApp de la livraison (par compte)"
+      description="Chaque numéro de resto a son compte WhatsApp, et un modèle appartient à un compte : il faut les 10 modèles sur le compte de chaque resto. Hors fenêtre de 24 h, la livraison ne peut prévenir le client qu'avec un modèle approuvé."
       className="lg:col-span-2"
     >
       <div className="space-y-3" data-testid="modeles-livraison">
@@ -258,46 +283,57 @@ export function ModelesLivraisonCard() {
           </Notice>
         )}
         <div className="flex flex-wrap items-center gap-2">
-          {data && data.comptes.length > 1 && (
-            <Select aria-label="Compte WhatsApp Business" value={waba} onChange={(e) => void lire(e.target.value)} className="max-w-xs">
-              {data.comptes.map((c) => (
-                <option key={c} value={c}>
-                  Compte {c}
-                </option>
-              ))}
-            </Select>
-          )}
-          <Button variant="secondary" onClick={() => void lire(waba || undefined)} disabled={busy}>
-            {busy ? "Lecture chez Meta…" : data ? "Actualiser" : "Voir les modèles"}
+          <Button variant="secondary" onClick={() => void lancer()} disabled={busy}>
+            {busy ? "Lecture chez Meta…" : comptes ? "Actualiser" : "Voir les modèles de chaque compte"}
           </Button>
-          {data && manquants > 0 && (
-            <Button onClick={creer} disabled={busy || !waba} data-testid="modeles-creer">
-              Créer les {manquants} manquant{manquants > 1 ? "s" : ""} et les soumettre
+          {comptes && total > 0 && (
+            <Button
+              onClick={() => void lancer({ method: "POST", body: JSON.stringify({ tous: true }) }, `Créer les ${total} modèles manquants sur tous les comptes et les soumettre à Meta ?`)}
+              disabled={busy}
+              data-testid="modeles-creer-tous"
+            >
+              Créer les {total} manquants sur tous les comptes
             </Button>
           )}
         </div>
-        {data?.wabaId && <p className="text-xs text-muted">Compte WhatsApp Business {data.wabaId}</p>}
-        {data && data.etat.length > 0 && (
-          <ul className="grid gap-1 text-sm sm:grid-cols-2">
-            {data.etat.map((t) => (
-              <li key={t.name} className="flex flex-wrap items-center gap-2">
-                <code className="text-xs">{t.name}</code>
-                {t.status ? <Badge tone={STATUTS[t.status]?.ton ?? "neutral"}>{STATUTS[t.status]?.texte ?? t.status}</Badge> : <Badge tone="neutral">Absent</Badge>}
-                {t.motif && <span className="text-xs text-coral">{t.motif}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-        {data?.crees && data.crees.length > 0 && <Notice tone="success">{data.crees.length} modèle(s) créé(s) et soumis à Meta : réponse en quelques heures (parfois 1 à 2 jours).</Notice>}
-        {data?.echecs && data.echecs.length > 0 && (
-          <Notice tone="error">
-            {data.echecs.map((e) => (
-              <span key={e.name} className="block">
+        {comptes && comptes.length === 0 && <p className="text-sm text-muted">Aucun canal de resto pour l&apos;instant.</p>}
+        {comptes?.map((c) => (
+          <div key={c.canalId} className="rounded-2xl border border-rule p-3 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <strong>{c.libelle}</strong>
+              {c.compteId && <span className="font-mono text-xs text-muted">compte {c.compteId}</span>}
+              <span className="text-xs text-muted">jeton {c.jeton === "client" ? "du client" : "général"}</span>
+              {manquants(c) > 0 && (
+                <Button
+                  variant="secondary"
+                  className="ml-auto"
+                  disabled={busy}
+                  onClick={() => void lancer({ method: "POST", body: JSON.stringify({ canalId: c.canalId }) }, `Créer les ${manquants(c)} modèles manquants sur le compte ${c.compteId} ?`)}
+                >
+                  Créer les {manquants(c)} manquants
+                </Button>
+              )}
+            </div>
+            {c.error && <p className="mt-1 text-xs text-coral">{c.error}</p>}
+            {c.etat && (
+              <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+                {c.etat.map((t) => (
+                  <li key={t.name} className="flex flex-wrap items-center gap-2">
+                    <code className="text-xs">{t.name}</code>
+                    {t.status ? <Badge tone={STATUTS[t.status]?.ton ?? "neutral"}>{STATUTS[t.status]?.texte ?? t.status}</Badge> : <Badge tone="neutral">Absent</Badge>}
+                    {t.motif && <span className="text-xs text-coral">{t.motif}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {c.crees && c.crees.length > 0 && <p className="mt-1 text-xs text-green-700">{c.crees.length} créé(s) et soumis à Meta (réponse en quelques heures, parfois 1 à 2 jours).</p>}
+            {c.echecs?.map((e) => (
+              <p key={e.name} className="mt-1 text-xs text-coral">
                 {e.name} : {e.erreur}
-              </span>
+              </p>
             ))}
-          </Notice>
-        )}
+          </div>
+        ))}
       </div>
     </Card>
   );

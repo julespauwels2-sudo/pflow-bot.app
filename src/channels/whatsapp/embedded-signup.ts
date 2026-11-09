@@ -19,6 +19,9 @@ import type { Canal, ChannelStore } from "../core/types";
 import type { Connexion, ConnexionEtape, ConnexionStore } from "../core/connexions";
 import { LIVRAISON_TEMPLATES, templatePayload } from "./livraison-templates";
 
+/** Seul numéro de test des canaux créés par l'Embedded Signup : le bot ne répond qu'à Jules tant qu'il est en test. */
+export const JULES_TEST_NUMERO = "590690938108";
+
 export interface MetaAppConfig {
   appId: string;
   appSecret: string;
@@ -58,7 +61,7 @@ function metaErrorText(json: Record<string, unknown>, status: number): string {
 /** Appel à l'API Graph, borné dans le temps. Le jeton passe en en-tête, jamais dans l'URL (sauf l'échange du code). */
 type GraphTarget = Pick<MetaAppConfig, "base" | "version" | "fetch" | "timeoutMs">;
 
-async function graph(meta: GraphTarget, method: "GET" | "POST", path: string, token: string | null, body?: unknown): Promise<Record<string, unknown>> {
+async function graph(meta: GraphTarget, method: "GET" | "POST" | "DELETE", path: string, token: string | null, body?: unknown): Promise<Record<string, unknown>> {
   const doFetch = meta.fetch ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), meta.timeoutMs ?? 10_000);
@@ -178,7 +181,8 @@ export async function terminerConnexion(deps: SignupDeps, connexion: Connexion, 
       handoffPauseHours: 24,
       sessionMinutes: 30,
       etat: "test",
-      testNumeros: [],
+      // En test, le bot ne répond qu'à Jules : aucune réponse automatique aux vrais clients du numéro.
+      testNumeros: [JULES_TEST_NUMERO],
     };
     const r = await deps.store.ensureCanal(canal);
     c.canalId = r.canal.id;
@@ -245,4 +249,44 @@ export async function modelesLivraison(target: GraphTarget, wabaId: string, toke
     crees,
     echecs,
   };
+}
+
+/**
+ * Débrancher un numéro connecté (par exemple le numéro de la vidéo de l'examen Meta) : désabonnement de l'app aux
+ * webhooks du compte du client (avec SON jeton), canal coupé (le bot ne répond plus à personne), jeton effacé.
+ * Le gérant garde son appli et son numéro. Côté Meta, il peut aussi retirer PFlow de ses partenaires (voir la doc).
+ */
+export async function debrancherConnexion(
+  deps: { meta: GraphTarget; connexions: ConnexionStore; store: Pick<ChannelStore, "setCanalEtat">; now?: () => Date },
+  connexion: Connexion,
+  token: string | null,
+): Promise<Connexion> {
+  const now = () => (deps.now ? deps.now() : new Date());
+  const c: Connexion = { ...connexion, etapes: [...connexion.etapes] };
+  const note = (etape: string, ok: boolean, detail?: string) => c.etapes.push({ etape, ok, le: now().toISOString(), ...(detail ? { detail: detail.slice(0, 300) } : {}) });
+  if (c.wabaId && token) {
+    try {
+      await graph(deps.meta, "DELETE", `${c.wabaId}/subscribed_apps`, token);
+      note("app_desabonnee", true);
+    } catch (error) {
+      note("app_desabonnee", false, (error as Error).message);
+    }
+  } else {
+    note("app_desabonnee", false, "Jeton du client absent : désabonnement à faire dans les paramètres du portefeuille du client");
+  }
+  if (c.canalId) {
+    try {
+      await deps.store.setCanalEtat(c.canalId, "coupe");
+      note("canal_coupe", true);
+    } catch (error) {
+      note("canal_coupe", false, (error as Error).message);
+    }
+  }
+  if (c.wabaId) {
+    await deps.connexions.deleteJeton(c.wabaId);
+    note("jeton_efface", true);
+  }
+  c.etat = "debranchee";
+  await deps.connexions.update(c);
+  return c;
 }

@@ -1059,4 +1059,11 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
   n'est que dans Vercel). Ajouté à la PR Embedded Signup : page État → « Modèles WhatsApp de la livraison », statut des
   10 chez Meta et bouton « Créer les manquants et les soumettre » (jeton général, compte 1808772226929443 par défaut).
   Textes vérifiés identiques au guide du CRM. Création à la main possible en attendant (guide du CRM).
+- **Diagnostic des comptes (9 nov., soir)** : le jeton de pflow-bots-serveur ne sait pas lister les entreprises (pas de
+  `business_management`) et le compte 1808772226929443 répond « Authorization Error ». PR séparée : IDs de comptes
+  saisis à la main et interrogés directement, SQL des canaux proposé. `business_management` n'est pas nécessaire.
+- **Modèles de la livraison compte par compte** (PR Embedded Signup) : pas de compte commun ; page État → statut et
+  création par compte (compte de messagerie d'abord, puis WABA).
+- **Vidéo de l'examen avec Cedyan Energy** (PR Embedded Signup) : lien pour un « client test » hors CRM, canal en test
+  avec seulement le numéro de Jules, bouton « Débrancher ». Déroulé des vidéos : `docs/etape-c/embedded-signup.md`.
 
