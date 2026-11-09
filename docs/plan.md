@@ -125,7 +125,13 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   tard, PR séparée). Sous-test « un réel avec son tendance ne part jamais par l'API : notification avec le son,
   relance, « C'est posté » » ; les 3 autres passent. Sans rapport avec la démo permanente (même échec sur `main`).
   Lancer : `cd repo && node --test tests/sons-tendance.test.js`.
-- **Notifications push pour le CRM** (noté le 9 novembre 2026, chantier séparé) : même principe que la boîte de
+- **Centre d'alertes unique dans PFlow Bots** (audit du 9 novembre 2026, `docs/etape-c/audit-notifications-crm.md`) :
+  PFlow Bots lit la table `alertes` du CRM (lecture seule) et pousse les alertes critiques ; le QG garde le personnel.
+  ≈ 1 jour, après Embedded Signup. **Urgent avant** : ajouter `COMMANDE_EN_ATTENTE` (et paiements, silence) au push du
+  QG (1 ligne SQL, à jouer par Jules).
+- **Supervision du CRM et arrêt d'UChat** : les sondes interrogent encore UChat (fausses pannes après l'arrêt). À
+  adapter avec la bascule (PR CRM).
+- ~~**Notifications push pour le CRM**~~ : le CRM en a déjà (app QG). Ancienne note : (noté le 9 novembre 2026, chantier séparé) : même principe que la boîte de
   réception de PFlow Bots (app installée, Web Push, clés VAPID), pour les alertes du CRM. Pas maintenant.
 
 ### Phase 2

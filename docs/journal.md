@@ -985,3 +985,21 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
   qualité, statut, coexistence, apps abonnées, et SQL des canaux en test proposé pour les numéros sans canal.
 - PR séparées : vrais boutons WhatsApp dans la boîte de réception ; étape 3 en ≈ 20 s ; CRM : notification
   « commande prête » en bas de l'écran.
+
+
+## 9 novembre 2026 (nuit) — audit des notifications du CRM (lecture seule, aucun code)
+
+- **Seul canal vers Jules : le push de l'app QG du CRM** (marche, indépendant de Vercel et d'UChat). WhatsApp coupé
+  depuis le 26 octobre (code + pause jusqu'en 2100 en base). Ni e-mail, ni SMS.
+- 🔴 **Commande non acceptée** : détectée (10 min, 12 fois en 30 jours, dont Cookies An Nou 6 h 19 le 8 nov. et Mexico
+  plus d'1 jour le 1er nov.) mais **Jules n'est plus prévenu** : la règle n'est pas dans la liste du push.
+  Correctif d'1 ligne proposé (réglage `qg_settings.alertes_push`), **non appliqué**.
+- **Resto sans commande depuis X jours** : n'existe pas en jours (silence en heures, décrochage à la semaine,
+  affichage seulement).
+- **Résumé du matin** : push chaque jour à 8 h, marche.
+- **Stripe** (abonnement PFlow) : branché, push en temps réel, jamais déclenché (aucune facture d'abonnement).
+- Appareils abonnés au push du QG : 1 seul (5 fin octobre).
+- Recommandation : pas de nouveau push dans le CRM ; à terme, **PFlow Bots centre d'alertes unique** pour tout ce qui
+  touche un resto (lecture de la table `alertes`, aucune modification du CRM). Détail :
+  `docs/etape-c/audit-notifications-crm.md`.
+
