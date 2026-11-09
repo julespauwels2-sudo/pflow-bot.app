@@ -25,6 +25,9 @@ import { loadBotFromWorkspace } from "./bot-loader";
 import { createMemoryChannelStore } from "./memory-store";
 import type { ProcessorDeps } from "./processor";
 import { createSupabaseChannelStore } from "./supabase-store";
+import { createMemoryConnexionStore, createSupabaseConnexionStore, type ConnexionStore } from "./connexions";
+import type { MetaAppConfig } from "../whatsapp/embedded-signup";
+import { dechiffrerJeton } from "@/lib/jetons-chiffres";
 import type { Canal, ChannelSender, ChannelStore, Plateforme } from "./types";
 
 export const DEFAULT_GRAPH_BASE = "https://graph.facebook.com";
@@ -72,6 +75,25 @@ export interface ChannelsRuntime {
   deps(plateforme: Plateforme): ProcessorDeps | null;
   /** Données des bots (clients, flux, fiches). */
   workspace(): Promise<WorkspaceData>;
+  /** « Connecter votre WhatsApp » (Embedded Signup) : demandes de connexion et jetons chiffrés des clients. */
+  connexions: ConnexionStore;
+}
+
+/**
+ * L'app Meta pour l'Embedded Signup : META_APP_ID et META_ES_CONFIG_ID (pas des secrets), et le secret de l'app
+ * (WHATSAPP_APP_SECRET, le même que pour la signature des webhooks). null : pas encore configuré.
+ */
+export function metaAppConfig(): MetaAppConfig | null {
+  const appId = env("META_APP_ID");
+  const configId = env("META_ES_CONFIG_ID");
+  const appSecret = env("WHATSAPP_APP_SECRET");
+  if (!appId || !configId || !appSecret) return null;
+  return { appId, configId, appSecret, base: env("WHATSAPP_GRAPH_BASE") || DEFAULT_GRAPH_BASE, version: env("WHATSAPP_GRAPH_VERSION") || DEFAULT_GRAPH_VERSION };
+}
+
+/** Ce qui manque pour l'Embedded Signup (page État). */
+export function embeddedSignupMissing(): string[] {
+  return ["META_APP_ID", "META_ES_CONFIG_ID", "WHATSAPP_APP_SECRET", "BOT_JETONS_CLE"].filter((name) => !env(name));
 }
 
 /** Code de démo fictif (mode mémoire) : la page de démonstration du CRM l'attend sur 20 caractères. */
@@ -134,6 +156,7 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
   const transcriber = transcriberFromEnv();
   const demoAnswer = demoCompletionFromEnv();
   let store: ChannelStore;
+  let connexions: ConnexionStore;
   let repos: Repositories;
   let workspace: () => Promise<WorkspaceData>;
 
@@ -157,6 +180,7 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
       { ...base, id: "canal-pflow", role: "pflow", restaurantId: "", triggerMode: "toujours", plateforme: "whatsapp", accountId: env("WHATSAPP_PFLOW_PHONE_ID") || "1000000099", numeroAffiche: "Numéro PFlow (démos)", coexistence: false },
     ];
     store = createMemoryChannelStore(canaux);
+    connexions = createMemoryConnexionStore();
     workspace = () => repos.workspace.exportAll();
   } else {
     const sb = createClient(env("NEXT_PUBLIC_SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), { auth: { persistSession: false, autoRefreshToken: false } });
@@ -164,12 +188,41 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
     const workspaceStore = createSupabaseStore(db);
     repos = createLocalRepositories(workspaceStore, { crmClients: true, lockedFields: (id) => workspaceStore.lockedFields(id) });
     store = createSupabaseChannelStore(db);
+    connexions = createSupabaseConnexionStore(db);
     workspace = () => workspaceStore.read();
+  }
+
+  // WhatsApp : chaque numéro connecté par l'Embedded Signup envoie avec le jeton de SON client (gardé chiffré) ; les
+  // autres (numéros du compte PFlow) avec le jeton général. Cache de 5 min ; une erreur : le jeton général.
+  const wa = readWhatsAppConfig();
+  if (wa.ready) {
+    const cache = new Map<string, { token: string | null; at: number }>();
+    sendersByPlatform.whatsapp = createGraphClient({
+      token: wa.token,
+      base: wa.graphBase,
+      version: wa.graphVersion,
+      tokenFor: async (accountId) => {
+        const hit = cache.get(accountId);
+        if (hit && Date.now() - hit.at < 300_000) return hit.token;
+        let token: string | null = null;
+        try {
+          const canal = await store.canalByAccount("whatsapp", accountId);
+          const chiffre = canal?.wabaId ? await connexions.jetonChiffre(canal.wabaId) : null;
+          token = chiffre ? dechiffrerJeton(chiffre) : null;
+        } catch {
+          // Table absente (migration pas encore jouée), clé absente : le jeton général.
+          token = null;
+        }
+        cache.set(accountId, { token, at: Date.now() });
+        return token;
+      },
+    });
   }
 
   return {
     mode: storeMode(),
     store,
+    connexions,
     senders: sendersByPlatform,
     workspace,
     deps(plateforme) {

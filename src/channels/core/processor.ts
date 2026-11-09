@@ -390,7 +390,7 @@ async function transcribeVoice(event: InboundEvent, contactId: string, deps: Pro
   if (transcribed >= limits.maxPerDay) return refuse("plafond", VOICE_TEXTS.plafond, { erreur: `Plafond de ${limits.maxPerDay} vocaux par 24 h atteint` });
 
   try {
-    const audio = await deps.graph.downloadMedia(event.media);
+    const audio = await deps.graph.downloadMedia(event.media, event.accountId);
     const seconds = audioDurationSeconds(audio.data, audio.mimeType);
     // Durée inconnue (format autre qu'Ogg Opus) : estimée par la taille, à 32 Ko/s au plus (très large).
     const tooLong = seconds !== null ? seconds > limits.maxSeconds + 0.5 : audio.data.byteLength > limits.maxSeconds * 32_000;

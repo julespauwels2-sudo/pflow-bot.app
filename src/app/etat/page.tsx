@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { MobileHeader } from "@/components/mobile";
 import { PushControls } from "@/components/pwa";
+import { ConnexionsWhatsAppCard } from "@/components/connexions-whatsapp-card";
 import { useAuth } from "@/components/auth-gate";
 import { Badge, Button, Card, Loading, Notice } from "@/components/ui";
 import { errorText, useLoad } from "@/data/browser";
@@ -105,6 +106,7 @@ export default function SystemStatusPage() {
         {server.status === "loading" && <Loading />}
         {server.status === "error" && <Notice tone="error">{server.error}</Notice>}
         {server.status === "ready" && <ServerCards data={server.data} />}
+        <ConnexionsWhatsAppCard />
 
 
         <MobileAccountCard />

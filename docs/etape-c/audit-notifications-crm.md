@@ -17,7 +17,8 @@ Les chemins de code partent de `repo/`.
 - 🔴 **Trou important : une commande non acceptée ne prévient plus Jules.** La règle détecte bien (12 fois en 30 jours),
   mais elle n'est pas dans la liste des alertes envoyées en push, et le WhatsApp est coupé. Exemples réels :
   - 8 nov. : **Cookies An Nou**, une commande a attendu **6 h 19** ;
-  - 1er nov. : **Mexico**, une commande a attendu **plus d'1 jour** (dashboard fermé depuis 5 h 33) ;
+  - 1er nov. : **Mexico**, une commande programmée (passée la veille à 23 h 14 pour 11 h 35) a attendu **4 h 51** après
+    son heure (dashboard fermé ; corrigé le 9 nov. : l'alerte comptait depuis la veille) ;
   - 6, 7 et 8 nov. : ag_pizzaa et Mexico, 10 à 53 min.
   Dernière alerte « commande pas acceptée » réellement envoyée à Jules : **22 octobre** (par WhatsApp/UChat).
 - **Appareils abonnés au push du QG : 1 seul** (un iPhone, vu le 7 nov.), contre 5 fin octobre.

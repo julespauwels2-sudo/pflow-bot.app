@@ -135,16 +135,20 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   PFlow Bots lit la table `alertes` du CRM (lecture seule) et pousse les alertes critiques ; le QG garde le personnel.
   ≈ 1 jour, après Embedded Signup. **Urgent avant** : ajouter `COMMANDE_EN_ATTENTE` (et paiements, silence) au push du
   QG (1 ligne SQL, à jouer par Jules).
+- **Embedded Signup v4 avec coexistence** (PR du 9 novembre, chantier C) : construit et testé (faux Meta). À faire par
+  Jules : SQL `20261111000000_bot_connexions_whatsapp`, variables `BOT_JETONS_CLE`, `META_APP_ID`, `META_ES_CONFIG_ID`,
+  démarches Meta dans l'ordre (vérification d'entreprise, configuration v4, Tech Provider, App Review avec 2 vidéos).
+  Détail : `docs/etape-c/embedded-signup.md`.
 - **Livraison : route `POST /api/webhooks/pflow-livraison`** (contrat `docs/livraison/INTERFACE-PFLOW-BOTS.md` du
-  CRM, version 1 du 9 novembre 2026, décision finale de Jules). Les messages de suivi partent **toujours du numéro du
+  CRM, version du commit ad59937, décision finale de Jules). Les messages de suivi partent **toujours du numéro du
   resto**, **jamais** du numéro PFlow (aucun secours) : texte libre avec bouton « Suivre ma livraison » si la fenêtre
   de 24 h est ouverte, modèle sinon ; sinon `pas_de_canal` / `modele_absent` / `erreur_meta`, et PFlow Order réessaie
   puis alerte Jules. À construire : même signature que `/api/webhooks/pflow-order` ; envoi de **modèles** (absent du
   client Graph aujourd'hui) ; idempotence gardée 24 h **avant** l'appel à Meta (nouvelle table `bot_`, SQL à montrer) ;
   code de livraison jamais dans les journaux ; réponse en moins de 8 s. ≈ 1 jour. Prérequis : canaux **actifs** des
   restos (bascule 19-21 et Embedded Signup) et les **10 modèles** `pflow_livraison_*` approuvés sur le compte WhatsApp
-  de chaque resto (création par l'API de Meta, intégrée à Embedded Signup). À signaler au CRM : le §5 (points 2 et 4)
-  parle encore d'un envoi « par le numéro PFlow », en contradiction avec la décision finale.
+  de chaque resto (création par l'API de Meta, intégrée à Embedded Signup). Le §5 a été corrigé (commit ad59937). Pour un resto connecté par l'Embedded Signup, le modèle se
+  cherche sur le compte WhatsApp du resto (le sien), pas sur celui de Jules.
 - **Supervision du CRM et arrêt d'UChat** : les sondes interrogent encore UChat (fausses pannes après l'arrêt). À
   adapter avec la bascule (PR CRM).
 - ~~**Notifications push pour le CRM**~~ : le CRM en a déjà (app QG). Ancienne note : (noté le 9 novembre 2026, chantier séparé) : même principe que la boîte de
