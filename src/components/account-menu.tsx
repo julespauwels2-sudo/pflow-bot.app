@@ -12,19 +12,19 @@ export function AccountMenu() {
   const [hasLocal] = useState(() => isCrmMode && typeof window !== "undefined" && Boolean(readBrowserWorkspace()));
   if (!email) return null;
   return (
-    <span className="ml-2 flex items-center gap-1 border-l border-rule pl-3">
+    <span className="ml-2 flex items-center gap-1 border-l-2 border-rule pl-3 text-xs font-extrabold tracking-[0.08em] uppercase">
       {hasLocal && (
-        <Link href="/import" className="rounded-full bg-pink/10 px-3 py-1.5 text-pink hover:bg-pink/20">
+        <Link href="/import" className="rounded-full bg-pink px-3 py-1.5 text-nuit shadow-bouton">
           Importer
         </Link>
       )}
-      <Link href="/etat" className="rounded-full px-3 py-1.5 hover:bg-white/5" title="État du système">
+      <Link href="/etat" className="rounded-full px-3 py-1.5 hover:bg-white hover:text-nuit" title="État du système">
         État
       </Link>
-      <span className="hidden text-xs font-normal text-muted sm:inline" title={email}>
+      <span className="hidden text-xs font-semibold tracking-normal text-muted normal-case sm:inline" title={email}>
         {email}
       </span>
-      <button type="button" className="rounded-full px-3 py-1.5 hover:bg-white/5" onClick={() => void signOut()}>
+      <button type="button" className="rounded-full px-3 py-1.5 hover:bg-white hover:text-nuit" onClick={() => void signOut()}>
         Déconnexion
       </button>
     </span>

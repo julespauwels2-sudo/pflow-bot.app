@@ -13,15 +13,15 @@ export interface BlockInfo {
 
 export const BLOCKS: Record<NodeType, BlockInfo> = {
   trigger: { label: "Déclencheur", description: "Mots-clés qui lancent le flux", accent: "bg-pink", hex: "#FF4FB5", icon: "⚡" },
-  message: { label: "Message", description: "Une ou plusieurs bulles, avec boutons", accent: "bg-blue", hex: "#2A8BFF", icon: "💬" },
-  list: { label: "Liste", description: "Jusqu'à 10 choix", accent: "bg-blue", hex: "#2A8BFF", icon: "📋" },
+  message: { label: "Message", description: "Une ou plusieurs bulles, avec boutons", accent: "bg-blue", hex: "#2AABFF", icon: "💬" },
+  list: { label: "Liste", description: "Jusqu'à 10 choix", accent: "bg-blue", hex: "#2AABFF", icon: "📋" },
   question: { label: "Question", description: "Pose une question, garde la réponse", accent: "bg-cyan", hex: "#74DDFB", icon: "❓" },
-  condition: { label: "Condition", description: "Selon une variable, l'heure ou le jour", accent: "bg-navy-2", hex: "#1B2A6B", icon: "🔀" },
-  ai: { label: "Agent IA", description: "L'IA répond, lance une fonction ou passe la main", accent: "bg-pink-2", hex: "#FF7CCB", icon: "✨" },
-  handoff: { label: "Transfert humain", description: "Met le bot en pause, prévient le gérant", accent: "bg-coral", hex: "#FF6B6B", icon: "🙋" },
+  condition: { label: "Condition", description: "Selon une variable, l'heure ou le jour", accent: "bg-nuit text-white", hex: "#0A1236", icon: "🔀" },
+  ai: { label: "Agent IA", description: "L'IA répond, lance une fonction ou passe la main", accent: "bg-pink", hex: "#FF4FB5", icon: "✨" },
+  handoff: { label: "Transfert humain", description: "Met le bot en pause, prévient le gérant", accent: "bg-pink", hex: "#FF4FB5", icon: "🙋" },
   commande: { label: "Commande", description: "Suivi ou annulation de la commande du client (PFlow Order)", accent: "bg-cyan", hex: "#74DDFB", icon: "🧾" },
-  goto_flow: { label: "Aller à un flux", description: "Saute vers un autre flux", accent: "bg-navy", hex: "#101B4D", icon: "↪️" },
-  end: { label: "Fin", description: "Termine la conversation", accent: "bg-muted", hex: "#5E6690", icon: "🏁" },
+  goto_flow: { label: "Aller à un flux", description: "Saute vers un autre flux", accent: "bg-nuit text-white", hex: "#0A1236", icon: "↪️" },
+  end: { label: "Fin", description: "Termine la conversation", accent: "bg-ink/15", hex: "#FFFFFF", icon: "🏁" },
   delay: { label: "Délai", description: "Pause avec « en train d'écrire »", accent: "bg-cyan", hex: "#74DDFB", icon: "⏳" },
 };
 

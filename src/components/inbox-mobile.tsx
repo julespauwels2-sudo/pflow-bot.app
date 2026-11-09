@@ -67,7 +67,7 @@ export function MobileInboxList({
         </Notice>
       )}
       {waiting > 0 && (
-        <p className="bg-brand shadow-bouton rounded-2xl px-4 py-3 text-base font-bold text-white" data-testid="inbox-attente">
+        <p className="bg-brand shadow-bouton rounded-2xl px-4 py-3 text-base font-bold text-nuit" data-testid="inbox-attente">
           🔔 {waiting} conversation{waiting > 1 ? "s attendent" : " attend"} une réponse
         </p>
       )}
@@ -75,7 +75,7 @@ export function MobileInboxList({
       {rows.length === 0 ? (
         <p className="py-10 text-center text-base text-muted">Aucune conversation pour le moment.</p>
       ) : (
-        <ul className="divide-y divide-rule overflow-hidden rounded-[var(--radius-card)] border border-white/10 bg-verre shadow-card">
+        <ul className="divide-y divide-rule overflow-hidden rounded-[var(--radius-card)] border border-ink/10 carte shadow-card">
           {rows.map(({ canal, conv }) => {
             const name = who(canal, conv);
             const unread = isUnread(conv, seen);
@@ -84,7 +84,7 @@ export function MobileInboxList({
               <li key={conv.contactId}>
                 <button type="button" onClick={() => onOpen(conv.contactId)} className="flex min-h-[4.5rem] w-full items-center gap-3 px-3.5 py-3 text-left active:bg-pink/5" data-testid="inbox-row">
                   <span
-                    className={`grid size-12 shrink-0 place-items-center rounded-full font-title text-base font-semibold text-white ${conv.transfertOuvert ? "bg-brand ring-2 ring-pink/30 ring-offset-2" : "bg-avatar"}`}
+                    className={`grid size-12 shrink-0 place-items-center rounded-full font-title text-base font-semibold text-nuit ${conv.transfertOuvert ? "bg-brand ring-2 ring-pink/30 ring-offset-2" : "bg-avatar"}`}
                     aria-hidden
                   >
                     {initials(name)}
@@ -92,7 +92,7 @@ export function MobileInboxList({
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
                       <span className={`min-w-0 flex-1 truncate text-base ${unread ? "font-extrabold" : "font-semibold"}`}>{name}</span>
-                      <span className={`shrink-0 text-xs ${unread ? "font-bold text-pink-3" : "text-muted"}`}>{shortTime(lastAt(conv))}</span>
+                      <span className={`shrink-0 text-xs ${unread ? "font-bold text-rose" : "text-muted"}`}>{shortTime(lastAt(conv))}</span>
                     </span>
                     <span className="flex items-center gap-2">
                       <span className={`min-w-0 flex-1 truncate text-sm ${unread ? "font-semibold text-ink" : "text-muted"}`}>
@@ -101,8 +101,8 @@ export function MobileInboxList({
                       {unread && <span className="bg-brand size-2.5 shrink-0 rounded-full" aria-label="non lu" />}
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-1.5">
-                      {conv.transfertOuvert && <span className="bg-brand rounded-full px-2.5 py-0.5 text-xs font-bold text-white">🔔 Attend l&apos;équipe</span>}
-                      {pause && !conv.transfertOuvert && <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-semibold">⏸ {pause}</span>}
+                      {conv.transfertOuvert && <span className="bg-brand rounded-full px-2.5 py-0.5 text-xs font-bold text-nuit">🔔 Attend l&apos;équipe</span>}
+                      {pause && !conv.transfertOuvert && <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs font-semibold">⏸ {pause}</span>}
                       <span className="truncate text-xs text-muted">
                         {canal.plateforme === "instagram" ? "📸" : "💬"} {canal.nomResto}
                         {conv.demoEnCours ? ` · démo ${conv.demoEnCours}` : ""}
@@ -194,14 +194,14 @@ export function MobileConversation({
       className="bg-chat-motif fixed inset-x-0 top-0 z-40 flex flex-col"
       style={{ height: vv.height ? `${vv.height}px` : "100dvh", transform: `translateY(${vv.offsetTop}px)` }}
     >
-      <header className="bg-navy-grad shadow-bloc shrink-0 rounded-b-[var(--radius-card)] pt-[env(safe-area-inset-top)] text-white">
+      <header className="shrink-0 border-b-2 border-white/15 bg-nuit pt-[env(safe-area-inset-top)] text-white">
         <div className="flex items-center gap-1 px-1 py-1.5">
-          <button type="button" onClick={onBack} aria-label="Retour à la liste" className="grid size-11 shrink-0 place-items-center rounded-full active:bg-white/10">
+          <button type="button" onClick={onBack} aria-label="Retour à la liste" className="grid size-11 shrink-0 place-items-center rounded-full active:bg-ink/10">
             <svg viewBox="0 0 24 24" className="size-6" aria-hidden>
               <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
-          <span className={`grid size-10 shrink-0 place-items-center rounded-full font-title text-sm font-semibold text-white ${conv.transfertOuvert ? "bg-brand" : "bg-avatar"}`} aria-hidden>
+          <span className={`grid size-10 shrink-0 place-items-center rounded-full font-title text-sm font-semibold text-nuit ${conv.transfertOuvert ? "bg-brand" : "bg-avatar"}`} aria-hidden>
             {initials(name)}
           </span>
           <span className="min-w-0 flex-1 pl-1">
@@ -213,16 +213,16 @@ export function MobileConversation({
         </div>
         <div className="flex items-center gap-2 px-3 pb-3">
           {conv.pause ? (
-            <button type="button" onClick={() => void onRelease()} className="bg-brand shadow-bouton min-h-11 rounded-full px-4 text-sm font-bold text-white" data-testid="mobile-rendre">
+            <button type="button" onClick={() => void onRelease()} className="bg-brand shadow-bouton min-h-11 rounded-full px-4 text-sm font-bold text-nuit" data-testid="mobile-rendre">
               Rendre au bot
             </button>
           ) : (
-            <button type="button" onClick={() => void onTakeOver()} className="min-h-11 rounded-full bg-verre px-4 text-sm font-bold text-ink" data-testid="mobile-reprendre">
+            <button type="button" onClick={() => void onTakeOver()} className="min-h-11 rounded-full carte px-4 text-sm font-bold text-ink" data-testid="mobile-reprendre">
               Reprendre la main
             </button>
           )}
           <span className="min-w-0 flex-1 text-xs leading-tight text-white/70">
-            {conv.transfertOuvert && <span className="block font-bold text-pink-2">🔔 Attend l&apos;équipe</span>}
+            {conv.transfertOuvert && <span className="block font-bold text-rose">🔔 Attend l&apos;équipe</span>}
             {pause ?? "Le bot répond"}
           </span>
         </div>
@@ -251,8 +251,8 @@ export function MobileConversation({
           thread.messages.map((m) => (
             <div key={m.id} className={`flex ${m.sens === "entrant" ? "justify-start" : "justify-end"}`}>
               <div
-                className={`max-w-[85%] overflow-hidden rounded-2xl px-3 py-1.5 text-base leading-snug break-words whitespace-pre-wrap shadow-sm ${
-                  m.sens === "entrant" ? "rounded-tl-sm bg-verre" : m.auteur === "humain" || m.sens === "echo" ? "rounded-tr-sm bg-bulle-humain" : "rounded-tr-sm bg-bulle-bot"
+                className={`max-w-[85%] overflow-hidden rounded-2xl px-3 py-1.5 text-base leading-snug break-words whitespace-pre-wrap ${
+                  m.sens === "entrant" ? "rounded-tl-sm carte" : m.auteur === "humain" || m.sens === "echo" ? "rounded-tr-sm aplat-rose" : "rounded-tr-sm aplat-bleu"
                 }`}
               >
                 {m.sens !== "entrant" && (
@@ -265,7 +265,7 @@ export function MobileConversation({
                     <span className="mt-0.5 block text-right text-[11px] text-muted">
                       {clock(m.at)}
                       {m.statut === "lu" && " · lu"}
-                      {m.statut === "echec" && <span className="text-coral"> · échec{m.erreur ? ` : ${m.erreur}` : ""}</span>}
+                      {m.statut === "echec" && <span className="text-alerte"> · échec{m.erreur ? ` : ${m.erreur}` : ""}</span>}
                     </span>
                   }
                 />
@@ -276,7 +276,7 @@ export function MobileConversation({
       </div>
 
       <form
-        className={`flex shrink-0 items-end gap-2 rounded-t-[var(--radius-card)] bg-verre px-2 pt-2 shadow-[0_-10px_30px_rgb(16_27_77/0.06)] ${keyboard ? "pb-2" : "pb-[max(0.5rem,env(safe-area-inset-bottom))]"}`}
+        className={`flex shrink-0 items-end gap-2 rounded-t-[var(--radius-card)] carte px-2 pt-2 ${keyboard ? "pb-2" : "pb-[max(0.5rem,env(safe-area-inset-bottom))]"}`}
         onSubmit={(e) => {
           e.preventDefault();
           void send();
@@ -291,14 +291,14 @@ export function MobileConversation({
               value={texte}
               onChange={(e) => setTexte(e.target.value)}
               placeholder={conv.pause ? "Message" : "Message (le bot se met en pause)"}
-              className="max-h-[132px] min-h-11 flex-1 resize-none rounded-3xl border border-line bg-white/5 px-4 py-2.5 text-base leading-snug outline-none focus:border-pink focus:ring-4 focus:ring-pink/15"
+              className="max-h-[132px] min-h-11 flex-1 resize-none rounded-3xl border border-line bg-ink/5 px-4 py-2.5 text-base leading-snug outline-none focus:border-pink focus:ring-4 focus:ring-pink/15"
               data-testid="mobile-reponse"
             />
             <button
               type="submit"
               aria-label="Envoyer"
               disabled={!texte.trim() || busy}
-              className="bg-brand shadow-bouton grid size-11 shrink-0 place-items-center rounded-full text-white disabled:opacity-40 disabled:shadow-none"
+              className="bg-brand shadow-bouton grid size-11 shrink-0 place-items-center rounded-full text-nuit disabled:opacity-40 disabled:shadow-none"
               data-testid="mobile-envoyer"
             >
               <svg viewBox="0 0 24 24" className="size-5" aria-hidden>

@@ -18,7 +18,7 @@ function RichText({ text }: { text: string }) {
       {parts.map((part, i) => {
         const m = /^\{\{\s*([a-zA-Z0-9_]+)\s*\}\}$/.exec(part);
         return m ? (
-          <span key={i} className="mx-0.5 rounded bg-pink/15 px-1 font-mono text-[11px] font-semibold text-pink">
+          <span key={i} className="mx-0.5 rounded bg-pink/15 px-1 font-mono text-[11px] font-semibold text-rose">
             {m[1]}
           </span>
         ) : (
@@ -33,7 +33,7 @@ function RichText({ text }: { text: string }) {
 function Bubble({ text, placeholder, children }: { text?: string; placeholder?: string; children?: ReactNode }) {
   const empty = !text?.trim();
   return (
-    <div className="rounded-xl rounded-tl-sm bg-verre px-2.5 py-1.5 text-[12.5px] leading-snug whitespace-pre-wrap text-ink shadow-[0_1px_1px_rgb(0_0_0/0.08)]">
+    <div className="rounded-xl rounded-tl-sm bg-ink/5 px-2.5 py-1.5 text-[12.5px] leading-snug whitespace-pre-wrap text-ink">
       {empty ? <span className="text-muted/70 italic">{placeholder ?? "Texte vide"}</span> : <RichText text={text!} />}
       {children}
     </div>
@@ -43,9 +43,9 @@ function Bubble({ text, placeholder, children }: { text?: string; placeholder?: 
 /** Ligne avec sa propre sortie (bouton, choix de liste, vrai / faux…). */
 function OutputRow({ id, children, tone = "default" }: { id: string; children: ReactNode; tone?: "default" | "danger" | "muted" }) {
   const tones = {
-    default: "border-blue/20 bg-verre text-blue",
-    danger: "border-coral/30 bg-coral/5 text-coral",
-    muted: "border-line bg-white/60 text-muted",
+    default: "border-blue/20 carte text-bleu",
+    danger: "border-coral/30 bg-coral/5 text-alerte",
+    muted: "border-line bg-ink/5 text-muted",
   };
   return (
     <div className="relative -mx-3 px-3">
@@ -77,13 +77,13 @@ function AddButtonMenu({ node, bubble, visible }: { node: Extract<FlowNode, { ty
     updateData(node.id, data, `${node.id}:${key}`);
     setOpen(false);
   };
-  const item = "block w-full px-3 py-1.5 text-left text-[12px] hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40";
+  const item = "block w-full px-3 py-1.5 text-left text-[12px] hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
     <div ref={ref} className={`nodrag nopan relative ${visible || open ? "" : "hidden group-hover:block"}`}>
       <button
         type="button"
-        className="w-full rounded-lg border border-dashed border-blue/40 py-1 text-[12px] font-semibold text-blue hover:bg-blue/5"
+        className="w-full rounded-lg border border-dashed border-blue/40 py-1 text-[12px] font-semibold text-bleu hover:bg-blue/5"
         onClick={(e) => {
           e.stopPropagation();
           setOpen((o) => !o);
@@ -92,7 +92,7 @@ function AddButtonMenu({ node, bubble, visible }: { node: Extract<FlowNode, { ty
         + Ajouter un bouton
       </button>
       {open && (
-        <div role="menu" className="absolute top-8 left-0 z-20 w-full overflow-hidden rounded-xl border border-line bg-verre shadow-pop">
+        <div role="menu" className="absolute top-8 left-0 z-20 w-full overflow-hidden rounded-xl border border-line carte shadow-pop">
           <button role="menuitem" type="button" className={item} disabled={!reply.allowed} title={reply.reason} onClick={() => choose(addReplyButton(node.data, bubble.id), "reply:add")}>
             <span className="font-semibold">↩︎ Bouton de réponse</span>
             <span className="block text-[11px] text-muted">{reply.reason ?? "Mène à une suite du flux"}</span>
@@ -120,7 +120,7 @@ function MessageBody({ node, selected }: { node: Extract<FlowNode, { type: "mess
               .filter((b) => b.kind === "link")
               .map((b) => (
                 <div key={b.id} className="mt-1.5 border-t border-rule pt-1 text-center">
-                  <div className="text-[12px] font-semibold text-blue">🔗 {b.title || "Sans titre"}</div>
+                  <div className="text-[12px] font-semibold text-bleu">🔗 {b.title || "Sans titre"}</div>
                   <div className="truncate text-[10px] text-muted">{b.kind === "link" && b.orderLink ? orderUrl : b.kind === "link" ? b.url : ""}</div>
                 </div>
               ))}
@@ -138,7 +138,7 @@ function MessageBody({ node, selected }: { node: Extract<FlowNode, { type: "mess
       {!readOnly && canAddBubble(node.data) && (
         <button
           type="button"
-          className={`nodrag nopan w-full rounded-lg py-1 text-[12px] font-semibold text-muted hover:bg-white/70 hover:text-ink ${selected ? "" : "hidden group-hover:block"}`}
+          className={`nodrag nopan w-full rounded-lg py-1 text-[12px] font-semibold text-muted hover:bg-ink/70 hover:text-ink ${selected ? "" : "hidden group-hover:block"}`}
           onClick={(e) => {
             e.stopPropagation();
             updateData(node.id, addBubble(node.data), `${node.id}:bubble:add`);
@@ -181,7 +181,7 @@ function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
       return node.data.keywords.length ? (
         <div className="flex flex-wrap gap-1">
           {node.data.keywords.map((k, i) => (
-            <span key={i} className="rounded-full bg-pink/10 px-2 py-0.5 text-[12px] font-semibold text-pink">
+            <span key={i} className="rounded-full bg-pink/10 px-2 py-0.5 text-[12px] font-semibold text-rose">
               {k}
             </span>
           ))}
@@ -197,7 +197,7 @@ function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
     case "delay":
       return (
         <p className="flex items-center gap-2 text-[12.5px]">
-          <span className="inline-flex gap-0.5 rounded-full bg-verre px-2 py-1 shadow-[0_1px_1px_rgb(0_0_0/0.08)]" aria-hidden>
+          <span className="inline-flex gap-0.5 rounded-full bg-ink/5 px-2 py-1" aria-hidden>
             <span className="size-1.5 animate-bounce rounded-full bg-muted [animation-delay:-0.3s]" />
             <span className="size-1.5 animate-bounce rounded-full bg-muted [animation-delay:-0.15s]" />
             <span className="size-1.5 animate-bounce rounded-full bg-muted" />
@@ -216,7 +216,7 @@ function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
       return (
         <div className="space-y-1.5">
           <Bubble text={node.data.text}>
-            <div className="mt-1.5 border-t border-rule pt-1 text-center text-[12px] font-semibold text-blue">☰ {node.data.buttonLabel || "…"}</div>
+            <div className="mt-1.5 border-t border-rule pt-1 text-center text-[12px] font-semibold text-bleu">☰ {node.data.buttonLabel || "…"}</div>
           </Bubble>
           {node.data.items.map((item) => (
             <OutputRow key={item.id} id={item.id}>
@@ -231,7 +231,7 @@ function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
         <div className="space-y-1.5">
           <Bubble text={node.data.text} placeholder="Question vide" />
           <p className="text-[11px] text-muted">
-            Réponse → <span className="font-mono font-semibold text-pink">{node.data.variable || "?"}</span> ({node.data.validation.replace("_", "/")})
+            Réponse → <span className="font-mono font-semibold text-rose">{node.data.variable || "?"}</span> ({node.data.validation.replace("_", "/")})
           </p>
           <OutputRow id="next">Réponse valide</OutputRow>
           <OutputRow id="echec" tone="danger">
@@ -299,7 +299,7 @@ function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
 
     case "goto_flow": {
       const target = flows.find((f) => f.id === node.data.flowId);
-      return <p className="text-[13px] font-semibold">→ {target ? target.name : <span className="text-coral">Flux à choisir</span>}</p>;
+      return <p className="text-[13px] font-semibold">→ {target ? target.name : <span className="text-alerte">Flux à choisir</span>}</p>;
     }
 
     case "end":
@@ -334,22 +334,22 @@ function BlockNodeComponent({ id, type, data, selected }: NodeProps<RFNode>) {
     : errors.length
       ? "ring-2 ring-coral"
       : warnings.length
-        ? "ring-1 ring-amber-400"
+        ? "ring-2 ring-blue"
         : "ring-1 ring-line";
 
   return (
-    <div className={`group w-[260px] rounded-2xl bg-verre shadow-card ${ring}`} title={nodeIssues.map((i) => i.message).join("\n") || undefined}>
-      {hasInput(node) && <Handle type="target" position={Position.Left} className="!top-6 !size-3 !border-2 !border-navy-3 !bg-navy" />}
+    <div className={`group w-[260px] rounded-2xl carte shadow-card ${ring}`} title={nodeIssues.map((i) => i.message).join("\n") || undefined}>
+      {hasInput(node) && <Handle type="target" position={Position.Left} className="!top-6 !size-3 !border-2 !border-white !bg-nuit" />}
       <div className="flex items-center gap-2 rounded-t-2xl border-b border-rule px-3 py-2">
         <span className={`grid size-6 place-items-center rounded-lg text-[13px] ${info.accent}`}>{info.icon}</span>
         <span className="flex-1 truncate font-title text-[13px] font-semibold">{info.label}</span>
-        {errors.length > 0 && <span className="rounded-full bg-coral px-1.5 text-[11px] font-bold text-white">{errors.length}</span>}
-        {errors.length === 0 && warnings.length > 0 && <span className="rounded-full bg-amber-400 px-1.5 text-[11px] font-bold text-white">!</span>}
+        {errors.length > 0 && <span className="rounded-full bg-coral px-1.5 text-[11px] font-bold text-nuit">{errors.length}</span>}
+        {errors.length === 0 && warnings.length > 0 && <span className="rounded-full bg-blue px-1.5 text-[11px] font-bold text-nuit">!</span>}
       </div>
-      <div className="rounded-b-2xl bg-white/5 px-3 py-2.5">
+      <div className="rounded-b-2xl bg-ink/5 px-3 py-2.5">
         <Body node={node} selected={!!selected} />
         {errors.length > 0 && (
-          <ul className="mt-2 space-y-0.5 text-[11px] font-semibold text-coral">
+          <ul className="mt-2 space-y-0.5 text-[11px] font-semibold text-alerte">
             {errors.slice(0, 3).map((e, i) => (
               <li key={i}>⚠ {e.message}</li>
             ))}
@@ -357,7 +357,7 @@ function BlockNodeComponent({ id, type, data, selected }: NodeProps<RFNode>) {
           </ul>
         )}
         {errors.length === 0 && warnings.length > 0 && (
-          <ul className="mt-2 space-y-0.5 text-[11px] text-amber-300">
+          <ul className="mt-2 space-y-0.5 text-[11px] text-alerte">
             {warnings.slice(0, 2).map((w, i) => (
               <li key={i}>• {w.message}</li>
             ))}

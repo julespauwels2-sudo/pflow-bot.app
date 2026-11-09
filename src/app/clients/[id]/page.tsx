@@ -56,7 +56,7 @@ export default function ClientPage() {
       {state.status === "ready" && state.data && (
         <div className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-3xl font-semibold">{state.data.client.nomResto}</h1>
+            <h1 className="text-5xl">{state.data.client.nomResto}<span className="text-rose">.</span></h1>
             <ButtonLink href={`/simulateur?client=${id}`}>💬 Tester le bot</ButtonLink>
           </div>
           <BotCard
@@ -132,7 +132,7 @@ function ClientSettings({ client, onSaved }: { client: BotClient; onSaved: () =>
   return (
     <Card title="Infos client" className="h-fit">
       <form onSubmit={save} className="space-y-4">
-        {isCrmMode && <p className="rounded-xl bg-white/5 p-2.5 text-[11px] text-muted">Nom, slug, fuseau et options payantes viennent du CRM : à modifier là-bas.</p>}
+        {isCrmMode && <p className="rounded-xl bg-ink/5 p-2.5 text-[11px] text-muted">Nom, slug, fuseau et options payantes viennent du CRM : à modifier là-bas.</p>}
         <Field label="Nom du resto" hint="Variable {{nom_resto}} dans les messages.">
           <Input required disabled={isCrmMode} value={form.nomResto} onChange={(e) => setForm({ ...form, nomResto: e.target.value })} />
         </Field>

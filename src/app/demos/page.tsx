@@ -71,7 +71,7 @@ export default function DemosPage() {
     <AppShell>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold">Démos</h1>
+          <h1 className="text-5xl">Démos<span className="text-rose">.</span></h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">
             Toutes les démos passent par <strong>ton numéro WhatsApp PFlow</strong>. Le prospect écrit le mot-clé de sa démo et elle démarre avec sa
             carte et ses infos. Sans mot-clé, le bot PFlow de base répond. Une démo dure {DEFAULT_DEMO_DAYS} jours, puis son bot est supprimé

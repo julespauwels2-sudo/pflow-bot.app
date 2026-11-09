@@ -325,13 +325,13 @@ function EditorInner({ flow: initialFlow, owner, flows, agentFunctions }: Props)
     <EditorContext.Provider value={ctx}>
       <div className="flex min-h-dvh flex-col lg:h-dvh">
         {/* Barre du haut */}
-        <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-rule bg-verre px-3 py-2 sm:px-4">
+        <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-rule carte px-3 py-2 sm:px-4">
           <Link href={settings.backHref} className="shrink-0 text-sm font-semibold text-muted hover:text-ink">
             ← {settings.backLabel}
           </Link>
           {settings.badge && <span className="rounded-full bg-navy-2 px-2.5 py-0.5 text-xs font-semibold text-white">{settings.badge}</span>}
           {initialFlow.overridesTemplateFlowId && (
-            <span className="rounded-full bg-blue/10 px-2.5 py-0.5 text-xs font-semibold text-blue" title="Copie d'un flux du modèle, pour ce client seulement">
+            <span className="rounded-full bg-blue/10 px-2.5 py-0.5 text-xs font-semibold text-bleu" title="Copie d'un flux du modèle, pour ce client seulement">
               Personnalisé
             </span>
           )}
@@ -341,10 +341,10 @@ function EditorInner({ flow: initialFlow, owner, flows, agentFunctions }: Props)
             onChange={(e) => setName(e.target.value)}
             onBlur={() => name.trim() && name !== flow.name && saveMeta({ name })}
             onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-            className="min-w-40 flex-1 rounded-lg px-2 py-1 font-title text-lg font-semibold hover:bg-white/5 focus:bg-white/10 focus:outline-none sm:max-w-xs"
+            className="min-w-40 flex-1 rounded-lg px-2 py-1 font-title text-lg font-semibold hover:bg-ink/5 focus:bg-ink/10 focus:outline-none sm:max-w-xs"
           />
           <span className="text-xs text-muted" aria-live="polite">
-            {saveError ? <span className="text-coral">Erreur d&apos;enregistrement : {saveError}</span> : dirty ? "Enregistrement…" : "Brouillon enregistré ✓"}
+            {saveError ? <span className="text-alerte">Erreur d&apos;enregistrement : {saveError}</span> : dirty ? "Enregistrement…" : "Brouillon enregistré ✓"}
           </span>
           {!flow.published ? (
             <StatusPill tone="neutral">Jamais publié</StatusPill>
@@ -362,12 +362,12 @@ function EditorInner({ flow: initialFlow, owner, flows, agentFunctions }: Props)
             </ToolButton>
             <Link
               href={`/simulateur?${settings.simulatorParams}&flux=${encodeURIComponent(botFlowId)}&brouillons=1`}
-              className="rounded-full border border-line bg-verre px-3 py-1.5 text-sm font-semibold hover:border-white/30"
+              className="rounded-full border border-line carte px-3 py-1.5 text-sm font-semibold hover:border-ink/30"
               title="Tester ce flux dans le simulateur (brouillons compris)"
             >
               ▶ Tester
             </Link>
-            <label className="flex items-center gap-1.5 rounded-full border border-line bg-verre px-3 py-1.5 text-xs font-semibold" title="Vérifier aussi les limites d'Instagram (réponses rapides, textes plus courts)">
+            <label className="flex items-center gap-1.5 rounded-full border border-line carte px-3 py-1.5 text-xs font-semibold" title="Vérifier aussi les limites d'Instagram (réponses rapides, textes plus courts)">
               <input
                 type="checkbox"
                 className="accent-pink"
@@ -394,7 +394,7 @@ function EditorInner({ flow: initialFlow, owner, flows, agentFunctions }: Props)
               onClick={publish}
               disabled={errorCount > 0 || !unpublished}
               title={errorCount > 0 ? "Corrigez les erreurs avant de publier" : !unpublished ? "Rien de nouveau à publier" : "Publier ce brouillon"}
-              className="rounded-full bg-pink px-4 py-1.5 text-sm font-semibold text-white shadow-[0_8px_20px_rgb(255_79_181/0.25)] hover:bg-pink-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-full bg-pink px-4 py-1.5 text-sm font-semibold text-nuit shadow-bouton hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
             >
               {errorCount > 0 ? `Publier · ${errorCount} erreur${errorCount > 1 ? "s" : ""}` : "Publier"}
             </button>
@@ -403,7 +403,7 @@ function EditorInner({ flow: initialFlow, owner, flows, agentFunctions }: Props)
 
         <div className="flex flex-1 flex-col lg:min-h-0 lg:flex-row">
           {/* Palette */}
-          <aside className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-rule bg-verre p-2 lg:w-52 lg:flex-col lg:overflow-y-auto lg:border-r lg:border-b-0">
+          <aside className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-rule carte p-2 lg:w-52 lg:flex-col lg:overflow-y-auto lg:border-r lg:border-b-0">
             <p className="hidden px-1 pb-1 text-xs font-semibold text-muted lg:block">Glissez ou cliquez pour ajouter</p>
             {PALETTE.map((type) => {
               const info = BLOCKS[type];
@@ -420,7 +420,7 @@ function EditorInner({ flow: initialFlow, owner, flows, agentFunctions }: Props)
                     e.dataTransfer.effectAllowed = "move";
                   }}
                   onClick={() => addBlock(type)}
-                  className="flex shrink-0 items-center gap-2 rounded-xl border border-white/10 bg-verre px-2.5 py-1.5 text-left text-sm font-semibold hover:border-pink/50 hover:bg-pink/5 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex shrink-0 items-center gap-2 rounded-xl border border-ink/10 carte px-2.5 py-1.5 text-left text-sm font-semibold hover:border-pink/50 hover:bg-pink/5 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <span className={`grid size-6 shrink-0 place-items-center rounded-lg text-xs ${info.accent}`}>{info.icon}</span>
                   <span className="whitespace-nowrap">{info.label}</span>
@@ -432,7 +432,7 @@ function EditorInner({ flow: initialFlow, owner, flows, agentFunctions }: Props)
           {/* Tableau blanc */}
           <div
             ref={canvasRef}
-            className="relative h-[72dvh] shrink-0 bg-white/5 lg:h-auto lg:min-h-0 lg:flex-1 lg:shrink"
+            className="relative h-[72dvh] shrink-0 bg-ink/5 lg:h-auto lg:min-h-0 lg:flex-1 lg:shrink"
             onDragOver={(e) => {
               if (e.dataTransfer.types.includes(DRAG_TYPE)) {
                 e.preventDefault();
@@ -483,7 +483,7 @@ function EditorInner({ flow: initialFlow, owner, flows, agentFunctions }: Props)
               <div
                 role="status"
                 className={`pointer-events-none absolute top-3 left-1/2 z-10 max-w-md -translate-x-1/2 rounded-full px-4 py-2 text-center text-sm font-semibold shadow-pop ${
-                  toast.tone === "error" ? "bg-coral text-white" : toast.tone === "success" ? "bg-wa text-white" : "bg-navy-2 text-white"
+                  toast.tone === "error" ? "bg-pink text-nuit" : toast.tone === "success" ? "bg-cyan text-nuit" : "bg-white text-nuit"
                 }`}
               >
                 {toast.text}
@@ -492,7 +492,7 @@ function EditorInner({ flow: initialFlow, owner, flows, agentFunctions }: Props)
           </div>
 
           {/* Panneau de droite */}
-          <aside className="shrink-0 overflow-y-auto border-t border-rule bg-verre p-4 lg:w-[340px] lg:border-t-0 lg:border-l">
+          <aside className="shrink-0 overflow-y-auto border-t border-rule carte p-4 lg:w-[340px] lg:border-t-0 lg:border-l">
             {selected.length === 1 ? (
               <NodeProperties
                 key={selected[0].id}
@@ -519,7 +519,7 @@ function EditorInner({ flow: initialFlow, owner, flows, agentFunctions }: Props)
 }
 
 function StatusPill({ tone, children }: { tone: "neutral" | "success" | "warning"; children: React.ReactNode }) {
-  const cls = { neutral: "bg-white/5 text-muted", success: "bg-wa/15 text-emerald-300", warning: "bg-pink/10 text-pink" }[tone];
+  const cls = { neutral: "bg-ink/5 text-muted", success: "bg-wa/15 text-ok", warning: "bg-pink/10 text-rose" }[tone];
   return <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${cls}`}>{children}</span>;
 }
 
@@ -528,7 +528,7 @@ function ToolButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButto
     <button
       type="button"
       aria-label={props.title}
-      className="rounded-full border border-line bg-verre px-3 py-1.5 text-sm font-semibold hover:border-white/30 disabled:cursor-not-allowed disabled:opacity-40"
+      className="rounded-full border border-line carte px-3 py-1.5 text-sm font-semibold hover:border-ink/30 disabled:cursor-not-allowed disabled:opacity-40"
       {...props}
     >
       {children}
@@ -542,13 +542,13 @@ function MultiSelection({ count, mod, onCopy, onDuplicate, onDelete }: { count: 
       <h2 className="font-title text-base font-semibold">{count} blocs sélectionnés</h2>
       <p className="text-xs text-muted">Déplacez-les ensemble, copiez-les ({mod}+C) vers un autre flux, ou dupliquez-les ({mod}+D).</p>
       <div className="grid gap-2">
-        <button type="button" className="rounded-full border border-line py-1.5 text-sm font-semibold hover:border-white/30" onClick={onCopy}>
+        <button type="button" className="rounded-full border border-line py-1.5 text-sm font-semibold hover:border-ink/30" onClick={onCopy}>
           Copier
         </button>
-        <button type="button" className="rounded-full border border-line py-1.5 text-sm font-semibold hover:border-white/30" onClick={onDuplicate}>
+        <button type="button" className="rounded-full border border-line py-1.5 text-sm font-semibold hover:border-ink/30" onClick={onDuplicate}>
           Dupliquer
         </button>
-        <button type="button" className="rounded-full border border-coral/40 py-1.5 text-sm font-semibold text-coral hover:bg-coral/10" onClick={onDelete}>
+        <button type="button" className="rounded-full border border-coral/40 py-1.5 text-sm font-semibold text-alerte hover:bg-coral/10" onClick={onDelete}>
           Supprimer
         </button>
       </div>
@@ -578,7 +578,7 @@ function FlowOverview({
       <div>
         <h2 className="font-title text-base font-semibold">Vérification</h2>
         {issues.length === 0 ? (
-          <p className="mt-1 rounded-xl bg-wa/10 p-2.5 text-sm font-semibold text-emerald-300">Aucun problème : le flux est prêt à être publié.</p>
+          <p className="mt-1 rounded-xl bg-wa/10 p-2.5 text-sm font-semibold text-ok">Aucun problème : le flux est prêt à être publié.</p>
         ) : (
           <ul className="mt-2 space-y-1">
             {[...errors, ...warnings].map((issue, i) => (
@@ -587,7 +587,7 @@ function FlowOverview({
                   type="button"
                   disabled={!issue.nodeId}
                   onClick={() => issue.nodeId && onFocus(issue.nodeId)}
-                  className={`w-full rounded-lg px-2 py-1.5 text-left text-xs hover:bg-white/5 ${issue.level === "error" ? "font-semibold text-coral" : "text-amber-300"}`}
+                  className={`w-full rounded-lg px-2 py-1.5 text-left text-xs hover:bg-ink/5 ${issue.level === "error" ? "font-semibold text-alerte" : "text-alerte"}`}
                 >
                   {issue.level === "error" ? "⚠" : "•"} {issue.message}
                 </button>

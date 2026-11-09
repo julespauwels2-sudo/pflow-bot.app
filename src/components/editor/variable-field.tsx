@@ -15,7 +15,7 @@ interface Props {
 }
 
 const base =
-  "w-full rounded-xl border border-line bg-verre px-3 py-2 pr-12 text-sm text-ink placeholder:text-muted/60 focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue/20";
+  "w-full rounded-xl border border-line carte px-3 py-2 pr-12 text-sm text-ink placeholder:text-muted/60 focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue/20";
 
 /** Champ texte avec un menu pour insérer une variable {{...}} au curseur. */
 export function VariableField({ value, onChange, variables, multiline, placeholder, max, ariaLabel }: Props) {
@@ -73,17 +73,17 @@ export function VariableField({ value, onChange, variables, multiline, placehold
         title="Insérer une variable (ou tapez {{)"
         aria-label="Insérer une variable"
         onClick={() => setOpen((o) => !o)}
-        className="absolute top-1.5 right-1.5 rounded-lg bg-pink/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-pink hover:bg-pink/20"
+        className="absolute top-1.5 right-1.5 rounded-lg bg-pink/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-rose hover:bg-pink/20"
       >
         {"{x}"}
       </button>
       {max !== undefined && (
-        <p className={`mt-0.5 text-right text-[11px] ${count > max ? "font-semibold text-coral" : "text-muted"}`}>
+        <p className={`mt-0.5 text-right text-[11px] ${count > max ? "font-semibold text-alerte" : "text-muted"}`}>
           {count} / {max}
         </p>
       )}
       {open && (
-        <div role="menu" className="absolute top-9 right-0 z-20 w-64 overflow-hidden rounded-xl border border-line bg-verre shadow-pop">
+        <div role="menu" className="absolute top-9 right-0 z-20 w-64 overflow-hidden rounded-xl border border-line carte shadow-pop">
           <p className="border-b border-rule px-3 py-2 text-xs font-semibold text-muted">Insérer une variable</p>
           {variables.map((v) => (
             <button
@@ -91,9 +91,9 @@ export function VariableField({ value, onChange, variables, multiline, placehold
               role="menuitem"
               type="button"
               onClick={() => insert(v.name)}
-              className="block w-full px-3 py-2 text-left hover:bg-white/5"
+              className="block w-full px-3 py-2 text-left hover:bg-ink/5"
             >
-              <span className="font-mono text-xs font-semibold text-pink">{`{{${v.name}}}`}</span>
+              <span className="font-mono text-xs font-semibold text-rose">{`{{${v.name}}}`}</span>
               <span className="block text-xs text-muted">{v.label}</span>
             </button>
           ))}

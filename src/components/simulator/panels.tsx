@@ -79,20 +79,20 @@ export function StatePanel({
         </label>
         <Row label="Bot pour ce contact">
           {pauseActive ? (
-            <span className="text-coral">
+            <span className="text-alerte">
               En pause ({pauseLabel[contact.pause!.reason]}){contact.pause!.until ? ` jusqu'à ${format(contact.pause!.until)}` : ""}
             </span>
           ) : (
-            <span className="text-emerald-300">Actif</span>
+            <span className="text-ok">Actif</span>
           )}
         </Row>
         {pauseActive && (
-          <button type="button" className="w-full rounded-full border border-line py-1 text-xs font-semibold hover:border-white/30" onClick={onLiftPause}>
+          <button type="button" className="w-full rounded-full border border-line py-1 text-xs font-semibold hover:border-ink/30" onClick={onLiftPause}>
             Relancer le bot (lever la pause)
           </button>
         )}
         <Row label="Fenêtre de 24 h">
-          {windowOpen ? <span className="text-emerald-300">Ouverte jusqu&apos;à {format(windowEnd!)}</span> : <span className="text-coral">Fermée</span>}
+          {windowOpen ? <span className="text-ok">Ouverte jusqu&apos;à {format(windowEnd!)}</span> : <span className="text-alerte">Fermée</span>}
         </Row>
         <Row label="Appels IA aujourd'hui">
           {aiCalls} / {aiLimit}
@@ -103,7 +103,7 @@ export function StatePanel({
         title="Conversation (session)"
         actions={
           sessionLive ? (
-            <button type="button" className="text-xs font-semibold text-coral hover:underline" onClick={onEndSession}>
+            <button type="button" className="text-xs font-semibold text-alerte hover:underline" onClick={onEndSession}>
               Terminer
             </button>
           ) : null
@@ -128,7 +128,7 @@ export function StatePanel({
           <dl className="space-y-1">
             {Object.entries(session.vars).map(([k, v]) => (
               <div key={k} className="text-[12px]">
-                <dt className="font-mono font-semibold text-pink">{`{{${k}}}`}</dt>
+                <dt className="font-mono font-semibold text-rose">{`{{${k}}}`}</dt>
                 <dd className="whitespace-pre-wrap">{v || <span className="text-muted italic">(vide)</span>}</dd>
               </div>
             ))}
@@ -141,7 +141,7 @@ export function StatePanel({
           <dl className="mt-1 space-y-1">
             {Object.entries(infoVars).map(([k, v]) => (
               <div key={k}>
-                <dt className="font-mono font-semibold text-pink">{`{{${k}}}`}</dt>
+                <dt className="font-mono font-semibold text-rose">{`{{${k}}}`}</dt>
                 <dd className="whitespace-pre-wrap">{v || <span className="text-muted italic">(vide)</span>}</dd>
               </div>
             ))}
@@ -152,7 +152,7 @@ export function StatePanel({
   );
 }
 
-const TONE = { ok: "text-emerald-300", skip: "text-coral", warn: "text-amber-300", info: "text-muted" } as const;
+const TONE = { ok: "text-ok", skip: "text-alerte", warn: "text-alerte", info: "text-muted" } as const;
 const ICON = { ok: "✓", skip: "⦸", warn: "⚠", info: "·" } as const;
 
 /** Journal : pourquoi le bot a réagi (ou non), tour par tour. */

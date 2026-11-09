@@ -67,14 +67,14 @@ export default function SystemStatusPage() {
       <MobileHeader
         title="État du système"
         action={
-          <button type="button" onClick={() => setTick((t) => t + 1)} className="min-h-11 rounded-full bg-white/12 px-4 text-sm font-bold text-white ring-1 ring-white/25 active:bg-white/20">
+          <button type="button" onClick={() => setTick((t) => t + 1)} className="min-h-11 rounded-full bg-white px-4 text-xs font-extrabold tracking-[0.08em] text-nuit uppercase shadow-bouton active:translate-y-px">
             Actualiser
           </button>
         }
       />
       <div className="hidden flex-wrap items-end justify-between gap-4 md:flex">
         <div>
-          <h1 className="text-2xl font-semibold md:text-3xl">État du système</h1>
+          <h1 className="text-4xl md:text-5xl">État du <span className="text-rose">système</span></h1>
           <p className="mt-1 hidden max-w-2xl text-sm text-muted md:block">
             Réservé aux administrateurs. Les clés sont seulement détectées : leur valeur n&apos;est jamais lue ni affichée.
           </p>
@@ -203,7 +203,7 @@ function ServerCards({ data }: { data: SystemStatus }) {
                 <span className="text-muted">{time(e.at)}</span>
                 <Badge>{e.source}</Badge>
                 <code className="min-w-0 text-xs break-all">{e.cle}</code>
-                {e.erreur && <span className="text-coral">{e.erreur}</span>}
+                {e.erreur && <span className="text-alerte">{e.erreur}</span>}
               </li>
             ))}
           </ul>
@@ -244,8 +244,8 @@ function AlertesBanner({ data }: { data: SystemStatus }) {
   else if (canaux && data.push && data.push.appareils === 0) lignes.push("Aucun appareil abonné aux notifications : aucune alerte ne peut vous joindre. Active-les ci-dessous (encadré « Notifications push »).");
   if (!lignes.length) return null;
   return (
-    <div role="alert" data-testid="alertes-bandeau" className="mt-6 rounded-2xl border-2 border-coral bg-coral/15 p-4 text-ink shadow-[0_0_40px_-10px_rgb(255_107_107/0.6)]">
-      <p className="text-lg font-bold text-coral">🚨 Alertes : personne n&apos;est prévenu</p>
+    <div role="alert" data-testid="alertes-bandeau" className="mt-6 rounded-2xl aplat-rose p-4 text-ink shadow-card">
+      <p className="text-lg font-bold text-alerte">🚨 Alertes : personne n&apos;est prévenu</p>
       <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm font-semibold">
         {lignes.map((l) => (
           <li key={l}>{l}</li>
@@ -288,8 +288,8 @@ function AlertesCard({ alertes }: { alertes: NonNullable<SystemStatus["alertes"]
               <span>{a.canal}</span>
               {a.prevenu ? <Badge tone="success">{VOIES[a.voie] ?? a.voie}</Badge> : <Badge tone="warning">{VOIES.aucune}</Badge>}
               {!a.prevenu && a.push && PUSH[a.push] && <Badge tone={PUSH[a.push].tone}>{PUSH[a.push].label}</Badge>}
-              {!a.prevenu && a.ouverte && <span className="text-xs font-semibold text-coral">à traiter dans la boîte de réception</span>}
-              {a.erreur && <span className="text-xs text-coral">{a.erreur}</span>}
+              {!a.prevenu && a.ouverte && <span className="text-xs font-semibold text-alerte">à traiter dans la boîte de réception</span>}
+              {a.erreur && <span className="text-xs text-alerte">{a.erreur}</span>}
             </li>
           ))}
         </ul>
@@ -308,7 +308,7 @@ function AiCalls({ calls, empty }: { calls: (AiCallLog & { resto: string })[]; e
           <strong>{c.resto}</strong>
           <Badge>{c.source}</Badge>
           <span className="min-w-0 flex-1 truncate">{c.message}</span>
-          {c.error ? <span className="text-coral">{c.error}</span> : c.decision && <span className="text-xs text-muted">{c.decision.action}</span>}
+          {c.error ? <span className="text-alerte">{c.error}</span> : c.decision && <span className="text-xs text-muted">{c.decision.action}</span>}
           {typeof c.costUsd === "number" && <span className="text-xs text-muted">{usd(c.costUsd)}</span>}
         </li>
       ))}
@@ -363,7 +363,7 @@ function WhatsAppAccessCard() {
                   <li key={e.etape} className="flex flex-wrap gap-2">
                     {e.ok ? <Badge tone="success">OK</Badge> : <Badge tone="warning">refusé</Badge>}
                     <span className="font-medium">{e.etape}</span>
-                    <span className={e.ok ? "text-muted" : "text-coral"}>{e.detail}</span>
+                    <span className={e.ok ? "text-muted" : "text-alerte"}>{e.detail}</span>
                   </li>
                 ))}
               </ul>
@@ -448,7 +448,7 @@ function WhatsAppAccountsCard() {
       <label className="mb-3 block text-sm">
         <span className="font-semibold">Comptes à interroger directement (facultatif)</span>
         <textarea
-          className="mt-1 block min-h-20 w-full rounded-[var(--radius-field)] border border-line bg-verre px-3 py-2 font-mono text-sm focus:border-pink focus:ring-4 focus:ring-pink/15 focus:outline-none"
+          className="mt-1 block min-h-20 w-full rounded-[var(--radius-field)] border border-line carte px-3 py-2 font-mono text-sm focus:border-pink focus:ring-4 focus:ring-pink/15 focus:outline-none"
           placeholder={"1120744623676139 ag pizza\n1678321033943134 Mexico\n2577158539379673 cookies an nou"}
           value={saisis}
           onChange={(e) => setSaisis(e.target.value)}
@@ -473,7 +473,7 @@ function WhatsAppAccountsCard() {
       {result.status === "ready" && (
         <div className="mt-3 space-y-4 text-sm" data-testid="comptes-whatsapp">
           {result.data.erreurs.map((e) => (
-            <p key={e} className="text-xs text-coral">
+            <p key={e} className="text-xs text-alerte">
               {e}
             </p>
           ))}
@@ -487,7 +487,7 @@ function WhatsAppAccountsCard() {
                 {c.origine.join(", ")} · apps abonnées : {c.apps.length ? c.apps.join(", ") : "aucune"}
               </p>
               {c.erreurs.map((e) => (
-                <p key={e} className="text-xs text-coral">
+                <p key={e} className="text-xs text-alerte">
                   {e}
                 </p>
               ))}
@@ -517,7 +517,7 @@ function WhatsAppAccountsCard() {
                   <p className="text-xs text-muted">
                     {p.numero} → {p.resto ?? "resto à choisir"}
                   </p>
-                  <pre className="mt-1 overflow-x-auto rounded-xl bg-white/5 p-3 text-xs">{p.sql}</pre>
+                  <pre className="mt-1 overflow-x-auto rounded-xl bg-ink/5 p-3 text-xs">{p.sql}</pre>
                 </div>
               ))}
             </div>
@@ -615,7 +615,7 @@ function OrderEventTestCard({ canaux }: { canaux: SystemStatus["comptes"] }) {
         </div>
       )}
       {result.status === "ready" && (
-        <p className={`mt-3 text-sm ${result.ok ? "" : "text-coral"}`} data-testid="evenement-test">
+        <p className={`mt-3 text-sm ${result.ok ? "" : "text-alerte"}`} data-testid="evenement-test">
           {result.ok ? "✅ " : "⚠️ "}
           {result.text}
         </p>

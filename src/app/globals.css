@@ -1,86 +1,159 @@
 @import "tailwindcss";
 
 /*
- * Thème PFlow (relevé sur pflow.fr et pflow.fr/demo) : SEUL endroit où vivent les couleurs, polices, arrondis et
- * ombres de l'app. Les composants utilisent ces jetons (bg-navy, text-pink, rounded-card, shadow-card, bg-brand…).
+ * Thème PFlow Bots = charte PFlow (docs/etape-c/direction-artistique.md) : SEUL endroit où vivent les couleurs, polices,
+ * arrondis et ombres de l'app. Règles de la charte appliquées à l'app :
+ * - fonds en aplat (nuit, bleu, rose), aucun dégradé, aucun halo, aucun flou ;
+ * - titres en Anton, en majuscules ; texte en Plus Jakarta Sans ; aucune italique ;
+ * - ombres plates décalées rgba(0,0,0,.28), jamais d'ombre floue ;
+ * - cartes blanches (texte nuit) sur le fond nuit, pills aux coins de 60 px.
+ *
+ * Couleurs « relatives » (ink, muted, line, rule, rose, bleu, reflet, alerte, ok) : leur valeur dépend de la surface.
+ * Sur le fond nuit : texte blanc, accents vifs. Dans une carte blanche (.carte) : texte nuit, accents foncés (contraste
+ * de 5 :1 au moins sur le blanc). Les composants n'ont donc qu'une classe (text-ink, text-rose…) quelle que soit la surface.
  */
 @theme {
-  /* Couleurs */
-  --color-navy: #101b4d;
-  --color-navy-2: #1b2a6b;
-  --color-navy-3: #0a1447;
-  --color-pink: #ff4fb5;
-  --color-pink-2: #ff7ccb;
-  --color-pink-3: #f03ca5;
-  /* Bleu lumineux de pflow.fr/demo (lisible sur le navy). */
-  --color-blue: #2aabff;
-  --color-cyan: #74ddfb;
-  --color-coral: #ff6b6b;
-  --color-wa: #22c55e;
-  /* Thème sombre de pflow.fr/demo : fond navy profond, texte crème, traits crème translucides. */
+  /* Palette de la charte */
+  --color-nuit: #0a1236;
   --color-fond: #0a1236;
   --color-page: #0a1236;
-  --color-ink: #f3eee6;
-  --color-muted: rgb(243 238 230 / 0.72);
-  --color-line: rgb(243 238 230 / 0.16);
-  --color-rule: rgb(243 238 230 / 0.09);
-  /* Surfaces : cartes légèrement translucides sur le fond navy. */
-  --color-surface: rgb(255 255 255 / 0.05);
-  --color-surface-2: rgb(255 255 255 / 0.08);
-  --color-bulle-bot: rgb(42 171 255 / 0.2);
-  --color-bulle-humain: rgb(255 79 181 / 0.22);
-  --color-chat: #0d1640;
+  --color-pink: #ff4fb5;
+  --color-blue: #2aabff;
+  --color-cyan: #74ddfb;
+  --color-creme: #f3eee6;
+  /* Anciens noms, ramenés à la palette (aucun vert, aucun corail, aucun dégradé de navy). */
+  --color-navy: #0a1236;
+  --color-navy-2: #0a1236;
+  --color-navy-3: #0a1236;
+  --color-pink-2: #ff4fb5;
+  --color-pink-3: #ff4fb5;
+  --color-coral: #ff4fb5;
+  --color-wa: #74ddfb;
 
-  /* Polices (fichiers du site, src/app/fonts) */
-  --font-title: var(--font-fredoka), ui-rounded, system-ui, sans-serif;
-  --font-sans: var(--font-manrope), system-ui, sans-serif;
+  /* Couleurs relatives, valeur « fond nuit » (redéfinies dans .carte, .aplat-bleu et .aplat-rose) */
+  --color-ink: #ffffff;
+  --color-muted: rgb(255 255 255 / 0.72);
+  --color-line: rgb(255 255 255 / 0.26);
+  --color-rule: rgb(255 255 255 / 0.12);
+  --color-rose: #ff4fb5;
+  --color-bleu: #2aabff;
+  --color-reflet: #74ddfb;
+  --color-alerte: #ff4fb5;
+  --color-ok: #74ddfb;
+
+  /* Boîte de réception : bulles en aplat (entrant blanc, bot bleu, humain rose ; texte nuit) */
+  --color-bulle-bot: #2aabff;
+  --color-bulle-humain: #ff4fb5;
+  --color-chat: #0a1236;
+
+  /* Polices de la charte (src/app/fonts) */
+  --font-title: var(--font-anton), Impact, "Arial Narrow", sans-serif;
+  --font-sans: var(--font-jakarta), system-ui, sans-serif;
 
   /* Arrondis */
-  --radius-card: 26px;
+  --radius-card: 28px;
   --radius-field: 14px;
   --radius-sheet: 28px;
+  --radius-pill: 60px;
 
-  /* Ombres */
-  --shadow-card: 0 24px 60px -28px rgb(0 0 0 / 0.55), inset 0 1px 0 rgb(255 255 255 / 0.06);
-  --shadow-pop: 0 30px 80px -30px rgb(0 0 0 / 0.7);
-  /* Bouton rose de pflow.fr : grande ombre rose diffuse et reflet en haut. */
-  --shadow-bouton: 0 18px 40px -12px rgb(255 79 181 / 0.75), inset 0 1px 0 rgb(255 255 255 / 0.35);
-  --shadow-bloc: 0 30px 70px -28px rgb(0 0 0 / 0.75);
+  /* Ombres plates décalées, jamais floues */
+  --shadow-card: 8px 10px 0 rgb(0 0 0 / 0.28);
+  --shadow-pop: 12px 14px 0 rgb(0 0 0 / 0.28);
+  --shadow-bouton: 3px 4px 0 rgb(0 0 0 / 0.28);
+  --shadow-bloc: 8px 10px 0 rgb(0 0 0 / 0.28);
 }
 
-/* Dégradés du site (boutons roses, blocs navy, filet de marque) */
+/* Anciens utilitaires (dégradés de la première version) ramenés à des aplats. */
 @utility bg-brand {
-  background-image: linear-gradient(180deg, #ff74c6 0%, #ff4fb5 55%, #f03ca5 100%);
+  background-color: #ff4fb5;
 }
 @utility bg-navy-grad {
-  background-color: #101b4d;
-  background-image:
-    radial-gradient(120% 90% at 0% 0%, rgb(116 221 251 / 0.18), transparent 55%),
-    radial-gradient(80% 90% at 100% 100%, rgb(255 79 181 / 0.22), transparent 60%),
-    linear-gradient(155deg, #1b2a6b, #101b4d);
+  background-color: #0a1236;
 }
 @utility bg-avatar {
-  background-image: linear-gradient(135deg, #74ddfb, #2a8bff);
+  background-color: #2aabff;
 }
 @utility bg-filet {
-  background-image: linear-gradient(90deg, #74ddfb, #2a8bff, #ff4fb5);
+  background-color: #ff4fb5;
 }
-/* Fond de conversation : léger motif de points, comme un papier peint WhatsApp aux couleurs PFlow */
+/* Fond de conversation : aplat nuit et grille de points blancs (motif de la charte). */
 @utility bg-chat-motif {
-  background-color: #0d1640;
-  background-image: radial-gradient(rgb(243 238 230 / 0.05) 1px, transparent 1.2px);
-  background-size: 18px 18px;
+  background-color: #0a1236;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='2' cy='2' r='1.3' fill='%23ffffff' fill-opacity='0.08'/%3E%3C/svg%3E");
 }
-/* Carte « verre » : translucide sur le fond navy, flou derrière. */
-@utility bg-verre {
-  background-color: rgb(255 255 255 / 0.05);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+/* Grille de points de la charte (en haut à droite des visuels), opacité 35 %. */
+@utility grille-points {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='3' cy='3' r='2.2' fill='%23ffffff'/%3E%3C/svg%3E");
+  opacity: 0.35;
+}
+
+/*
+ * Surfaces (couche « components » : les classes text-* posées sur l'élément gardent la priorité).
+ * .carte : carte blanche, texte nuit, ombre plate. .aplat-bleu / .aplat-rose : blocs de couleur, texte nuit,
+ * accent en blanc (règle des titres de la charte).
+ */
+@layer components {
+  .carte,
+  .bg-verre {
+    background-color: #ffffff;
+    color: var(--color-ink);
+    color-scheme: light;
+    --color-ink: #0a1236;
+    --color-muted: rgb(10 18 54 / 0.68);
+    --color-line: rgb(10 18 54 / 0.2);
+    --color-rule: rgb(10 18 54 / 0.1);
+    --color-rose: #c8157f;
+    --color-bleu: #0067b8;
+    --color-reflet: #0067b8;
+    --color-alerte: #c8157f;
+    --color-ok: #0067b8;
+  }
+  .aplat-bleu,
+  .aplat-rose {
+    color: var(--color-ink);
+    color-scheme: light;
+    --color-ink: #0a1236;
+    --color-muted: rgb(10 18 54 / 0.78);
+    --color-line: rgb(10 18 54 / 0.3);
+    --color-rule: rgb(10 18 54 / 0.18);
+    --color-rose: #ffffff;
+    --color-bleu: #0a1236;
+    --color-reflet: #0a1236;
+    --color-alerte: #0a1236;
+    --color-ok: #0a1236;
+  }
+  .aplat-bleu {
+    background-color: #2aabff;
+  }
+  .aplat-rose {
+    background-color: #ff4fb5;
+  }
+  /* Anton s'écrit toujours en majuscules (charte). */
+  .font-title {
+    text-transform: uppercase;
+  }
+  /* Bloc nuit posé dans une carte blanche : on repasse aux couleurs « fond nuit ». */
+  .aplat-nuit {
+    background-color: #0a1236;
+    color: #ffffff;
+    color-scheme: dark;
+    --color-ink: #ffffff;
+    --color-muted: rgb(255 255 255 / 0.72);
+    --color-line: rgb(255 255 255 / 0.26);
+    --color-rule: rgb(255 255 255 / 0.12);
+    --color-rose: #ff4fb5;
+    --color-bleu: #2aabff;
+    --color-reflet: #74ddfb;
+    --color-alerte: #ff4fb5;
+    --color-ok: #74ddfb;
+  }
 }
 
 html {
-  /* Contrôles natifs (listes déroulantes, cases, barres de défilement) en sombre. */
+  /* Barres de défilement en sombre sur le fond nuit ; les cartes repassent en clair. */
   color-scheme: dark;
+  /* Charte : aucune italique, aucun faux gras (Anton n'existe qu'en 400). */
+  font-synthesis: none;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -93,52 +166,51 @@ html {
   }
 }
 
-/* Fond de pflow.fr/demo : navy profond et deux halos (bleu en haut à gauche, rose à droite), fixes au défilement. */
+/* Fond nuit en aplat : aucun halo, aucun dégradé. */
 body {
-  background-color: var(--color-fond);
-  background-image:
-    radial-gradient(520px 520px at 8% -8%, rgb(42 171 255 / 0.3), transparent 70%),
-    radial-gradient(480px 480px at 100% 38%, rgb(255 79 181 / 0.18), transparent 70%),
-    radial-gradient(600px 400px at 30% 110%, rgb(116 221 251 / 0.08), transparent 70%);
-  background-attachment: fixed;
+  background-color: #0a1236;
   color: var(--color-ink);
   font-family: var(--font-sans);
 }
 
 ::selection {
-  background: rgb(255 79 181 / 0.35);
+  background: #ff4fb5;
+  color: #0a1236;
 }
 
+/* Titres : Anton, majuscules, interligne serré. */
 h1,
 h2,
 h3 {
   font-family: var(--font-title);
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-weight: 400;
+  text-transform: uppercase;
+  line-height: 1.05;
+  letter-spacing: 0.01em;
 }
 
-/* Éditeur de flux (React Flow) en sombre : fond, poignées, commandes, mini-carte. */
+/* Éditeur de flux (React Flow) : toile nuit en aplat, grille de points, blocs en cartes blanches. */
 .react-flow {
-  --xy-background-color: transparent;
-  --xy-background-pattern-color: rgb(243 238 230 / 0.12);
-  --xy-edge-stroke: rgb(243 238 230 / 0.45);
+  --xy-background-color: #0a1236;
+  --xy-background-pattern-color: rgb(255 255 255 / 0.16);
+  --xy-edge-stroke: rgb(255 255 255 / 0.6);
   --xy-edge-stroke-selected: #ff4fb5;
-  --xy-controls-button-background-color: #141e4a;
-  --xy-controls-button-background-color-hover: #1b2a6b;
-  --xy-controls-button-color: #f3eee6;
-  --xy-controls-button-border-color: rgb(243 238 230 / 0.14);
-  --xy-minimap-background-color: #0d1640;
+  --xy-controls-button-background-color: #ffffff;
+  --xy-controls-button-background-color-hover: #f3eee6;
+  --xy-controls-button-color: #0a1236;
+  --xy-controls-button-border-color: rgb(10 18 54 / 0.12);
+  --xy-minimap-background-color: #0a1236;
   --xy-minimap-mask-background-color: rgb(10 18 54 / 0.6);
   --xy-attribution-background-color: transparent;
 }
 
-/* Simulateur : surlignage du bloc en cours et des blocs exécutés */
+/* Simulateur : surlignage du bloc en cours et des blocs exécutés (anneaux pleins, sans flou) */
 .react-flow__node.sim-idle {
   opacity: 0.55;
 }
 .react-flow__node.sim-trail > div {
-  box-shadow: 0 0 0 3px rgb(255 79 181 / 0.35);
+  box-shadow: 0 0 0 3px #2aabff;
 }
 .react-flow__node.sim-active > div {
-  box-shadow: 0 0 0 4px #ff4fb5, 0 12px 30px rgb(255 79 181 / 0.35);
+  box-shadow: 0 0 0 4px #ff4fb5, 8px 10px 0 rgb(0 0 0 / 0.28);
 }

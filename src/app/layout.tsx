@@ -4,9 +4,18 @@ import { AuthGate } from "@/components/auth-gate";
 import { PwaRegister } from "@/components/pwa";
 import "./globals.css";
 
-// Les polices du site pflow.fr (mêmes fichiers) : Fredoka pour les titres, Manrope pour le texte.
-const fredoka = localFont({ src: "./fonts/fredoka.woff2", variable: "--font-fredoka", weight: "300 700", display: "swap" });
-const manrope = localFont({ src: "./fonts/manrope.woff2", variable: "--font-manrope", weight: "200 800", display: "swap" });
+// Polices de la charte PFlow (mêmes fichiers que le CRM) : Anton pour les titres, Plus Jakarta Sans pour le texte.
+const anton = localFont({ src: "./fonts/anton-400.woff2", variable: "--font-anton", weight: "400", display: "swap" });
+const jakarta = localFont({
+  src: [
+    { path: "./fonts/pjs-400.woff2", weight: "400" },
+    { path: "./fonts/pjs-600.woff2", weight: "600" },
+    { path: "./fonts/pjs-700.woff2", weight: "700" },
+    { path: "./fonts/pjs-800.woff2", weight: "800" },
+  ],
+  variable: "--font-jakarta",
+  display: "swap",
+});
 
 /** Écrans de lancement de l'app installée sur iPhone (public/splash, générés depuis le logo PFlow). */
 const SPLASH: [number, number, number][] = [
@@ -23,16 +32,16 @@ export const metadata: Metadata = {
   description: "Plateforme de chatbots WhatsApp de PFlow",
   robots: { index: false, follow: false },
   // App installable sur l'écran d'accueil de l'iPhone (notifications push : voir src/components/pwa.tsx).
-  // Barre d'état transparente : les en-têtes navy passent dessous (zones sûres gérées par la page).
+  // Barre d'état transparente : les en-têtes nuit passent dessous (zones sûres gérées par la page).
   appleWebApp: { capable: true, title: "PFlow Bots", statusBarStyle: "black-translucent", startupImage },
 };
 
 // viewportFit « cover » : les zones sûres de l'iPhone (barre d'accueil) sont gérées par la page (env(safe-area-inset-*)).
-export const viewport: Viewport = { themeColor: "#101B4D", viewportFit: "cover" };
+export const viewport: Viewport = { themeColor: "#0A1236", viewportFit: "cover" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="fr" className={`${fredoka.variable} ${manrope.variable}`}>
+    <html lang="fr" className={`${anton.variable} ${jakarta.variable}`}>
       <body className="min-h-screen antialiased">
         <PwaRegister />
         <AuthGate>{children}</AuthGate>

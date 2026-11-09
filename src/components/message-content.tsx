@@ -47,7 +47,7 @@ const listIcon = (
 );
 
 /** Ligne de bouton sous la bulle, sur toute sa largeur (comme WhatsApp). */
-const row = "flex min-h-10 w-full items-center justify-center gap-1.5 border-t border-white/10 px-3 py-2 text-center font-semibold text-cyan";
+const row = "flex min-h-10 w-full items-center justify-center gap-1.5 border-t border-ink/10 px-3 py-2 text-center font-semibold text-reflet";
 
 /**
  * `texte` : texte lisible du message (repli pour les anciens messages) ; `contenu` : le message enregistré ;
@@ -75,7 +75,7 @@ export function MessageContent({ texte, contenu, footer }: { texte: string; cont
             </span>
           ))}
         {c.kind === "link" && (
-          <a href={c.url} target="_blank" rel="noopener noreferrer" title={c.url} className={`${row} hover:bg-white/5`} data-testid="message-lien">
+          <a href={c.url} target="_blank" rel="noopener noreferrer" title={c.url} className={`${row} hover:bg-ink/5`} data-testid="message-lien">
             {linkIcon}
             {c.buttonLabel}
           </a>
@@ -86,7 +86,7 @@ export function MessageContent({ texte, contenu, footer }: { texte: string; cont
               {listIcon}
               {c.buttonLabel}
             </summary>
-            <ul className="border-t border-white/10 px-3 py-1 text-sm">
+            <ul className="border-t border-ink/10 px-3 py-1 text-sm">
               {(c.items ?? []).map((item, i) => (
                 <li key={item.id ?? i} className="py-1">
                   <span className="block font-semibold">{item.title}</span>

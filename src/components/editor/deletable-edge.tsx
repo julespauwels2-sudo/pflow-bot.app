@@ -16,7 +16,7 @@ export function DeletableEdge(props: EdgeProps) {
         <EdgeLabelRenderer>
           <button
             type="button"
-            className="nodrag nopan pointer-events-auto absolute grid size-6 place-items-center rounded-full bg-coral text-xs font-bold text-white shadow-card"
+            className="nodrag nopan pointer-events-auto absolute grid size-6 place-items-center rounded-full bg-coral text-xs font-bold text-nuit shadow-card"
             style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
             aria-label="Supprimer la flèche"
             title="Supprimer la flèche (Suppr)"
