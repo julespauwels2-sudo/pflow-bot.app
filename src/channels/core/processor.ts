@@ -2,6 +2,7 @@
  * Traitement d'une notification du webhook : pour chaque message reçu, le moteur décide, puis les
  * réponses partent par l'API Graph. Aucune dépendance à Next.js (testable seul, déplaçable).
  */
+import { createHash } from "node:crypto";
 import { runEngine, type AiPort, type OrderBridge, type AiRequest, type AiResult, type EngineResult } from "@/engine";
 import { createContactToken } from "@/channels/pflow-order/contact-token";
 import type { LoadedBot } from "./bot-loader";
@@ -15,6 +16,9 @@ import { nextContactDemo, routePflowMessage, type DemoDirectoryEntry } from "@/d
 import { canAlertQuestion, guide, nextParcours } from "@/demos/parcours";
 import { DEFAULT_BOTS_URL, demoLinks } from "@/demos/demo-auto";
 import { alertDelivered, sendAlert, type AlertConfig, type AlertResult } from "./alerts";
+
+/** Raison notée dans le journal pour un message ignoré parce que le canal est en test (page État). */
+export const HORS_LISTE = "canal en test, numéro hors liste";
 
 /** Plafond d'un « en train d'écrire » côté serveur (le webhook ne doit pas attendre trop longtemps). */
 export const MAX_TYPING_MS = 3000;
@@ -112,7 +116,15 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     return;
   }
   if (canal.etat === "test" && !canal.testNumeros.includes(event.waId)) {
-    report.skipped.push({ wamid: event.wamid, reason: "canal en test, numéro hors liste : rien enregistré" });
+    // Ni contact, ni message : seulement une trace avec les 4 derniers chiffres (page État, « hors liste de test »),
+    // supprimée avec le journal des notifications (30 jours). La clé est une empreinte de l'identifiant du message
+    // (le wamid de WhatsApp contient le numéro encodé : il n'est pas gardé).
+    const fin = event.waId.slice(-4);
+    report.skipped.push({ wamid: event.wamid, reason: `canal en test, numéro hors liste (…${fin}) : message non enregistré` });
+    const key = `hors-liste:${createHash("sha256").update(event.wamid).digest("hex").slice(0, 24)}`;
+    if (await store.claimEvent(event.plateforme, key, { horsListe: true, fin, canal: canal.id }).catch(() => false)) {
+      await store.finishEvent(event.plateforme, key, `${HORS_LISTE} (…${fin})`).catch(() => undefined);
+    }
     return;
   }
   // Idempotence : un message renvoyé par Meta n'est jamais retraité.

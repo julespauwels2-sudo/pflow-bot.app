@@ -17,6 +17,7 @@ interface SystemStatus {
   evenements: { source: string; cle: string; at: string; erreur?: string }[];
   alertes?: { at: string; canal: string; source: string; prevenu: boolean; voie: string; push?: string; erreur?: string; ouverte: boolean }[];
   push?: { configure: boolean; appareils: number };
+  horsListe?: { at: string; fin: string }[];
   erreurCanaux?: string;
 }
 
@@ -156,6 +157,8 @@ function ServerCards({ data }: { data: SystemStatus }) {
 
       {data.comptes.length > 0 && <CanauxCard comptes={data.comptes} />}
       {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && <WhatsAppAccessCard />}
+      {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && <WhatsAppAccountsCard />}
+      {data.horsListe && data.horsListe.length > 0 && <HorsListeCard items={data.horsListe} />}
       {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && data.comptes.some((c) => c.plateforme === "whatsapp" && c.etat === "test") && <OrderEventTestCard canaux={data.comptes.filter((c) => c.plateforme === "whatsapp" && c.etat === "test" && c.role === "resto" && c.testNumeros > 0)} />}
 
       {/* Sur téléphone : juste après le bandeau d'alerte (notification de test, appareils). */}
@@ -359,6 +362,140 @@ function WhatsAppAccessCard() {
           ))}
           <p className="text-xs text-muted">
             Testé le {time(result.data.testeLe)} · API Graph {result.data.version}
+          </p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Messages ignorés car le canal est en test et l'expéditeur hors de la liste de test : 4 derniers chiffres seulement. */
+function HorsListeCard({ items }: { items: NonNullable<SystemStatus["horsListe"]> }) {
+  // Regroupés par numéro : combien de messages, et le dernier.
+  const byFin = new Map<string, { fin: string; count: number; last: string }>();
+  for (const i of items) {
+    const g = byFin.get(i.fin) ?? { fin: i.fin, count: 0, last: i.at };
+    g.count += 1;
+    if (i.at > g.last) g.last = i.at;
+    byFin.set(i.fin, g);
+  }
+  return (
+    <Card title="Messages ignorés (canal en test, numéro hors liste)" className="lg:col-span-2">
+      <p className="mb-2 text-xs text-muted">
+        Ni le message ni le numéro ne sont enregistrés : seulement les 4 derniers chiffres, gardés 30 jours. Pour qu&apos;un testeur ait une réponse
+        pendant le test, ajoute son numéro à la liste de test du canal.
+      </p>
+      <ul className="divide-y divide-rule text-sm" data-testid="hors-liste">
+        {[...byFin.values()].map((g) => (
+          <li key={g.fin} className="flex flex-wrap items-baseline gap-2 py-1">
+            <span className="font-mono font-semibold">…{g.fin}</span>
+            <span className="text-muted">
+              {g.count} message{g.count > 1 ? "s" : ""} · dernier le {time(g.last)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+interface AccountsResult {
+  testeLe: string;
+  version: string;
+  erreurs: string[];
+  comptes: {
+    id: string;
+    nom?: string;
+    origine: string[];
+    apps: string[];
+    erreurs: string[];
+    numeros: { id: string; affichage?: string; nomVerifie?: string; qualite?: string; statut?: string; plateforme?: string; coexistence?: boolean; canal?: { id: string; etat: string } }[];
+  }[];
+  propositions: { numero: string; resto: string | null; sql: string }[];
+}
+
+/** Diagnostic des comptes WhatsApp accessibles au token du serveur : lecture seule chez Meta. */
+function WhatsAppAccountsCard() {
+  const [result, setResult] = useState<{ status: "idle" } | { status: "loading" } | { status: "error"; error: string } | { status: "ready"; data: AccountsResult }>({ status: "idle" });
+  async function run() {
+    setResult({ status: "loading" });
+    try {
+      const token = await accessToken();
+      const response = await fetch("/api/etat/comptes-whatsapp", { method: "POST", headers: token ? { authorization: `Bearer ${token}` } : {} });
+      const body = (await response.json().catch(() => ({}))) as AccountsResult & { error?: string };
+      if (!response.ok) throw new Error(body.error ?? `Erreur ${response.status}`);
+      setResult({ status: "ready", data: body });
+    } catch (error) {
+      setResult({ status: "error", error: errorText(error) });
+    }
+  }
+  return (
+    <Card title="Diagnostic des comptes WhatsApp" className="lg:col-span-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="secondary" onClick={run} disabled={result.status === "loading"}>
+          {result.status === "loading" ? "Lecture chez Meta…" : "Lancer le diagnostic"}
+        </Button>
+        <span className="text-xs text-muted">Lecture seule : comptes attribués à pflow-bots-serveur, numéros, apps abonnées. Aucune écriture chez Meta.</span>
+      </div>
+      {result.status === "error" && (
+        <div className="mt-3">
+          <Notice tone="error">{result.error}</Notice>
+        </div>
+      )}
+      {result.status === "ready" && (
+        <div className="mt-3 space-y-4 text-sm" data-testid="comptes-whatsapp">
+          {result.data.erreurs.map((e) => (
+            <p key={e} className="text-xs text-coral">
+              {e}
+            </p>
+          ))}
+          {result.data.comptes.length === 0 && <p className="text-muted">Aucun compte accessible au token.</p>}
+          {result.data.comptes.map((c) => (
+            <div key={c.id} className="rounded-2xl border border-rule p-3">
+              <p className="font-semibold break-all">
+                {c.nom ?? "Compte"} <span className="font-mono text-xs font-normal text-muted">{c.id}</span>
+              </p>
+              <p className="text-xs text-muted">
+                {c.origine.join(", ")} · apps abonnées : {c.apps.length ? c.apps.join(", ") : "aucune"}
+              </p>
+              {c.erreurs.map((e) => (
+                <p key={e} className="text-xs text-coral">
+                  {e}
+                </p>
+              ))}
+              {c.numeros.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {c.numeros.map((n) => (
+                    <li key={n.id} className="flex flex-wrap items-baseline gap-2">
+                      <strong>{n.affichage ?? "?"}</strong>
+                      {n.nomVerifie && <span>{n.nomVerifie}</span>}
+                      <span className="font-mono text-xs text-muted">phone_number_id {n.id}</span>
+                      {n.statut && <Badge tone={n.statut === "CONNECTED" ? "success" : "warning"}>{n.statut}</Badge>}
+                      {n.qualite && <Badge>qualité {n.qualite}</Badge>}
+                      {n.plateforme && <Badge>{n.plateforme}</Badge>}
+                      {n.coexistence !== undefined && <Badge tone={n.coexistence ? "info" : "neutral"}>{n.coexistence ? "coexistence" : "sans appli"}</Badge>}
+                      {n.canal ? <Badge tone="success">canal {n.canal.etat}</Badge> : <Badge>pas de canal</Badge>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+          {result.data.propositions.length > 0 && (
+            <div>
+              <p className="font-semibold">SQL proposé (canaux en test, à vérifier : rien n&apos;est appliqué)</p>
+              {result.data.propositions.map((p) => (
+                <div key={p.numero} className="mt-2">
+                  <p className="text-xs text-muted">
+                    {p.numero} → {p.resto ?? "resto à choisir"}
+                  </p>
+                  <pre className="mt-1 overflow-x-auto rounded-xl bg-page p-3 text-xs">{p.sql}</pre>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted">
+            Lu le {time(result.data.testeLe)} · API Graph {result.data.version}
           </p>
         </div>
       )}
