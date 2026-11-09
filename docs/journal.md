@@ -1002,4 +1002,7 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
 - Recommandation : pas de nouveau push dans le CRM ; à terme, **PFlow Bots centre d'alertes unique** pour tout ce qui
   touche un resto (lecture de la table `alertes`, aucune modification du CRM). Détail :
   `docs/etape-c/audit-notifications-crm.md`.
+- **Contrat livraison mis à jour (9 nov., version 1)** : plus aucun secours par le numéro PFlow. Rien n'était encore
+  construit côté PFlow Bots pour la livraison : la route `pflow-livraison` est ajoutée au plan (≈ 1 jour, après les
+  canaux actifs des restos et Embedded Signup, qui créera aussi les 10 modèles de livraison sur chaque compte resto).
 
