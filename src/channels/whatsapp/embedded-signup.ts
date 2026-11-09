@@ -56,7 +56,9 @@ function metaErrorText(json: Record<string, unknown>, status: number): string {
 }
 
 /** Appel à l'API Graph, borné dans le temps. Le jeton passe en en-tête, jamais dans l'URL (sauf l'échange du code). */
-async function graph(meta: MetaAppConfig, method: "GET" | "POST", path: string, token: string | null, body?: unknown): Promise<Record<string, unknown>> {
+type GraphTarget = Pick<MetaAppConfig, "base" | "version" | "fetch" | "timeoutMs">;
+
+async function graph(meta: GraphTarget, method: "GET" | "POST", path: string, token: string | null, body?: unknown): Promise<Record<string, unknown>> {
   const doFetch = meta.fetch ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), meta.timeoutMs ?? 10_000);
@@ -188,22 +190,9 @@ export async function terminerConnexion(deps: SignupDeps, connexion: Connexion, 
 
   // 7. Modèles de la livraison
   try {
-    const existants = new Set<string>();
-    const liste = await graph(deps.meta, "GET", `${input.wabaId}/message_templates?fields=name,status&limit=200`, token);
-    for (const t of (liste.data as { name?: string }[] | undefined) ?? []) if (t.name) existants.add(t.name);
-    let crees = 0;
-    const echecs: string[] = [];
-    for (const t of LIVRAISON_TEMPLATES) {
-      if (existants.has(t.name)) continue;
-      try {
-        await graph(deps.meta, "POST", `${input.wabaId}/message_templates`, token, templatePayload(t));
-        crees++;
-      } catch (error) {
-        echecs.push(`${t.name} : ${(error as Error).message}`);
-      }
-    }
-    const deja = LIVRAISON_TEMPLATES.length - crees - echecs.length;
-    note("modeles_livraison", echecs.length === 0, `${crees} créé(s), ${deja} déjà là${echecs.length ? `, ${echecs.length} en échec (${echecs[0]})` : ""}`);
+    const r = await modelesLivraison(deps.meta, input.wabaId, token, true);
+    const deja = r.etat.filter((t) => t.status && !r.crees.includes(t.name)).length;
+    note("modeles_livraison", r.echecs.length === 0, `${r.crees.length} créé(s), ${deja} déjà là${r.echecs.length ? `, ${r.echecs.length} en échec (${r.echecs[0].name} : ${r.echecs[0].erreur})` : ""}`);
   } catch (error) {
     note("modeles_livraison", false, (error as Error).message);
   }
@@ -214,4 +203,46 @@ export async function terminerConnexion(deps: SignupDeps, connexion: Connexion, 
   if (ratees.length) c.erreur = `Terminé, à reprendre à la main : ${ratees.join(", ")}`;
   await deps.connexions.update(c);
   return c;
+}
+
+export interface ModelesResultat {
+  /** Les 10 modèles de la livraison et leur statut chez Meta (null : absent du compte). */
+  etat: { name: string; status: string | null; motif?: string }[];
+  crees: string[];
+  echecs: { name: string; erreur: string }[];
+}
+
+/**
+ * Les 10 modèles de la livraison sur un compte WhatsApp Business : leur statut (APPROVED, PENDING, REJECTED…) et, si
+ * `creer`, la création des manquants (envoyés à l'examen de Meta). Un modèle existant n'est jamais modifié.
+ */
+export async function modelesLivraison(target: GraphTarget, wabaId: string, token: string, creer: boolean): Promise<ModelesResultat> {
+  const lire = async () => {
+    const liste = await graph(target, "GET", `${wabaId}/message_templates?fields=name,status,rejected_reason,language&limit=200`, token);
+    const parNom = new Map<string, { status: string; motif?: string }>();
+    for (const t of (liste.data as { name?: string; status?: string; rejected_reason?: string; language?: string }[] | undefined) ?? []) {
+      if (t.name && (!t.language || t.language === "fr")) parNom.set(t.name, { status: t.status ?? "?", ...(t.rejected_reason && t.rejected_reason !== "NONE" ? { motif: t.rejected_reason } : {}) });
+    }
+    return parNom;
+  };
+  const avant = await lire();
+  const crees: string[] = [];
+  const echecs: ModelesResultat["echecs"] = [];
+  if (creer) {
+    for (const t of LIVRAISON_TEMPLATES) {
+      if (avant.has(t.name)) continue;
+      try {
+        const r = await graph(target, "POST", `${wabaId}/message_templates`, token, templatePayload(t));
+        crees.push(t.name);
+        avant.set(t.name, { status: typeof r.status === "string" ? r.status : "PENDING" });
+      } catch (error) {
+        echecs.push({ name: t.name, erreur: (error as Error).message });
+      }
+    }
+  }
+  return {
+    etat: LIVRAISON_TEMPLATES.map((t) => ({ name: t.name, status: avant.get(t.name)?.status ?? null, ...(avant.get(t.name)?.motif ? { motif: avant.get(t.name)!.motif } : {}) })),
+    crees,
+    echecs,
+  };
 }

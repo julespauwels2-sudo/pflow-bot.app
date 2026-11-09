@@ -1055,4 +1055,8 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
   comptes » pour les vidéos : `docs/etape-c/embedded-signup.md`.
 - À vérifier : depuis le 1er octobre 2026, les messages de service seraient facturés par Meta (le contrat livraison
   compte sur 1 000 messages gratuits par mois).
+- **Modèles de la livraison sur le compte commun** : créés par l'API impossible depuis la session (le jeton général
+  n'est que dans Vercel). Ajouté à la PR Embedded Signup : page État → « Modèles WhatsApp de la livraison », statut des
+  10 chez Meta et bouton « Créer les manquants et les soumettre » (jeton général, compte 1808772226929443 par défaut).
+  Textes vérifiés identiques au guide du CRM. Création à la main possible en attendant (guide du CRM).
 

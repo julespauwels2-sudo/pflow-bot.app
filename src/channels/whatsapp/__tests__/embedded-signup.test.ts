@@ -42,8 +42,8 @@ beforeAll(async () => {
       if (path.startsWith("1234567890?fields=")) return json(200, { display_phone_number: "+590 690 12 34 56", verified_name: "Bokit An Nou", is_on_biz_app: true, platform_type: "CLOUD_API" });
       if (path === "9876543210/subscribed_apps") return json(200, { success: true });
       if (path === "1234567890/smb_app_data") return json(200, { request_id: "r1" });
-      if (path.startsWith("9876543210/message_templates?")) return json(200, { data: existingTemplates.map((name) => ({ name, status: "APPROVED" })) });
-      if (path === "9876543210/message_templates") return json(200, { id: "t1", status: "PENDING", category: "UTILITY" });
+      if (/^\d+\/message_templates\?/.test(path)) return json(200, { data: existingTemplates.map((name) => ({ name, status: "APPROVED", language: "fr" })) });
+      if (/^\d+\/message_templates$/.test(path)) return json(200, { id: "t1", status: "PENDING", category: "UTILITY" });
       if (path === "1234567890/messages") return json(200, { messages: [{ id: "wamid.sent" }] });
       json(404, { error: { message: "inconnu" } });
     });
@@ -271,3 +271,45 @@ describe("routes « Connecter votre WhatsApp » (mode mémoire)", () => {
     expect(c!.erreur).toContain("s-1");
   });
 });
+
+describe("modèles de la livraison sur le compte commun (page État)", () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    process.env = { ...saved };
+    (globalThis as { __pflowChannels?: unknown }).__pflowChannels = undefined;
+  });
+
+  it("statut des 10, puis création des seuls manquants avec le jeton général ; compte inconnu refusé", async () => {
+    Object.assign(process.env, { CHANNELS_STORE: "memory", WHATSAPP_APP_SECRET: "s", WHATSAPP_VERIFY_TOKEN: "v", WHATSAPP_TOKEN: "jeton-general-pflow", WHATSAPP_GRAPH_BASE: base });
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    delete process.env.VERCEL;
+    (globalThis as { __pflowChannels?: unknown }).__pflowChannels = undefined;
+    const route = await import("@/app/api/etat/modeles-livraison/route");
+    existingTemplates = ["pflow_livraison_en_route", "pflow_livraison_annulee"];
+
+    // Le compte du canal de démo (mode mémoire) : « waba-demo » n'est pas un identifiant Meta ; on en ajoute un vrai.
+    const { getChannelsRuntime } = await import("@/channels/core/runtime");
+    const rt = await getChannelsRuntime();
+    await rt.store.ensureCanal({ restaurantId: "r", role: "resto", plateforme: "whatsapp", accountId: "5550001111", wabaId: "1808772226929443", triggerMode: "toujours", coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "test", testNumeros: [] });
+
+    const lu = await (await route.GET(new Request("http://localhost/api/etat/modeles-livraison?waba=1808772226929443"))).json();
+    expect(lu.etat).toHaveLength(10);
+    expect(lu.etat.filter((t: { status: string | null }) => t.status === "APPROVED").map((t: { name: string }) => t.name).sort()).toEqual(["pflow_livraison_annulee", "pflow_livraison_en_route"]);
+    expect(calls.every((c) => c.method === "GET")).toBe(true);
+
+    calls.length = 0;
+    const cree = await (await route.POST(new Request("http://localhost/x", { method: "POST", body: JSON.stringify({ wabaId: "1808772226929443" }) }))).json();
+    expect(cree.crees).toHaveLength(8);
+    expect(cree.echecs).toEqual([]);
+    const posts = calls.filter((c) => c.method === "POST");
+    expect(posts).toHaveLength(8);
+    expect(posts.every((c) => c.path === "1808772226929443/message_templates" && c.auth === "Bearer jeton-general-pflow")).toBe(true);
+    expect(posts.map((c) => c.body?.name)).not.toContain("pflow_livraison_en_route");
+    expect(JSON.stringify(cree)).not.toContain("jeton-general-pflow");
+
+    const refus = await route.POST(new Request("http://localhost/x", { method: "POST", body: JSON.stringify({ wabaId: "1111111111" }) }));
+    expect(refus.status).toBe(400);
+  });
+});
+

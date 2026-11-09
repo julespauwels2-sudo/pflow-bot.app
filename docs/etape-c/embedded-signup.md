@@ -84,6 +84,26 @@ testeur). Donc **le même code** tourne dès maintenant avec tes comptes, sans a
 
 Sans accès avancé, un vrai client (sans rôle sur l'app) voit l'erreur `#2655111` : c'est normal avant l'examen.
 
+## 2 bis. Les 10 modèles de la livraison sur TON compte (une seule fois)
+
+Contrat livraison (version du commit ad59937) : les 10 modèles se créent **une fois** sur ton compte WhatsApp Business
+commun (celui de tous tes numéros). En base, le compte du numéro PFlow Démo est le **1808772226929443** : c'est
+celui-là, sauf si tu me dis le contraire. Textes : identiques au mot près à `docs/livraison/GUIDE-MODELES-WHATSAPP.md`
+(vérifié automatiquement le 9 novembre).
+
+- **Par l'API, en un clic (après fusion de cette PR)** : page **État** → « Modèles WhatsApp de la livraison » → « Voir
+  les modèles » (statut de chacun chez Meta) → « Créer les N manquants et les soumettre ». Le serveur utilise le jeton
+  général déjà dans Vercel (`WHATSAPP_TOKEN`) ; un modèle existant n'est jamais modifié. Il faut que ce jeton ait
+  l'autorisation `whatsapp_business_management` sur ce compte (c'est le cas d'un jeton d'utilisateur système « Admin »
+  créé avec les deux autorisations WhatsApp ; sinon Meta répond une erreur de permission, affichée telle quelle).
+- **À la main (sans attendre la fusion)** : business.facebook.com → ton portefeuille → WhatsApp Manager → Gestion des
+  comptes → **Modèles de message** → Créer un modèle, puis pour chacun : catégorie **Utilitaire**, nom exact, langue
+  **Français** (code `fr`), corps exact, variables de type « Nombre » avec les exemples du guide, bouton **Accéder au
+  site web** « Suivre ma livraison », URL **dynamique** `https://order.pflow.fr/suivi/{{1}}`, exemple
+  `https://order.pflow.fr/suivi/0b6f2c1e-1111-4222-8333-444455556666`, puis **Envoyer**. Pas à pas complet :
+  `docs/livraison/GUIDE-MODELES-WHATSAPP.md` (branche Livraison du CRM).
+- Réponse de Meta : souvent quelques heures, parfois 1 à 2 jours. Un refus s'affiche avec son motif sur la page État.
+
 ## 3. Ce qu'il faut dire aux restos (coexistence)
 
 - Garder l'appli **WhatsApp Business** à jour et **l'ouvrir au moins une fois toutes les 2 semaines** (sinon Meta coupe
