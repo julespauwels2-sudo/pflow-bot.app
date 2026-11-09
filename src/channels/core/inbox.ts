@@ -50,7 +50,8 @@ export function messageText(m: Pick<StoredMessage, "type" | "contenu">): string 
   if (out.kind === "text" && typeof out.text === "string") return out.text;
   if (out.kind === "buttons") return `${out.text}\n${(out.buttons ?? []).map((b) => `[${b.title}]`).join(" ")}`;
   if (out.kind === "list") return `${out.text}\n[${out.buttonLabel}] ${(out.items ?? []).map((i) => i.title).join(", ")}`;
-  if (out.kind === "link") return `${out.text}\n[🔗 ${out.buttonLabel}] ${out.url}`;
+  // L'adresse du lien n'apparaît pas dans le texte (extrait de la liste) : le bouton la porte.
+  if (out.kind === "link") return `${out.text}\n[🔗 ${out.buttonLabel}]`;
   if (m.type === "audio") return typeof c.erreur === "string" ? `🎤 Message vocal (non transcrit : ${c.erreur})` : "🎤 Message vocal";
   if (m.type === "image") return "📷 Photo";
   return `(${m.type})`;

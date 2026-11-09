@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { MobileConversation, MobileInboxList } from "@/components/inbox-mobile";
+import { MessageContent } from "@/components/message-content";
 import { useIsMobile } from "@/components/mobile";
 import { OPEN_CONVERSATION_EVENT, PushControls } from "@/components/pwa";
 import { markSeen, readSeen, type SeenState } from "@/lib/inbox-view";
@@ -312,7 +313,7 @@ function ConversationView({
         {thread.messages.map((m) => (
           <div key={m.id} className={`flex ${m.sens === "entrant" ? "justify-start" : "justify-end"}`}>
             <div
-              className={`max-w-[80%] rounded-xl px-3 py-1.5 text-sm whitespace-pre-wrap shadow-sm ${
+              className={`max-w-[80%] overflow-hidden rounded-xl px-3 py-1.5 text-sm whitespace-pre-wrap shadow-sm ${
                 m.sens === "entrant" ? "bg-white" : m.auteur === "humain" ? "bg-[#d9fdd3]" : "bg-[#e7f0ff]"
               }`}
             >
@@ -321,7 +322,7 @@ function ConversationView({
                 {m.statut === "echec" && <span className="text-coral"> · échec{m.erreur ? ` : ${m.erreur}` : ""}</span>}
                 {m.statut === "lu" && " · lu"}
               </span>
-              {m.texte}
+              <MessageContent texte={m.texte} contenu={m.contenu} />
             </div>
           </div>
         ))}

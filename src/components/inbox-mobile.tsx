@@ -11,7 +11,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { InboxCanal, InboxConversation } from "@/channels/core/inbox";
 import type { StoredMessage } from "@/channels/core/types";
-import { isUnread, lastAt, plainExtract, shortTime, sortConversations, waSegments, type SeenState } from "@/lib/inbox-view";
+import { isUnread, lastAt, plainExtract, shortTime, sortConversations, type SeenState } from "@/lib/inbox-view";
+import { MessageContent } from "./message-content";
 import { useVisualViewport } from "./mobile";
 import { PushControls } from "./pwa";
 import { Notice } from "./ui";
@@ -245,21 +246,24 @@ export function MobileConversation({
           thread.messages.map((m) => (
             <div key={m.id} className={`flex ${m.sens === "entrant" ? "justify-start" : "justify-end"}`}>
               <div
-                className={`max-w-[85%] rounded-2xl px-3 py-1.5 text-base leading-snug break-words whitespace-pre-wrap shadow-sm ${
+                className={`max-w-[85%] overflow-hidden rounded-2xl px-3 py-1.5 text-base leading-snug break-words whitespace-pre-wrap shadow-sm ${
                   m.sens === "entrant" ? "rounded-tl-sm bg-white" : m.auteur === "humain" || m.sens === "echo" ? "rounded-tr-sm bg-[#d9fdd3]" : "rounded-tr-sm bg-[#e7f0ff]"
                 }`}
               >
                 {m.sens !== "entrant" && (
                   <span className="mb-0.5 block text-[11px] font-semibold text-muted">{m.sens === "echo" ? "Gérant (appli)" : m.auteur === "humain" ? "Toi" : "Bot"}</span>
                 )}
-                {waSegments(m.texte).map((seg, i) =>
-                  seg.style === "bold" ? <strong key={i}>{seg.text}</strong> : seg.style === "italic" ? <em key={i}>{seg.text}</em> : seg.style === "strike" ? <s key={i}>{seg.text}</s> : <span key={i}>{seg.text}</span>,
-                )}
-                <span className="mt-0.5 block text-right text-[11px] text-muted">
-                  {clock(m.at)}
-                  {m.statut === "lu" && " · lu"}
-                  {m.statut === "echec" && <span className="text-coral"> · échec{m.erreur ? ` : ${m.erreur}` : ""}</span>}
-                </span>
+                <MessageContent
+                  texte={m.texte}
+                  contenu={m.contenu}
+                  footer={
+                    <span className="mt-0.5 block text-right text-[11px] text-muted">
+                      {clock(m.at)}
+                      {m.statut === "lu" && " · lu"}
+                      {m.statut === "echec" && <span className="text-coral"> · échec{m.erreur ? ` : ${m.erreur}` : ""}</span>}
+                    </span>
+                  }
+                />
               </div>
             </div>
           ))
