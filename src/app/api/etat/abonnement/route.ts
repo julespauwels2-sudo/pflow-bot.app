@@ -10,6 +10,7 @@ import { checkBotAdmin } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const caller = await checkBotAdmin(request.headers.get("authorization"));
@@ -21,7 +22,8 @@ export async function POST(request: Request) {
   if (!canal) return NextResponse.json({ error: "Canal WhatsApp introuvable." }, { status: 404 });
   const account = canal.messagingAccountId || canal.wabaId;
   if (!account) return NextResponse.json({ error: "Ni compte de messagerie ni WABA sur ce canal." }, { status: 400 });
-  const result = await setAppSubscription({ token: config.token, base: config.graphBase, version: config.graphVersion }, account, body.abonner !== false);
+  // subscribed_apps est lent chez Meta : délai de 25 s (comme la lecture du diagnostic).
+  const result = await setAppSubscription({ token: config.token, base: config.graphBase, version: config.graphVersion, timeoutMs: 25_000 }, account, body.abonner !== false);
   console.log(`[abonnement] ${canal.numeroAffiche ?? canal.accountId} : ${body.abonner !== false ? "abonner" : "désabonner"} → ${result.ok ? "ok" : "refus"}`);
   return NextResponse.json(result, { status: result.ok ? 200 : 502 });
 }

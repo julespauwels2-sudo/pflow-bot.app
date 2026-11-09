@@ -132,3 +132,37 @@ describe("comptes saisis à la main (token sans business_management)", () => {
   });
 });
 
+describe("apps abonnées : délai plus long et nouvel essai", () => {
+  it("1er essai sans réponse (délai dépassé) → 2e essai qui répond : UChat visible ; 2 échecs : message clair, pas « injoignable »", async () => {
+    let appels = 0;
+    const lent = (id: string, toujours: boolean) =>
+      (async (input: string | URL | Request, init?: RequestInit) => {
+        const path = String(input).replace(/^https:\/\/graph\.test\/v24\.0\//, "");
+        const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+        if (path.startsWith("debug_token")) return json({ data: { granular_scopes: [] } });
+        if (path.startsWith("me/businesses")) return new Response(JSON.stringify({ error: { message: "(#100) Missing Permission", code: 100 } }), { status: 400 });
+        if (path === id) return json({ id, name: "Mexico" });
+        if (path.startsWith(`${id}/phone_numbers`)) return json({ data: [] });
+        if (path.startsWith(`${id}/subscribed_apps`)) {
+          appels++;
+          if (toujours || appels === 1) {
+            // Meta ne répond pas : la requête reste ouverte jusqu'à l'abandon par le délai.
+            return new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+          }
+          return json({ data: [{ whatsapp_business_api_data: { name: "UChat" } }] });
+        }
+        return new Response("{}", { status: 404 });
+      }) as typeof fetch;
+
+    const ok = await diagnoseWhatsAppAccounts({ token: TOKEN, base: "https://graph.test", version: "v24.0", fetch: lent("1678321033943134", false), appsTimeoutMs: 50, retryDelayMs: 1 }, { accountIds: [], canaux: [], saisis: ["1678321033943134"] });
+    expect(appels).toBe(2);
+    expect(ok.comptes[0].apps).toEqual(["UChat"]);
+    expect(ok.comptes[0].erreurs).toEqual([]);
+
+    appels = 0;
+    const ko = await diagnoseWhatsAppAccounts({ token: TOKEN, base: "https://graph.test", version: "v24.0", fetch: lent("1678321033943134", true), appsTimeoutMs: 50, retryDelayMs: 1 }, { accountIds: [], canaux: [], saisis: ["1678321033943134"] });
+    expect(appels).toBe(2);
+    expect(ko.comptes[0].erreurs[0]).toMatch(/^Apps abonnées : Meta n'a pas répondu en/);
+  }, 60_000);
+});
+

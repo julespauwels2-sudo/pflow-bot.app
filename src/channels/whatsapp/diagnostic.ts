@@ -47,20 +47,24 @@ function graphError(json: Json, status: number): string {
   return `${status}${e.code ? ` / code ${e.code}` : ""}${e.error_subcode ? ` / sous-code ${e.error_subcode}` : ""} : ${e.message ?? "erreur"}`;
 }
 
+/** Délai de lecture des apps abonnées (la lecture la plus lente chez Meta). */
+export const APPS_TIMEOUT_MS = 25_000;
+
 export async function diagnoseWhatsAppAccounts(
   config: GraphConfig,
   known: { accountIds: string[]; canaux: { id: string; etat: string; compteId: string }[]; saisis?: string[] },
 ): Promise<DiagnosticResult> {
   const doFetch = config.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
   const base = `${config.base.replace(/\/$/, "")}/${config.version}`;
-  const get = async (path: string): Promise<{ ok: true; json: Json } | { ok: false; error: string }> => {
+  const get = async (path: string, timeoutMs = config.timeoutMs ?? 10_000): Promise<{ ok: true; json: Json } | { ok: false; error: string; timeout?: boolean }> => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), config.timeoutMs ?? 10_000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await doFetch(`${base}/${path}`, { method: "GET", headers: { authorization: `Bearer ${config.token}` }, signal: controller.signal });
       const json = (await response.json().catch(() => ({}))) as Json;
       return response.ok ? { ok: true, json } : { ok: false, error: graphError(json, response.status) };
     } catch (error) {
+      if (controller.signal.aborted) return { ok: false, timeout: true, error: `Meta n'a pas répondu en ${Math.round(timeoutMs / 1000)} s` };
       return { ok: false, error: `Meta injoignable : ${error instanceof Error ? error.message : String(error)}` };
     } finally {
       clearTimeout(timer);
@@ -105,8 +109,8 @@ export async function diagnoseWhatsAppAccounts(
   for (const id of known.saisis ?? []) add(id, "saisi à la main");
 
   const canalByPhone = new Map(known.canaux.map((c) => [c.compteId, { id: c.id, etat: c.etat }]));
-  const comptes: DiagnosticAccount[] = [];
-  for (const [id, origine] of found) {
+  // Les comptes en parallèle : un compte lent ne retarde pas les autres (et le total reste sous le délai de la route).
+  const comptes: DiagnosticAccount[] = await Promise.all([...found].map(async ([id, origine]) => {
     const account: DiagnosticAccount = { id, origine: [...origine], numeros: [], apps: [], erreurs: [] };
     // Lecture simple, sans liste de champs (certains champs sont refusés sur les comptes du nouveau modèle).
     const info = await get(encodeURIComponent(id));
@@ -135,14 +139,20 @@ export async function diagnoseWhatsAppAccounts(
       account.erreurs.push(`Numéros : ${phones.error}`);
     }
 
-    const apps = await get(`${encodeURIComponent(id)}/subscribed_apps`);
+    // Apps abonnées (UChat encore là ? pour la migration) : la lecture la plus lente chez Meta. Délai de 25 s et un
+    // nouvel essai (après 1,5 s) si Meta ne répond pas ou est injoignable ; une vraie erreur de Meta n'est pas réessayée.
+    let apps = await get(`${encodeURIComponent(id)}/subscribed_apps`, config.appsTimeoutMs ?? APPS_TIMEOUT_MS);
+    if (!apps.ok && (apps.timeout || /injoignable/.test(apps.error))) {
+      await new Promise((r) => setTimeout(r, config.retryDelayMs ?? 1_500));
+      apps = await get(`${encodeURIComponent(id)}/subscribed_apps`, config.appsTimeoutMs ?? APPS_TIMEOUT_MS);
+    }
     if (apps.ok) {
       account.apps = ((apps.json.data ?? []) as { whatsapp_business_api_data?: { name?: string; id?: string } }[]).map((a) => a.whatsapp_business_api_data?.name ?? a.whatsapp_business_api_data?.id ?? "?");
     } else if (!/2388339/.test(apps.error)) {
       account.erreurs.push(`Apps abonnées : ${apps.error}`);
     }
-    comptes.push(account);
-  }
+    return account;
+  }));
   // Les comptes qui répondent (numéros trouvés) d'abord.
   comptes.sort((a, b) => b.numeros.length - a.numeros.length || a.id.localeCompare(b.id));
   return { comptes, erreurs };
