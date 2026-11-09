@@ -64,6 +64,9 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - **Test réel encore à faire** : boutons « Retour sur WhatsApp » (wa.me + texte prérempli) depuis le navigateur
   intégré de WhatsApp, sur Android (secours codé : rappel de l'étape avec [✅ C'est fait]).
 
+- ✅ **Direction artistique** (PR du 9 novembre) : thème centralisé (`src/app/globals.css`), écrans iPhone, icône et
+  écran de lancement « PFlow Bots ». Détail : `docs/etape-c/direction-artistique.md`.
+
 ### Étape B
 - **Options payantes** (ex. relance panier abandonné) : lues dans le CRM (modules du resto). **Les
   seules options payantes côté bot sont celles du CRM.** Le **paiement en ligne n'en est pas une** : il

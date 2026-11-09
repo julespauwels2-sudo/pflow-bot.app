@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { MobileConversation, MobileInboxList } from "@/components/inbox-mobile";
 import { MessageContent } from "@/components/message-content";
-import { useIsMobile } from "@/components/mobile";
+import { MobileHeader, useIsMobile } from "@/components/mobile";
 import { OPEN_CONVERSATION_EVENT, PushControls } from "@/components/pwa";
 import { markSeen, readSeen, type SeenState } from "@/lib/inbox-view";
 import { Badge, Button, Card, Loading, Notice, Textarea } from "@/components/ui";
@@ -153,6 +153,7 @@ export default function InboxPage() {
   if (isMobile) {
     return (
       <AppShell mobile>
+        {state.status !== "ready" && <MobileHeader title="Boîte de réception" />}
         {state.status === "loading" && <Loading />}
         {state.status === "error" && <Notice tone="error">{state.error}</Notice>}
         {state.status === "off" && <Notice tone="info">Aucun canal (WhatsApp, Instagram) n&apos;est encore branché. Variables manquantes : {state.missing.join(", ")}.</Notice>}
@@ -359,7 +360,7 @@ function SimulateForm({ plateformes, onSent, onError }: { plateformes: InboxCana
   const [nom, setNom] = useState("Léa");
   return (
     <form
-      className="flex flex-wrap items-center gap-2 rounded-2xl border border-dashed border-line bg-white p-3 text-sm"
+      className="flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] border border-dashed border-pink/40 bg-white p-3 text-sm shadow-card"
       onSubmit={async (e) => {
         e.preventDefault();
         try {

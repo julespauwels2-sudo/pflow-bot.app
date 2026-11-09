@@ -1,12 +1,17 @@
 @import "tailwindcss";
 
-/* Direction artistique PFlow (relevée sur pflow.fr) */
+/*
+ * Thème PFlow (relevé sur pflow.fr et pflow.fr/demo) : SEUL endroit où vivent les couleurs, polices, arrondis et
+ * ombres de l'app. Les composants utilisent ces jetons (bg-navy, text-pink, rounded-card, shadow-card, bg-brand…).
+ */
 @theme {
+  /* Couleurs */
   --color-navy: #101b4d;
   --color-navy-2: #1b2a6b;
   --color-navy-3: #0a1447;
   --color-pink: #ff4fb5;
   --color-pink-2: #ff7ccb;
+  --color-pink-3: #f03ca5;
   --color-blue: #2a8bff;
   --color-cyan: #74ddfb;
   --color-coral: #ff6b6b;
@@ -15,13 +20,48 @@
   --color-muted: #5e6690;
   --color-line: rgb(16 27 77 / 0.12);
   --color-rule: rgb(16 27 77 / 0.08);
+  --color-bulle-bot: #e8f1ff;
+  --color-bulle-humain: #ffe8f5;
+  --color-chat: #f1eff8;
 
+  /* Polices (fichiers du site, src/app/fonts) */
   --font-title: var(--font-fredoka), ui-rounded, system-ui, sans-serif;
   --font-sans: var(--font-manrope), system-ui, sans-serif;
 
+  /* Arrondis */
   --radius-card: 24px;
+  --radius-field: 14px;
+  --radius-sheet: 28px;
+
+  /* Ombres */
   --shadow-card: 0 12px 30px rgb(16 27 77 / 0.08);
   --shadow-pop: 0 24px 60px rgb(16 27 77 / 0.14);
+  --shadow-bouton: 0 14px 30px -10px rgb(255 79 181 / 0.6), inset 0 1px 0 rgb(255 255 255 / 0.55);
+  --shadow-bloc: 0 30px 70px -28px rgb(16 27 77 / 0.75);
+}
+
+/* Dégradés du site (boutons roses, blocs navy, filet de marque) */
+@utility bg-brand {
+  background-image: linear-gradient(180deg, #ff74c6 0%, #ff4fb5 55%, #f03ca5 100%);
+}
+@utility bg-navy-grad {
+  background-color: #101b4d;
+  background-image:
+    radial-gradient(120% 90% at 0% 0%, rgb(116 221 251 / 0.18), transparent 55%),
+    radial-gradient(80% 90% at 100% 100%, rgb(255 79 181 / 0.22), transparent 60%),
+    linear-gradient(155deg, #1b2a6b, #101b4d);
+}
+@utility bg-avatar {
+  background-image: linear-gradient(135deg, #74ddfb, #2a8bff);
+}
+@utility bg-filet {
+  background-image: linear-gradient(90deg, #74ddfb, #2a8bff, #ff4fb5);
+}
+/* Fond de conversation : léger motif de points, comme un papier peint WhatsApp aux couleurs PFlow */
+@utility bg-chat-motif {
+  background-color: #f1eff8;
+  background-image: radial-gradient(rgb(16 27 77 / 0.06) 1px, transparent 1.2px);
+  background-size: 18px 18px;
 }
 
 html {

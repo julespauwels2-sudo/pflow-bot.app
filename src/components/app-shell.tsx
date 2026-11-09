@@ -1,22 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { AccountMenu } from "./account-menu";
+import { Logo } from "./logo";
 import { DesktopOnly, MobileTabBar } from "./mobile";
 
-export function Logo() {
-  return (
-    <Link href="/" className="flex items-center gap-2.5">
-      <span className="grid size-9 place-items-center rounded-xl bg-navy text-pink">
-        <svg viewBox="0 0 64 64" className="size-6" aria-hidden>
-          <path d="M18 22a8 8 0 0 1 8-8h14a8 8 0 0 1 8 8v12a8 8 0 0 1-8 8H30l-9 7v-7.5A8 8 0 0 1 18 34Z" fill="currentColor" />
-        </svg>
-      </span>
-      <span className="font-title text-lg font-semibold whitespace-nowrap">
-        PFlow <span className="text-pink">Bots</span>
-      </span>
-    </Link>
-  );
-}
+export { Logo };
 
 /**
  * Cadre des pages. `mobile` : la page s'utilise aussi sur téléphone (boîte de réception, État) : en dessous de 768 px,
@@ -26,20 +14,21 @@ export function Logo() {
 export function AppShell({ children, breadcrumb, mobile = false }: { children: ReactNode; breadcrumb?: ReactNode; mobile?: boolean }) {
   const page = (
     <div className="min-h-screen">
-      <header className={`border-b border-rule bg-white/80 backdrop-blur ${mobile ? "hidden md:block" : ""}`}>
+      <header className={`relative border-b border-rule bg-white/85 backdrop-blur ${mobile ? "hidden md:block" : ""}`}>
+        <div className="bg-filet absolute inset-x-0 bottom-0 h-[2px] opacity-70" aria-hidden />
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
           <Logo />
           <nav className="flex max-w-full items-center gap-1 overflow-x-auto text-sm font-semibold whitespace-nowrap">
-            <Link href="/modele" className="rounded-full px-3 py-1.5 hover:bg-navy/5">
+            <Link href="/modele" className="rounded-full px-3 py-1.5 transition hover:bg-pink/10 hover:text-pink-3">
               Modèle maître
             </Link>
-            <Link href="/clients" className="rounded-full px-3 py-1.5 hover:bg-navy/5">
+            <Link href="/clients" className="rounded-full px-3 py-1.5 transition hover:bg-pink/10 hover:text-pink-3">
               Clients
             </Link>
-            <Link href="/demos" className="rounded-full px-3 py-1.5 hover:bg-navy/5">
+            <Link href="/demos" className="rounded-full px-3 py-1.5 transition hover:bg-pink/10 hover:text-pink-3">
               Démos
             </Link>
-            <Link href="/inbox" className="rounded-full px-3 py-1.5 hover:bg-navy/5">
+            <Link href="/inbox" className="rounded-full px-3 py-1.5 transition hover:bg-pink/10 hover:text-pink-3">
               Boîte de réception
             </Link>
             <AccountMenu />
