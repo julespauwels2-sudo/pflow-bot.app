@@ -14,8 +14,9 @@ const variants: Record<Variant, string> = {
   danger: "bg-white text-coral border border-coral/40 hover:bg-coral/10",
 };
 
+// Téléphone (max-md) : 44 px de haut au moins, pour le doigt. Ordinateur : inchangé.
 const buttonBase =
-  "inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue";
+  "inline-flex max-md:min-h-11 items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue";
 
 export function Button({ variant = "primary", className, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
   return <button type="button" className={cx(buttonBase, variants[variant], className)} {...props} />;

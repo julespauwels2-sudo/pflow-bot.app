@@ -26,6 +26,16 @@
 
 html {
   color-scheme: light;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Téléphone : champs en 16 px au moins (sinon l'iPhone zoome en entrant dans un champ). */
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
 }
 
 body {
