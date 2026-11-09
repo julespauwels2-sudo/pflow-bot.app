@@ -148,11 +148,14 @@ préviens-le **avant le 12**.
 Les comptes de messagerie, relevés dans Business Manager, ont été lus par le diagnostic (PR n° 18), qui a généré le
 SQL. Jules l'a validé, puis il a été appliqué. Chaque canal est en **test** avec seulement 590690938108 en liste de test.
 
-| Resto | Compte de messagerie | Mode | Canal (id) | Numéro |
+| Resto | Compte de messagerie | Numéro (phone_number_id) | Mode | Canal (id) |
 |---|---|---|---|---|
-| Cookies An Nou | 2577158539379673 | toujours | *à reporter après application* | *idem* |
-| Mexico Sainte-Rose | 1678321033943134 | mots_cles_uniquement | *à reporter* | *idem* |
-| ag pizza | 1120744623676139 | mots_cles_uniquement | *à reporter* | *idem* |
+| Cookies An Nou | 2577158539379673 | +590 690 58-9366 (1265359206670157) | toujours | `e082c43f-7fdf-4e35-b992-c1b108499c7c` |
+| Mexico Sainte-Rose | 1678321033943134 | +590 690 70-7873 (1336937752846131) | mots_cles_uniquement | `001e1405-ad06-40a0-bde3-2ad2559a8971` |
+| ag pizza | 1120744623676139 | +590 690 90-4390 (1425470167313189) | mots_cles_uniquement | `a83759cb-d2ea-431d-92c9-b73d40bc42f1` |
+
+Appliqué le 9 novembre 2026 (accord de Jules), coexistence = oui, état **test**, liste de test = 590690938108. Le
+canal du numéro de test Meta (+1 555 186 2679), relié à Cookies An Nou, reste en test : il ne gêne pas.
 
 **Ce que ces canaux en test ne changent pas** (vérifié dans le code le 9 novembre) :
 - **Messages des clients** : ils arrivent à UChat comme avant. PFlow Bots n'est pas encore abonné à ces comptes

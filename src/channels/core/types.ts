@@ -26,7 +26,7 @@ export interface ChannelSender {
   /** Accusé de lecture et « en train d'écrire ». */
   markRead(accountId: string, messageId: string, typing: boolean, to?: string): Promise<void>;
   /** Téléchargement d'un média reçu (message vocal). */
-  downloadMedia?(media: MediaRef): Promise<{ data: Uint8Array; mimeType: string }>;
+  downloadMedia?(media: MediaRef, accountId?: string): Promise<{ data: Uint8Array; mimeType: string }>;
 }
 
 /** Média à télécharger : identifiant WhatsApp ou adresse Instagram. */
@@ -164,6 +164,11 @@ export interface ChannelStore {
   listCanaux(): Promise<Canal[]>;
   /** Change l'état d'un canal (page État : bascule et retour arrière). */
   setCanalEtat(canalId: string, etat: Canal["etat"]): Promise<void>;
+  /**
+   * Embedded Signup : crée le canal WhatsApp d'un resto (toujours en « test »), ou renvoie celui qui existe déjà pour ce
+   * numéro (aucun doublon, aucun canal existant modifié).
+   */
+  ensureCanal(canal: Omit<Canal, "id">): Promise<{ canal: Canal; created: boolean }>;
   getOrCreateContact(canalId: string, waId: string, profileName?: string): Promise<ChannelContact>;
   getContact(contactId: string): Promise<ChannelContact | null>;
   saveContact(contact: ChannelContact): Promise<void>;

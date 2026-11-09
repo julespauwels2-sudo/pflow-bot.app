@@ -75,6 +75,13 @@ export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: 
     async listCanaux() {
       return clone(canalList);
     },
+    async ensureCanal(input) {
+      const existing = canalList.find((c) => c.plateforme === input.plateforme && c.accountId === input.accountId);
+      if (existing) return { canal: clone(existing), created: false };
+      const canal = { ...input, id: `canal-${canalList.length + 1}-${input.accountId}` };
+      canalList.push(canal);
+      return { canal: clone(canal), created: true };
+    },
     async setCanalEtat(canalId, etat) {
       const canal = canalList.find((c) => c.id === canalId);
       if (!canal) throw new Error("Canal introuvable");

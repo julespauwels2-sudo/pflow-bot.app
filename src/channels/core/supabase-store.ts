@@ -156,6 +156,34 @@ export function createSupabaseChannelStore(db: Db, newId: () => string = () => c
     async listCanaux() {
       return (await db.select("bot_canaux", "*")).map(rowToCanal);
     },
+    async ensureCanal(input) {
+      const found = (await db.select("bot_canaux", "*", eq("compte_id", input.accountId))).find((r) => (r.plateforme ?? "whatsapp") === input.plateforme);
+      if (found) return { canal: rowToCanal(found), created: false };
+      const id = crypto.randomUUID();
+      await db.upsert(
+        "bot_canaux",
+        [
+          {
+            id,
+            restaurant_id: input.restaurantId || null,
+            role: input.role ?? "resto",
+            plateforme: input.plateforme,
+            compte_id: input.accountId,
+            waba_id: input.wabaId ?? null,
+            numero_affiche: input.numeroAffiche ?? null,
+            mode_declenchement: input.triggerMode,
+            coexistence: input.coexistence,
+            pause_echo_heures: input.echoPauseHours,
+            pause_transfert_heures: input.handoffPauseHours,
+            session_minutes: input.sessionMinutes,
+            etat: "test",
+            test_numeros: input.testNumeros,
+          },
+        ],
+        "id",
+      );
+      return { canal: { ...input, id, etat: "test" }, created: true };
+    },
     async setCanalEtat(canalId, etat) {
       const [row] = await db.select("bot_canaux", "*", eq("id", canalId));
       if (!row) throw new Error("Canal introuvable");
