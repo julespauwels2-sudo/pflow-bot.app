@@ -985,3 +985,17 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
   qualité, statut, coexistence, apps abonnées, et SQL des canaux en test proposé pour les numéros sans canal.
 - PR séparées : vrais boutons WhatsApp dans la boîte de réception ; étape 3 en ≈ 20 s ; CRM : notification
   « commande prête » en bas de l'écran.
+
+
+## 9 novembre 2026 (nuit) — direction artistique de PFlow Bots (PR séparée)
+
+- Thème centralisé dans `src/app/globals.css` : couleurs, polices (Fredoka et Manrope, fichiers du site), arrondis,
+  ombres et dégradés de pflow.fr.
+- iPhone : boîte de réception, conversation, État, barre d'onglets et connexion aux couleurs PFlow (en-têtes navy,
+  rose pour les actions).
+- Nouvelle icône (P en verre liquide du site) et écran de lancement « PFlow Bots ».
+- Ordinateur : mêmes couleurs, disposition inchangée. Aucun changement de fonctionnement (428 tests).
+- Captures avant/après : `docs/captures/direction-artistique/`. Détail : `docs/etape-c/direction-artistique.md`.
+- À faire par Jules : supprimer puis réinstaller l'app sur l'iPhone (nouvelle icône, écran de lancement), puis
+  réactiver les notifications.
+

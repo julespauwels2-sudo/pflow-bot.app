@@ -13,7 +13,7 @@ import type { InboxCanal, InboxConversation } from "@/channels/core/inbox";
 import type { StoredMessage } from "@/channels/core/types";
 import { isUnread, lastAt, plainExtract, shortTime, sortConversations, type SeenState } from "@/lib/inbox-view";
 import { MessageContent } from "./message-content";
-import { useVisualViewport } from "./mobile";
+import { MobileHeader, useVisualViewport } from "./mobile";
 import { PushControls } from "./pwa";
 import { Notice } from "./ui";
 
@@ -54,7 +54,12 @@ export function MobileInboxList({
   const waiting = rows.filter((r) => r.conv.transfertOuvert).length;
   return (
     <div className="space-y-3" data-testid="inbox-mobile-list">
-      <h1 className="text-2xl font-semibold">Boîte de réception</h1>
+      <MobileHeader title="Boîte de réception">
+        <p className="mt-1 text-sm text-white/70">
+          {rows.length} conversation{rows.length > 1 ? "s" : ""}
+          {waiting > 0 ? "" : " · tout est à jour"}
+        </p>
+      </MobileHeader>
       <PushControls compact />
       {notice && (
         <Notice tone={notice.tone} onClose={onCloseNotice}>
@@ -62,7 +67,7 @@ export function MobileInboxList({
         </Notice>
       )}
       {waiting > 0 && (
-        <p className="rounded-2xl bg-pink/10 px-4 py-3 text-base font-semibold text-pink" data-testid="inbox-attente">
+        <p className="bg-brand shadow-bouton rounded-2xl px-4 py-3 text-base font-bold text-white" data-testid="inbox-attente">
           🔔 {waiting} conversation{waiting > 1 ? "s attendent" : " attend"} une réponse
         </p>
       )}
@@ -70,16 +75,16 @@ export function MobileInboxList({
       {rows.length === 0 ? (
         <p className="py-10 text-center text-base text-muted">Aucune conversation pour le moment.</p>
       ) : (
-        <ul className="-mx-4 divide-y divide-rule border-y border-rule bg-white">
+        <ul className="divide-y divide-rule overflow-hidden rounded-[var(--radius-card)] border border-rule bg-white shadow-card">
           {rows.map(({ canal, conv }) => {
             const name = who(canal, conv);
             const unread = isUnread(conv, seen);
             const pause = pauseLabel(conv);
             return (
               <li key={conv.contactId}>
-                <button type="button" onClick={() => onOpen(conv.contactId)} className="flex min-h-[4.5rem] w-full items-center gap-3 px-4 py-2.5 text-left active:bg-page" data-testid="inbox-row">
+                <button type="button" onClick={() => onOpen(conv.contactId)} className="flex min-h-[4.5rem] w-full items-center gap-3 px-3.5 py-3 text-left active:bg-pink/5" data-testid="inbox-row">
                   <span
-                    className={`grid size-12 shrink-0 place-items-center rounded-full text-base font-bold ${conv.transfertOuvert ? "bg-pink text-white" : "bg-navy/10 text-navy"}`}
+                    className={`grid size-12 shrink-0 place-items-center rounded-full font-title text-base font-semibold text-white ${conv.transfertOuvert ? "bg-brand ring-2 ring-pink/30 ring-offset-2" : "bg-avatar"}`}
                     aria-hidden
                   >
                     {initials(name)}
@@ -87,16 +92,16 @@ export function MobileInboxList({
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2">
                       <span className={`min-w-0 flex-1 truncate text-base ${unread ? "font-extrabold" : "font-semibold"}`}>{name}</span>
-                      <span className={`shrink-0 text-xs ${unread ? "font-bold text-wa" : "text-muted"}`}>{shortTime(lastAt(conv))}</span>
+                      <span className={`shrink-0 text-xs ${unread ? "font-bold text-pink-3" : "text-muted"}`}>{shortTime(lastAt(conv))}</span>
                     </span>
                     <span className="flex items-center gap-2">
                       <span className={`min-w-0 flex-1 truncate text-sm ${unread ? "font-semibold text-navy" : "text-muted"}`}>
                         {conv.dernierMessage ? `${conv.dernierMessage.sens === "entrant" ? "" : "↪ "}${plainExtract(conv.dernierMessage.texte)}` : "—"}
                       </span>
-                      {unread && <span className="size-2.5 shrink-0 rounded-full bg-wa" aria-label="non lu" />}
+                      {unread && <span className="bg-brand size-2.5 shrink-0 rounded-full" aria-label="non lu" />}
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-1.5">
-                      {conv.transfertOuvert && <span className="rounded-full bg-pink px-2.5 py-0.5 text-xs font-bold text-white">🔔 Attend l&apos;équipe</span>}
+                      {conv.transfertOuvert && <span className="bg-brand rounded-full px-2.5 py-0.5 text-xs font-bold text-white">🔔 Attend l&apos;équipe</span>}
                       {pause && !conv.transfertOuvert && <span className="rounded-full bg-navy/10 px-2 py-0.5 text-xs font-semibold">⏸ {pause}</span>}
                       <span className="truncate text-xs text-muted">
                         {canal.plateforme === "instagram" ? "📸" : "💬"} {canal.nomResto}
@@ -186,38 +191,38 @@ export function MobileConversation({
       role="dialog"
       aria-label={`Conversation avec ${name}`}
       data-testid="inbox-mobile-conversation"
-      className="fixed inset-x-0 top-0 z-40 flex flex-col bg-[#efeae2]"
+      className="bg-chat-motif fixed inset-x-0 top-0 z-40 flex flex-col"
       style={{ height: vv.height ? `${vv.height}px` : "100dvh", transform: `translateY(${vv.offsetTop}px)` }}
     >
-      <header className="shrink-0 border-b border-rule bg-white pt-[env(safe-area-inset-top)]">
+      <header className="bg-navy-grad shadow-bloc shrink-0 rounded-b-[var(--radius-card)] pt-[env(safe-area-inset-top)] text-white">
         <div className="flex items-center gap-1 px-1 py-1.5">
-          <button type="button" onClick={onBack} aria-label="Retour à la liste" className="grid size-11 shrink-0 place-items-center rounded-full active:bg-page">
+          <button type="button" onClick={onBack} aria-label="Retour à la liste" className="grid size-11 shrink-0 place-items-center rounded-full active:bg-white/10">
             <svg viewBox="0 0 24 24" className="size-6" aria-hidden>
               <path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
-          <span className={`grid size-10 shrink-0 place-items-center rounded-full text-sm font-bold ${conv.transfertOuvert ? "bg-pink text-white" : "bg-navy/10"}`} aria-hidden>
+          <span className={`grid size-10 shrink-0 place-items-center rounded-full font-title text-sm font-semibold text-white ${conv.transfertOuvert ? "bg-brand" : "bg-avatar"}`} aria-hidden>
             {initials(name)}
           </span>
           <span className="min-w-0 flex-1 pl-1">
-            <span className="block truncate text-base font-bold">{name}</span>
-            <span className="block truncate text-xs text-muted">
+            <span className="block truncate font-title text-lg leading-tight font-semibold">{name}</span>
+            <span className="block truncate text-xs text-white/65">
               {canal.nomResto} · {conv.fenetreOuverte ? "fenêtre de 24 h ouverte" : "fenêtre de 24 h fermée"}
             </span>
           </span>
         </div>
-        <div className="flex items-center gap-2 px-3 pb-2">
+        <div className="flex items-center gap-2 px-3 pb-3">
           {conv.pause ? (
-            <button type="button" onClick={() => void onRelease()} className="min-h-11 rounded-full bg-navy px-4 text-sm font-semibold text-white" data-testid="mobile-rendre">
+            <button type="button" onClick={() => void onRelease()} className="bg-brand shadow-bouton min-h-11 rounded-full px-4 text-sm font-bold text-white" data-testid="mobile-rendre">
               Rendre au bot
             </button>
           ) : (
-            <button type="button" onClick={() => void onTakeOver()} className="min-h-11 rounded-full border border-line bg-white px-4 text-sm font-semibold" data-testid="mobile-reprendre">
+            <button type="button" onClick={() => void onTakeOver()} className="min-h-11 rounded-full bg-white px-4 text-sm font-bold text-navy" data-testid="mobile-reprendre">
               Reprendre la main
             </button>
           )}
-          <span className="min-w-0 flex-1 text-xs leading-tight text-muted">
-            {conv.transfertOuvert && <span className="block font-bold text-pink">🔔 Attend l&apos;équipe</span>}
+          <span className="min-w-0 flex-1 text-xs leading-tight text-white/70">
+            {conv.transfertOuvert && <span className="block font-bold text-pink-2">🔔 Attend l&apos;équipe</span>}
             {pause ?? "Le bot répond"}
           </span>
         </div>
@@ -247,7 +252,7 @@ export function MobileConversation({
             <div key={m.id} className={`flex ${m.sens === "entrant" ? "justify-start" : "justify-end"}`}>
               <div
                 className={`max-w-[85%] overflow-hidden rounded-2xl px-3 py-1.5 text-base leading-snug break-words whitespace-pre-wrap shadow-sm ${
-                  m.sens === "entrant" ? "rounded-tl-sm bg-white" : m.auteur === "humain" || m.sens === "echo" ? "rounded-tr-sm bg-[#d9fdd3]" : "rounded-tr-sm bg-[#e7f0ff]"
+                  m.sens === "entrant" ? "rounded-tl-sm bg-white" : m.auteur === "humain" || m.sens === "echo" ? "rounded-tr-sm bg-bulle-humain" : "rounded-tr-sm bg-bulle-bot"
                 }`}
               >
                 {m.sens !== "entrant" && (
@@ -271,7 +276,7 @@ export function MobileConversation({
       </div>
 
       <form
-        className={`flex shrink-0 items-end gap-2 border-t border-rule bg-white px-2 pt-2 ${keyboard ? "pb-2" : "pb-[max(0.5rem,env(safe-area-inset-bottom))]"}`}
+        className={`flex shrink-0 items-end gap-2 rounded-t-[var(--radius-card)] bg-white px-2 pt-2 shadow-[0_-10px_30px_rgb(16_27_77/0.06)] ${keyboard ? "pb-2" : "pb-[max(0.5rem,env(safe-area-inset-bottom))]"}`}
         onSubmit={(e) => {
           e.preventDefault();
           void send();
@@ -286,14 +291,14 @@ export function MobileConversation({
               value={texte}
               onChange={(e) => setTexte(e.target.value)}
               placeholder={conv.pause ? "Message" : "Message (le bot se met en pause)"}
-              className="max-h-[132px] min-h-11 flex-1 resize-none rounded-3xl border border-line bg-page px-4 py-2.5 text-base leading-snug outline-none focus:border-navy/40"
+              className="max-h-[132px] min-h-11 flex-1 resize-none rounded-3xl border border-line bg-page px-4 py-2.5 text-base leading-snug outline-none focus:border-pink focus:ring-4 focus:ring-pink/15"
               data-testid="mobile-reponse"
             />
             <button
               type="submit"
               aria-label="Envoyer"
               disabled={!texte.trim() || busy}
-              className="grid size-11 shrink-0 place-items-center rounded-full bg-wa text-white disabled:opacity-40"
+              className="bg-brand shadow-bouton grid size-11 shrink-0 place-items-center rounded-full text-white disabled:opacity-40 disabled:shadow-none"
               data-testid="mobile-envoyer"
             >
               <svg viewBox="0 0 24 24" className="size-5" aria-hidden>

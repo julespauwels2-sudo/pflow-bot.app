@@ -11,6 +11,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { Logo } from "./logo";
 
 /** Même seuil que le préfixe « md: » de Tailwind. */
 export const MOBILE_QUERY = "(max-width: 767px)";
@@ -56,20 +57,16 @@ export function DesktopOnly({ children }: { children: ReactNode }) {
   return (
     <>
       <div className="md:hidden" data-testid="desktop-only">
-        <div className="flex min-h-dvh flex-col items-center justify-center gap-5 px-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-center">
-          <span className="grid size-14 place-items-center rounded-2xl bg-navy text-pink" aria-hidden>
-            <svg viewBox="0 0 64 64" className="size-9">
-              <path d="M18 22a8 8 0 0 1 8-8h14a8 8 0 0 1 8 8v12a8 8 0 0 1-8 8H30l-9 7v-7.5A8 8 0 0 1 18 34Z" fill="currentColor" />
-            </svg>
-          </span>
+        <div className="bg-navy-grad flex min-h-dvh flex-col items-center justify-center gap-6 px-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-center text-white">
+          <Logo tone="dark" size="lg" href={null} />
           <div>
             <p className="font-title text-xl font-semibold">Cette page s&apos;utilise sur ordinateur</p>
-            <p className="mt-1 text-base text-muted">Sur téléphone : la boîte de réception et l&apos;état du système.</p>
+            <p className="mt-1 text-base text-white/70">Sur téléphone : la boîte de réception et l&apos;état du système.</p>
           </div>
-          <Link href="/inbox" className="inline-flex min-h-11 items-center rounded-full bg-pink px-6 text-base font-semibold text-white">
+          <Link href="/inbox" className="bg-brand shadow-bouton inline-flex min-h-11 items-center rounded-full px-6 text-base font-bold text-white">
             Ouvrir la boîte de réception
           </Link>
-          <Link href="/etat" className="inline-flex min-h-11 items-center text-base font-semibold text-muted underline">
+          <Link href="/etat" className="inline-flex min-h-11 items-center text-base font-semibold text-white/75 underline">
             État du système
           </Link>
         </div>
@@ -94,6 +91,26 @@ const TABS = [
   },
 ];
 
+/**
+ * En-tête des écrans iPhone : bandeau navy aux couleurs du site (logo PFlow Bots, titre), qui passe sous la barre
+ * d'état (zones sûres). Téléphone seulement : sur ordinateur, rien ne change.
+ */
+export function MobileHeader({ title, action, children }: { title: string; action?: ReactNode; children?: ReactNode }) {
+  return (
+    <div
+      className="bg-navy-grad shadow-bloc relative -mx-4 -mt-[max(1rem,env(safe-area-inset-top))] mb-4 rounded-b-[var(--radius-sheet)] px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-5 text-white md:hidden"
+      data-testid="mobile-header"
+    >
+      <div className="flex min-h-11 items-center justify-between gap-3">
+        <Logo tone="dark" href={null} />
+        {action}
+      </div>
+      <h1 className="mt-3 font-title text-[1.75rem] leading-tight font-semibold">{title}</h1>
+      {children}
+    </div>
+  );
+}
+
 /** Barre d'onglets en bas de l'écran (téléphone seulement), au-dessus de la barre d'accueil de l'iPhone. */
 export function MobileTabBar() {
   const pathname = usePathname();
@@ -101,9 +118,9 @@ export function MobileTabBar() {
     <nav
       aria-label="Navigation"
       data-testid="mobile-tabs"
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-rule bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t border-rule bg-white/90 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgb(16_27_77/0.06)] backdrop-blur-xl md:hidden"
     >
-      <ul className="flex">
+      <ul className="flex px-2">
         {TABS.map((tab) => {
           const active = pathname === tab.href;
           return (
@@ -111,11 +128,13 @@ export function MobileTabBar() {
               <Link
                 href={tab.href}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs font-semibold ${active ? "text-pink" : "text-muted"}`}
+                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs font-bold ${active ? "text-pink-3" : "text-muted"}`}
               >
-                <svg viewBox="0 0 24 24" className="size-6" aria-hidden>
-                  {tab.icon}
-                </svg>
+                <span className={`grid h-8 w-14 place-items-center rounded-full transition ${active ? "bg-pink/12" : ""}`}>
+                  <svg viewBox="0 0 24 24" className="size-6" aria-hidden>
+                    {tab.icon}
+                  </svg>
+                </span>
                 {tab.label}
               </Link>
             </li>

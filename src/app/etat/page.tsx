@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { MobileHeader } from "@/components/mobile";
 import { PushControls } from "@/components/pwa";
 import { useAuth } from "@/components/auth-gate";
 import { Badge, Button, Card, Loading, Notice } from "@/components/ui";
@@ -63,7 +64,15 @@ export default function SystemStatusPage() {
 
   return (
     <AppShell mobile>
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <MobileHeader
+        title="État du système"
+        action={
+          <button type="button" onClick={() => setTick((t) => t + 1)} className="min-h-11 rounded-full bg-white/12 px-4 text-sm font-bold text-white ring-1 ring-white/25 active:bg-white/20">
+            Actualiser
+          </button>
+        }
+      />
+      <div className="hidden flex-wrap items-end justify-between gap-4 md:flex">
         <div>
           <h1 className="text-2xl font-semibold md:text-3xl">État du système</h1>
           <p className="mt-1 hidden max-w-2xl text-sm text-muted md:block">

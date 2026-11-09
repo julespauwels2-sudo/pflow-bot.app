@@ -8,15 +8,15 @@ function cx(...classes: (string | false | null | undefined)[]) {
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-pink text-white hover:bg-pink-2 shadow-[0_8px_20px_rgb(255_79_181/0.25)]",
-  secondary: "bg-white text-navy border border-line hover:border-navy/30",
+  primary: "bg-brand text-white shadow-bouton hover:brightness-105 active:translate-y-px",
+  secondary: "bg-white text-navy border border-line shadow-card hover:border-navy/25",
   ghost: "text-navy hover:bg-navy/5",
   danger: "bg-white text-coral border border-coral/40 hover:bg-coral/10",
 };
 
 // Téléphone (max-md) : 44 px de haut au moins, pour le doigt. Ordinateur : inchangé.
 const buttonBase =
-  "inline-flex max-md:min-h-11 items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue";
+  "inline-flex max-md:min-h-11 items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue";
 
 export function Button({ variant = "primary", className, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
   return <button type="button" className={cx(buttonBase, variants[variant], className)} {...props} />;
@@ -77,7 +77,7 @@ export function Field({ label, hint, error, children, className }: { label: stri
 }
 
 const inputBase =
-  "w-full rounded-xl border border-line bg-white px-3 py-2 text-sm text-navy placeholder:text-muted/60 focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue/20";
+  "w-full rounded-[var(--radius-field)] border border-line bg-white px-3 py-2 text-sm text-navy placeholder:text-muted/60 focus:border-pink focus:outline-none focus:ring-4 focus:ring-pink/15";
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cx(inputBase, className)} {...props} />;
