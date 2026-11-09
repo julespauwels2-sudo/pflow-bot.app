@@ -967,3 +967,21 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
   demande d'écrire (« Je n'ai pas bien compris votre vocal, pouvez-vous l'écrire ? »).
 - **Boîte de réception** : « 🎤 Message vocal (0:23) » et la transcription.
 - **Aucun fichier audio stocké.**
+
+
+## 9 novembre 2026 (soir) — PFlow Démo actif ; diagnostic, boutons, étape 3, notification du CRM
+
+- **PFlow Démo est passé en ACTIF** (bot UChat de ce numéro désactivé). Un testeur a fait tout le parcours (commande,
+  confirmation automatique, dashboard, étape 3, « Je veux le mien ») ; Jules a reçu la notification push.
+- **Premier message du testeur, avant l'actif** :
+  - les journaux de Vercel montrent **7 messages ignorés** entre 04:34:16 et 04:35:06 (UTC) : « canal en test, numéro
+    hors liste : rien enregistré » ;
+  - le canal est passé en actif à 04:37:33 ;
+  - à 04:39:23, un nouveau contact se crée, **numéro finissant par 3646**, hors de la liste de test.
+  - Les journaux n'ont pas le numéro (voulu) : c'est très probablement lui, mais non prouvé.
+- **Désormais**, un message ignoré « hors liste » laisse une trace avec **les 4 derniers chiffres seulement**
+  (page État ; ni le message, ni le numéro, ni l'identifiant du message ; 30 jours).
+- **Page État, « Diagnostic des comptes WhatsApp »** (lecture seule chez Meta) : comptes attribués au token, numéros,
+  qualité, statut, coexistence, apps abonnées, et SQL des canaux en test proposé pour les numéros sans canal.
+- PR séparées : vrais boutons WhatsApp dans la boîte de réception ; étape 3 en ≈ 20 s ; CRM : notification
+  « commande prête » en bas de l'écran.

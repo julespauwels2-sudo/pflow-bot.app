@@ -71,6 +71,16 @@ tout arrêter le 22 (partie 2).
 
 Envoie-moi le tableau rempli (les IDs ne sont pas des secrets) : je complète le SQL de la partie 4.
 
+**Plus simple depuis le 9 novembre** : les comptes des 3 restos sont attribués à `pflow-bots-serveur`. Page **État →
+« Diagnostic des comptes WhatsApp » → Lancer le diagnostic** (lecture seule chez Meta). Pour chaque compte :
+- nom, ID du compte de messagerie, numéros (affichage, `phone_number_id`, qualité, statut, coexistence) et apps
+  abonnées ;
+- pour chaque numéro sans canal, **le SQL du canal en test, déjà rempli** (resto trouvé par son nom, mode du bot,
+  compte de messagerie qui répond).
+
+Il reste à vérifier le resto et à mettre le WABA (ou `null`). Le moyen de paiement ne passe pas par l'API :
+WhatsApp Manager → compte de messagerie → Paramètres de paiement.
+
 ## 2. Le risque à l'arrêt d'UChat, et comment l'éviter
 
 ### Ce qui ne coupe PAS le numéro

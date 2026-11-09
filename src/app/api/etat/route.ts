@@ -23,6 +23,8 @@ export async function GET(request: Request) {
   /** Les dernières alertes au gérant (transferts) : notification push partie ou non, erreurs, encore ouvertes. */
   let alertes: { at: string; canal: string; source: string; prevenu: boolean; voie: string; push?: string; erreur?: string; ouverte: boolean }[] = [];
   /** Notifications push : clés présentes, appareils abonnés (tous comptes). */
+  /** Messages ignorés parce que le canal est en test et l'expéditeur hors de la liste : 4 derniers chiffres seulement. */
+  let horsListe: { at: string; fin: string }[] = [];
   const push = { configure: Boolean(pushConfigFromEnv((name) => process.env[name]?.trim() || "")), appareils: 0 };
   if (canaux.some((c) => c.configure)) {
     try {
@@ -56,13 +58,20 @@ export async function GET(request: Request) {
           ...(t.alerteErreur ? { erreur: maskId(t.alerteErreur) } : {}),
         }));
       push.appareils = (await rt.store.listPushSubscriptions().catch(() => [])).length;
+      horsListe = (await rt.store.recentEvents(200))
+        .filter((e) => e.key.includes("hors-liste:"))
+        .flatMap((e) => {
+          const fin = /…(\d{4})\)/.exec(e.error ?? "")?.[1];
+          return fin ? [{ at: e.at, fin }] : [];
+        })
+        .slice(0, 20);
     } catch (error) {
       erreurCanaux = error instanceof Error ? error.message : String(error);
     }
   }
 
   return NextResponse.json(
-    { cles: keyStatuses(), canaux, services: servicesStatus(), comptes, evenements, alertes, push, ...(erreurCanaux ? { erreurCanaux } : {}) },
+    { cles: keyStatuses(), canaux, services: servicesStatus(), comptes, evenements, alertes, push, horsListe, ...(erreurCanaux ? { erreurCanaux } : {}) },
     { headers: { "cache-control": "no-store" } },
   );
 }

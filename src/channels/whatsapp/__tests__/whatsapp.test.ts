@@ -207,12 +207,23 @@ describe("de bout en bout contre un faux serveur Meta", () => {
   it("canal en test : seuls les numéros de test reçoivent une réponse ; canal inconnu ignoré", async () => {
     received.length = 0;
     const { store, deps } = await setup({ etat: "test", testNumeros: ["590690000002"] });
-    const report = await processWebhookPayload(payload([text("bonjour")]), deps);
-    expect(report.skipped[0].reason).toBe("canal en test, numéro hors liste : rien enregistré");
+    const notif = payload([text("bonjour")]);
+    const report = await processWebhookPayload(notif, deps);
+    expect(report.skipped[0].reason).toBe(`canal en test, numéro hors liste (…${CLIENT_WA.slice(-4)}) : message non enregistré`);
     expect(sentMessages()).toEqual([]);
-    // Vrai client pendant la bascule : ni événement, ni contact, ni message (boîte de réception vide).
-    expect(store.events.size).toBe(0);
+    // Vrai client pendant la bascule : ni contact, ni message (boîte de réception vide). Seule trace : les 4 derniers
+    // chiffres, pour la page État ; ni le numéro, ni le texte, ni l'identifiant du message.
     expect(await store.listContacts("canal1")).toEqual([]);
+    const [trace] = await store.recentEvents(10);
+    expect(trace.error).toBe(`canal en test, numéro hors liste (…${CLIENT_WA.slice(-4)})`);
+    expect(trace.key).toMatch(/^hors-liste:[0-9a-f]{24}$/);
+    const stored = JSON.stringify([...store.events.values()]);
+    expect(stored).not.toContain(CLIENT_WA);
+    expect(stored).not.toContain("bonjour");
+    expect(stored).not.toContain("wamid.");
+    // Meta renvoie la même notification : une seule trace.
+    await processWebhookPayload(notif, deps);
+    expect(store.events.size).toBe(1);
     const other = await processWebhookPayload({ ...payload([text("bonjour")]), entry: [{ changes: [{ field: "messages", value: { metadata: { phone_number_id: "999" }, messages: [text("x")] } }] }] }, deps);
     expect(other.skipped[0].reason).toContain("numéro inconnu");
   });
