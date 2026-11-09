@@ -8,6 +8,8 @@
  *    Nouveau modèle de comptes : l'ID du « compte WhatsApp » peut être refusé (sous-code 2388339) ; c'est l'ID du
  *    compte de messagerie qui répond.
  * 3. Pour chaque numéro sans canal : la ligne SQL du canal en test, à vérifier puis à jouer à la main.
+ * Les comptes que le token ne sait pas lister (sans l'autorisation business_management) se saisissent à la main
+ * (IDs relevés dans Business Manager) : ils sont interrogés directement, comme les autres.
  */
 import type { GraphConfig } from "./graph";
 
@@ -45,7 +47,10 @@ function graphError(json: Json, status: number): string {
   return `${status}${e.code ? ` / code ${e.code}` : ""}${e.error_subcode ? ` / sous-code ${e.error_subcode}` : ""} : ${e.message ?? "erreur"}`;
 }
 
-export async function diagnoseWhatsAppAccounts(config: GraphConfig, known: { accountIds: string[]; canaux: { id: string; etat: string; compteId: string }[] }): Promise<DiagnosticResult> {
+export async function diagnoseWhatsAppAccounts(
+  config: GraphConfig,
+  known: { accountIds: string[]; canaux: { id: string; etat: string; compteId: string }[]; saisis?: string[] },
+): Promise<DiagnosticResult> {
   const doFetch = config.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
   const base = `${config.base.replace(/\/$/, "")}/${config.version}`;
   const get = async (path: string): Promise<{ ok: true; json: Json } | { ok: false; error: string }> => {
@@ -95,8 +100,9 @@ export async function diagnoseWhatsAppAccounts(config: GraphConfig, known: { acc
     }
   }
 
-  // 3. Les comptes déjà connus des canaux.
+  // 3. Les comptes déjà connus des canaux, et ceux saisis à la main.
   for (const id of known.accountIds) add(id, "canal existant");
+  for (const id of known.saisis ?? []) add(id, "saisi à la main");
 
   const canalByPhone = new Map(known.canaux.map((c) => [c.compteId, { id: c.id, etat: c.etat }]));
   const comptes: DiagnosticAccount[] = [];
@@ -181,8 +187,35 @@ export function canalInsertSql(input: { restaurant: { id: string; nom: string } 
     "  (restaurant_id, role, plateforme, compte_id, waba_id, messaging_account_id, numero_affiche,",
     "   mode_declenchement, coexistence, etat, test_numeros)",
     "values",
-    `  (${restaurant ? sqlText(restaurant.id) : "'<RESTAURANT_ID>'"}, 'resto', 'whatsapp', ${sqlText(numero.id)}, '<WABA_ID>', ${sqlText(compte.id)},`,
+    `  (${restaurant ? sqlText(restaurant.id) : "'<RESTAURANT_ID>'"}, 'resto', 'whatsapp', ${sqlText(numero.id)}, null, ${sqlText(compte.id)},`,
     `   ${sqlText(label)}, ${sqlText(input.mode)}, ${numero.coexistence === undefined ? "<true|false>" : String(numero.coexistence)}, 'test', array[${sqlText(input.testNumero)}])`,
-    "returning id, restaurant_id, numero_affiche, etat;",
+    "returning id, restaurant_id, numero_affiche, etat;  -- waba_id : laissé vide (le compte de messagerie suffit pour envoyer)",
   ].join("\n");
+}
+
+/**
+ * IDs saisis dans le diagnostic : une ligne (ou une virgule) par compte, « ID » ou « ID nom du resto ». Seuls des
+ * chiffres sont gardés comme ID (10 au plus) ; le nom aide à proposer le bon resto du CRM.
+ */
+export function parseSaisis(texte: string): { id: string; resto?: string }[] {
+  return texte
+    .split(/[\n,;]+/)
+    .map((l) => l.trim())
+    .map((l) => /^(\d{5,25})(?:\s*[:=-]?\s*(.+))?$/.exec(l))
+    .filter((m): m is RegExpExecArray => Boolean(m))
+    .slice(0, 10)
+    .map((m) => ({ id: m[1], ...(m[2]?.trim() ? { resto: m[2].trim() } : {}) }));
+}
+
+/** Le resto du CRM désigné par un nom saisi (« ag pizza » → « ag_pizzaa ») : un seul candidat, sinon rien. */
+export function restoParNom(nom: string, restos: { id: string; nom: string }[]): { id: string; nom: string } | null {
+  const n = normalize(nom);
+  if (n.length < 3) return null;
+  const exact = restos.filter((r) => normalize(r.nom) === n);
+  if (exact.length === 1) return exact[0];
+  const proches = restos.filter((r) => {
+    const x = normalize(r.nom);
+    return x.length >= 3 && (x.includes(n) || n.includes(x) || x.replace(/ /g, "").startsWith(n.replace(/ /g, "")));
+  });
+  return proches.length === 1 ? proches[0] : null;
 }
