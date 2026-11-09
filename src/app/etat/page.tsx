@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { PushControls } from "@/components/pwa";
+import { useAuth } from "@/components/auth-gate";
 import { Badge, Button, Card, Loading, Notice } from "@/components/ui";
 import { errorText, useLoad } from "@/data/browser";
 import type { AiCallLog } from "@/data/types";
@@ -60,11 +61,11 @@ export default function SystemStatusPage() {
   }, [tick]);
 
   return (
-    <AppShell>
+    <AppShell mobile>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold">État du système</h1>
-          <p className="mt-1 max-w-2xl text-sm text-muted">
+          <h1 className="text-2xl font-semibold md:text-3xl">État du système</h1>
+          <p className="mt-1 hidden max-w-2xl text-sm text-muted md:block">
             Réservé aux administrateurs. Les clés sont seulement détectées : leur valeur n&apos;est jamais lue ni affichée.
           </p>
         </div>
@@ -96,6 +97,7 @@ export default function SystemStatusPage() {
         {server.status === "ready" && <ServerCards data={server.data} />}
 
 
+        <MobileAccountCard />
         <Card title="Derniers appels IA" className="lg:col-span-2">
           {state.status === "ready" && <AiCalls calls={state.data.appels} empty="Aucun appel IA pour l'instant." />}
         </Card>
@@ -118,10 +120,10 @@ function ServerCards({ data }: { data: SystemStatus }) {
             const comptes = data.comptes.filter((x) => x.plateforme === c.plateforme);
             return (
               <li key={c.plateforme}>
-                <span className="flex items-center gap-2">
+                <span className="flex flex-wrap items-center gap-2">
                   <strong>Webhook {NAMES[c.plateforme]}</strong>
                   {c.configure ? <Badge tone="success">actif</Badge> : <Badge>inactif</Badge>}
-                  <code className="text-xs text-muted">{c.webhook}</code>
+                  <code className="min-w-0 text-xs break-all text-muted">{c.webhook}</code>
                 </span>
                 {!c.configure && <span className="block text-xs text-muted">Manque : {c.missing.join(", ")}</span>}
                 {c.configure && (
@@ -156,9 +158,10 @@ function ServerCards({ data }: { data: SystemStatus }) {
       {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && <WhatsAppAccessCard />}
       {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && data.comptes.some((c) => c.plateforme === "whatsapp" && c.etat === "test") && <OrderEventTestCard canaux={data.comptes.filter((c) => c.plateforme === "whatsapp" && c.etat === "test" && c.role === "resto" && c.testNumeros > 0)} />}
 
-      <Card title="Notifications push (iPhone, ordinateur)" className="lg:col-span-2">
+      {/* Sur téléphone : juste après le bandeau d'alerte (notification de test, appareils). */}
+      <Card title="Notifications push (iPhone, ordinateur)" className="order-first md:order-none lg:col-span-2">
         <p className="mb-2 text-xs text-muted">
-          Chaque alerte part aussi en notification sur les appareils abonnés ; toucher la notification ouvre la conversation. Sur iPhone : iOS 16.4 ou
+          Les alertes partent en notification sur les appareils abonnés (seule voie) ; toucher la notification ouvre la conversation. Sur iPhone : iOS 16.4 ou
           plus, depuis l&apos;app ajoutée à l&apos;écran d&apos;accueil.
         </p>
         <PushControls />
@@ -170,8 +173,8 @@ function ServerCards({ data }: { data: SystemStatus }) {
         <ul className="grid gap-x-8 gap-y-1 text-sm md:grid-cols-2" data-testid="etat-cles">
           {data.cles.map((k) => (
             <li key={k.name} className="flex items-center justify-between gap-2">
-              <span>
-                <code className="text-xs">{k.name}</code> <span className="text-muted">· {k.role}</span>
+              <span className="min-w-0">
+                <code className="text-xs break-all">{k.name}</code> <span className="text-muted">· {k.role}</span>
               </span>
               {k.present ? <Badge tone="success">présente</Badge> : <Badge>absente</Badge>}
             </li>
@@ -187,7 +190,7 @@ function ServerCards({ data }: { data: SystemStatus }) {
               <li key={e.source + e.cle + e.at} className="flex flex-wrap gap-2 py-1">
                 <span className="text-muted">{time(e.at)}</span>
                 <Badge>{e.source}</Badge>
-                <code className="text-xs">{e.cle}</code>
+                <code className="min-w-0 text-xs break-all">{e.cle}</code>
                 {e.erreur && <span className="text-coral">{e.erreur}</span>}
               </li>
             ))}
@@ -221,7 +224,7 @@ function AlertesBanner({ data }: { data: SystemStatus }) {
   const lignes: string[] = [];
   if (nonRecues.length) {
     lignes.push(
-      `${nonRecues.length} alerte${nonRecues.length > 1 ? "s" : ""} non reçue${nonRecues.length > 1 ? "s" : ""} parmi les ${alertes.length} dernières` +
+      `${nonRecues.length} alerte${nonRecues.length > 1 ? "s" : ""} non reçue${nonRecues.length > 1 ? "s" : ""}${alertes.length > 1 ? ` parmi les ${alertes.length} dernières` : ""}` +
         (ouvertes ? ` : ${ouvertes} client${ouvertes > 1 ? "s attendent" : " attend"} peut-être encore une réponse.` : "."),
     );
   }
@@ -236,7 +239,7 @@ function AlertesBanner({ data }: { data: SystemStatus }) {
           <li key={l}>{l}</li>
         ))}
       </ul>
-      <a href="/inbox" className="mt-2 inline-block text-sm font-bold underline">
+      <a href="/inbox" className="mt-2 inline-flex items-center text-sm font-bold underline max-md:min-h-11">
         Ouvrir la boîte de réception (conversations « 🔔 Attend l&apos;équipe »)
       </a>
     </div>
@@ -554,6 +557,20 @@ function CanauxCard({ comptes }: { comptes: SystemStatus["comptes"] }) {
         </div>
       )}
       <p className="mt-2 text-xs text-muted">Un numéro de test Meta (+1 555…) ne passe jamais en actif. Guide de bascule : docs/etape-c/guide-c6-bascule.md.</p>
+    </Card>
+  );
+}
+
+/** Téléphone : le compte connecté et la déconnexion (l'en-tête de l'ordinateur n'est pas affiché). */
+function MobileAccountCard() {
+  const { email, signOut } = useAuth();
+  if (!email) return null;
+  return (
+    <Card title="Compte" className="md:hidden">
+      <p className="text-sm break-all text-muted">{email}</p>
+      <Button variant="secondary" className="mt-3 w-full" onClick={() => void signOut()}>
+        Déconnexion
+      </Button>
     </Card>
   );
 }

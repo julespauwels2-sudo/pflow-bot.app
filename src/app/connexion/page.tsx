@@ -16,7 +16,9 @@ export default function LoginPage() {
 
 /** Seules les pages internes sont acceptées comme destination après connexion. */
 function safeNext(value: string | null): string {
-  return value && value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/\\") && !value.startsWith("/connexion") ? value : "/clients";
+  if (value && value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/\\") && !value.startsWith("/connexion")) return value;
+  // Sur téléphone, la boîte de réception (les autres pages s'utilisent sur ordinateur).
+  return typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches ? "/inbox" : "/clients";
 }
 
 function LoginForm() {

@@ -37,6 +37,15 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - **Retrait de Smart Link = toute dernière étape**, seulement **après l'arrêt complet d'UChat** (plus aucun
   numéro ni bot sur UChat), et après avoir vérifié qu'aucun compte de messagerie n'est payé par sa ligne de
   crédit. Puis renouveler `PONT_CLE` (ci-dessus).
+- **Calendrier** (9 novembre 2026) : bascule des 3 clients (Cookies An Nou, Mexico, ag_pizzaa) du **19 au 21
+  novembre**, résiliation d'UChat avant le renouvellement du **22 novembre**. Runbook :
+  `docs/etape-c/migration-3-clients.md`.
+- **Instagram retiré des prérequis de l'arrêt d'UChat** (décision de Jules, 9 novembre 2026) : aucun client ne
+  l'utilise. Il attend la validation de Meta et se fera plus tard, sans lien avec la sortie d'UChat.
+- **Embedded Signup v4 + statut Tech Provider : après le 22 novembre** (décision de Jules, 9 novembre 2026).
+  Seul moyen de mettre le numéro d'un nouveau resto sur l'API en lui laissant son appli (coexistence). Démarches
+  Meta (vérification de l'entreprise, examen de l'app, Tech Provider) puis ≈ 4 à 5 jours de développement.
+  État des lieux : `docs/etape-c/nouveau-client.md`.
 
 ### Démos sur le numéro PFlow (fait, actif après la migration C)
 - Le futur webhook PFlow Order (événements de commande) ne doit **jamais** viser le numéro PFlow ni une
