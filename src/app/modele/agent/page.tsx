@@ -25,7 +25,7 @@ export default function AgentPage() {
 
   const breadcrumb = (
     <>
-      <Link href="/modele" className="hover:text-navy">
+      <Link href="/modele" className="hover:text-ink">
         Modèle maître
       </Link>{" "}
       / Agent IA
@@ -118,7 +118,7 @@ function AgentForm({
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold">Agent IA</h1>
+          <h1 className="text-5xl">Agent <span className="text-rose">IA</span></h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">
             La consigne, les réglages et les fonctions de l&apos;IA, communs à tous les bots liés au modèle. Ce qui est propre à chaque resto
             (horaires, carte, FAQ…) vient de sa fiche d&apos;infos.
@@ -152,9 +152,9 @@ function AgentForm({
         </Notice>
       )}
       {issues.length > 0 && (
-        <ul className="space-y-1 rounded-2xl border border-line bg-white p-4 text-sm" data-testid="agent-issues">
+        <ul className="space-y-1 rounded-2xl border border-line carte p-4 text-sm" data-testid="agent-issues">
           {issues.map((i) => (
-            <li key={i.message} className={i.level === "error" ? "font-semibold text-coral" : "text-muted"}>
+            <li key={i.message} className={i.level === "error" ? "font-semibold text-alerte" : "text-muted"}>
               {i.level === "error" ? "✕" : "⚠"} {i.message}
             </li>
           ))}
@@ -278,7 +278,7 @@ function AgentForm({
               <li>
                 <details>
                   <summary className="cursor-pointer font-semibold">Règles PFlow</summary>
-                  <pre className="mt-2 max-h-80 overflow-auto rounded-xl bg-page p-2 text-[11px] whitespace-pre-wrap">{PFLOW_RULES}</pre>
+                  <pre className="mt-2 max-h-80 overflow-auto rounded-xl bg-ink/5 p-2 text-[11px] whitespace-pre-wrap">{PFLOW_RULES}</pre>
                 </details>
               </li>
               <li>

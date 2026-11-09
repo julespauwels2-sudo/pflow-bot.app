@@ -30,6 +30,16 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - Avant de créer un script : vérifier `main` de Pflow-Crm, `repo/sql/NUMEROTATION.md` et les branches ouvertes ;
   ajouter la ligne du script dans ce fichier, dans la même PR (PR n° 78 de Pflow-Crm pour le fichier).
 
+### Charte graphique de PFlow Bots (décision de Jules, 9 novembre 2026)
+- **La charte PFlow est la référence pour toute nouvelle page de PFlow Bots** (PR n° 20, validée par Jules) :
+  - fonds en **aplat** nuit `#0A1236`, bleu `#2AABFF`, rose `#FF4FB5` ; aucun dégradé, halo ni flou ;
+  - titres en **Anton majuscules** (un seul segment en rose), texte en **Plus Jakarta Sans** ;
+  - **cartes blanches** à texte nuit sur le fond nuit, ombres plates `rgba(0,0,0,.28)` ;
+  - boutons en **pill rose** à texte nuit ; badges en aplat (reflet, rose, bleu) ;
+  - petit texte d'accent sur blanc : **`#C8157F`** (rose foncé) et **`#0067B8`** (bleu foncé), jamais le rose vif.
+- Une nouvelle page n'utilise que les jetons et composants existants (`src/app/globals.css`, `src/components/ui.tsx`) :
+  aucune couleur, police ou ombre écrite en dur. Détail : `docs/etape-c/direction-artistique.md`.
+
 ### Sortie d'UChat (décision de Jules, 8 novembre 2026)
 - Bascule numéro par numéro : **pause du bot UChat** pour le contact de test pendant les essais, puis
   **désactivation du bot UChat** du numéro à la bascule. Le partenaire **Smart Link** (prestataire d'UChat,
@@ -66,6 +76,8 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 
 - ✅ **Direction artistique** (PR du 9 novembre) : thème centralisé (`src/app/globals.css`), écrans iPhone, icône et
   écran de lancement « PFlow Bots ». Détail : `docs/etape-c/direction-artistique.md`.
+- ✅ **Charte PFlow sur toutes les pages** (PR n° 20) : aplats, Anton et Plus Jakarta Sans, cartes blanches, pills
+  roses. Référence pour toute nouvelle page (voir « Charte graphique de PFlow Bots » plus haut).
 
 ### Étape B
 - **Options payantes** (ex. relance panier abandonné) : lues dans le CRM (modules du resto). **Les

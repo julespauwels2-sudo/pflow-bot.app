@@ -151,12 +151,12 @@ export default function ConnecterPage() {
 
   const termine = infos?.etat === "terminee";
   return (
-    <div className="bg-navy-grad min-h-dvh">
+    <div className="min-h-dvh bg-nuit">
       <div className="mx-auto flex min-h-dvh max-w-xl flex-col gap-6 px-4 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
         <div className="flex flex-col items-center gap-2 text-center text-white">
           <Logo tone="dark" size="lg" href={null} />
-          <h1 className="mt-2 font-title text-2xl font-semibold">Connecter votre WhatsApp</h1>
-          {infos && <p className="text-white/75">{infos.nomResto}</p>}
+          <h1 className="mt-2 text-4xl">Connecter votre <span className="text-rose">WhatsApp</span></h1>
+          {infos && <p className="font-semibold text-white/75">{infos.nomResto}</p>}
         </div>
 
         {!infos && !erreur && <Loading />}
@@ -165,7 +165,7 @@ export default function ConnecterPage() {
         {infos && infos.etat === "expiree" && <Notice tone="error">Ce lien a expiré. Demandez un nouveau lien à PFlow.</Notice>}
 
         {infos && !termine && infos.etat !== "expiree" && (
-          <Card title="Avant de commencer (10 minutes)" className="shadow-bloc rounded-[var(--radius-sheet)]">
+          <Card title="Avant de commencer (10 minutes)" className="rounded-[var(--radius-sheet)]">
             <ul className="list-disc space-y-1.5 pl-5 text-sm">
               <li>
                 Le téléphone du numéro du restaurant, avec l&apos;<strong>appli WhatsApp Business</strong> à jour, utilisée sur ce numéro depuis au moins
@@ -200,7 +200,7 @@ export default function ConnecterPage() {
         )}
 
         {infos && infos.etapes.length > 0 && (
-          <Card title={termine ? "C'est connecté ✅" : "Où en est la connexion"} className="shadow-bloc rounded-[var(--radius-sheet)]">
+          <Card title={termine ? "C'est connecté ✅" : "Où en est la connexion"} className="rounded-[var(--radius-sheet)]">
             {termine && infos.numeroAffiche && (
               <p className="mb-3 text-sm">
                 Numéro : <strong>{infos.numeroAffiche}</strong>. Votre bot est en <strong>test</strong> : PFlow le vérifie avec vous avant de
@@ -221,13 +221,13 @@ export default function ConnecterPage() {
         )}
 
         {termine && (
-          <Card title="Dernière étape : votre carte chez Meta" className="shadow-bloc rounded-[var(--radius-sheet)]">
+          <Card title="Dernière étape : votre carte chez Meta" className="rounded-[var(--radius-sheet)]">
             <ol className="list-decimal space-y-1.5 pl-5 text-sm">
               <li>Ouvrez WhatsApp Manager (bouton ci-dessous), avec le même compte Facebook.</li>
               <li>Paramètres → Moyens de paiement → Ajouter une carte.</li>
               <li>C&apos;est tout. Meta prélève seulement les messages envoyés par le bot (les messages de vos clients sont gratuits).</li>
             </ol>
-            <a href={WHATSAPP_MANAGER} target="_blank" rel="noreferrer" className="bg-brand shadow-bouton mt-4 flex min-h-11 items-center justify-center rounded-full px-5 text-sm font-bold text-white">
+            <a href={WHATSAPP_MANAGER} target="_blank" rel="noreferrer" className="bg-brand shadow-bouton mt-4 flex min-h-11 uppercase tracking-[0.08em] items-center justify-center rounded-full px-5 text-sm font-extrabold text-nuit">
               Ouvrir WhatsApp Manager
             </a>
             <p className="mt-3 text-xs text-muted">Pensez à ouvrir l&apos;appli WhatsApp Business au moins une fois toutes les 2 semaines : sinon Meta coupe le bot.</p>

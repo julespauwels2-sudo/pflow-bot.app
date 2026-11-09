@@ -57,13 +57,15 @@ export function DesktopOnly({ children }: { children: ReactNode }) {
   return (
     <>
       <div className="md:hidden" data-testid="desktop-only">
-        <div className="bg-navy-grad flex min-h-dvh flex-col items-center justify-center gap-6 px-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-center text-white">
+        <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-nuit px-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-center text-white">
           <Logo tone="dark" size="lg" href={null} />
           <div>
-            <p className="font-title text-xl font-semibold">Cette page s&apos;utilise sur ordinateur</p>
-            <p className="mt-1 text-base text-white/70">Sur téléphone : la boîte de réception et l&apos;état du système.</p>
+            <p className="font-title text-4xl leading-none uppercase">
+              Cette page s&apos;utilise <span className="text-rose">sur ordinateur</span>
+            </p>
+            <p className="mt-3 text-base font-semibold text-white/75">Sur téléphone : la boîte de réception et l&apos;état du système.</p>
           </div>
-          <Link href="/inbox" className="bg-brand shadow-bouton inline-flex min-h-11 items-center rounded-full px-6 text-base font-bold text-white">
+          <Link href="/inbox" className="inline-flex min-h-11 items-center rounded-full bg-pink px-6 text-sm font-extrabold tracking-[0.08em] text-nuit uppercase shadow-bouton">
             Ouvrir la boîte de réception
           </Link>
           <Link href="/etat" className="inline-flex min-h-11 items-center text-base font-semibold text-white/75 underline">
@@ -92,20 +94,30 @@ const TABS = [
 ];
 
 /**
- * En-tête des écrans iPhone : bandeau navy aux couleurs du site (logo PFlow Bots, titre), qui passe sous la barre
+ * En-tête des écrans iPhone : aplat nuit de la charte (P bulle et pill PFLOW BOTS, titre en Anton), qui passe sous la barre
  * d'état (zones sûres). Téléphone seulement : sur ordinateur, rien ne change.
  */
 export function MobileHeader({ title, action, children }: { title: string; action?: ReactNode; children?: ReactNode }) {
   return (
     <div
-      className="bg-navy-grad shadow-bloc relative -mx-4 -mt-[max(1rem,env(safe-area-inset-top))] mb-4 rounded-b-[var(--radius-sheet)] px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-5 text-white md:hidden"
+      className="relative -mx-4 -mt-[max(1rem,env(safe-area-inset-top))] mb-4 bg-nuit px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-5 text-white md:hidden"
       data-testid="mobile-header"
     >
       <div className="flex min-h-11 items-center justify-between gap-3">
         <Logo tone="dark" href={null} />
-        {action}
+        {action ?? <div className="grille-points h-8 w-16" aria-hidden />}
       </div>
-      <h1 className="mt-3 font-title text-[1.75rem] leading-tight font-semibold">{title}</h1>
+      <h1 className="mt-4 text-[2.5rem] leading-none">
+        {/* Charte : un seul segment en rose, ici le dernier mot du titre. */}
+        {title.includes(" ") ? (
+          <>
+            {title.slice(0, title.lastIndexOf(" ") + 1)}
+            <span className="text-rose">{title.slice(title.lastIndexOf(" ") + 1)}</span>
+          </>
+        ) : (
+          title
+        )}
+      </h1>
       {children}
     </div>
   );
@@ -118,7 +130,7 @@ export function MobileTabBar() {
     <nav
       aria-label="Navigation"
       data-testid="mobile-tabs"
-      className="fixed inset-x-0 bottom-0 z-30 border-t border-rule bg-white/90 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgb(16_27_77/0.06)] backdrop-blur-xl md:hidden"
+      className="fixed inset-x-0 bottom-0 z-30 border-t-2 border-ink/15 bg-fond pb-[env(safe-area-inset-bottom)] md:hidden"
     >
       <ul className="flex px-2">
         {TABS.map((tab) => {
@@ -128,9 +140,9 @@ export function MobileTabBar() {
               <Link
                 href={tab.href}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs font-bold ${active ? "text-pink-3" : "text-muted"}`}
+                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs font-bold ${active ? "text-rose" : "text-muted"}`}
               >
-                <span className={`grid h-8 w-14 place-items-center rounded-full transition ${active ? "bg-pink/12" : ""}`}>
+                <span className={`grid h-8 w-14 place-items-center rounded-full transition ${active ? "bg-pink text-nuit" : ""}`}>
                   <svg viewBox="0 0 24 24" className="size-6" aria-hidden>
                     {tab.icon}
                   </svg>

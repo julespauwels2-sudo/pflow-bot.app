@@ -52,13 +52,16 @@ function LoginForm() {
   }
 
   return (
-    <div className="bg-navy-grad min-h-dvh">
+    <div className="min-h-dvh bg-nuit">
       <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-7 px-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         <div className="flex flex-col items-center gap-3 text-center">
           <Logo tone="dark" size="lg" href={null} />
-          <p className="text-sm text-white/70">Boîte de réception et alertes des chatbots PFlow</p>
+          <p className="font-title text-4xl leading-none text-white uppercase">
+            Vos bots, <span className="text-rose">partout.</span>
+          </p>
+          <p className="text-sm font-semibold text-white/75">Boîte de réception et alertes des chatbots PFlow</p>
         </div>
-        <Card title="Connexion" description="Avec ton compte PFlow (le même que pour le CRM)." className="shadow-bloc rounded-[var(--radius-sheet)]">
+        <Card title="Connexion" description="Avec ton compte PFlow (le même que pour le CRM)." className="rounded-[var(--radius-sheet)]">
         {!isSupabaseConfigured ? (
           <Notice tone="info">Supabase n&apos;est pas configuré : l&apos;app fonctionne avec les données de ce navigateur.</Notice>
         ) : (

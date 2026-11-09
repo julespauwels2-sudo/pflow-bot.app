@@ -151,7 +151,7 @@ export function ConnexionsWhatsAppCard() {
               placeholder="Client test hors CRM (ex. Cedyan Energy)"
               value={nomTest}
               onChange={(e) => setNomTest(e.target.value)}
-              className="w-full max-w-xs rounded-[var(--radius-field)] border border-line bg-white px-3 py-2 text-sm focus:border-pink focus:ring-4 focus:ring-pink/15 focus:outline-none"
+              className="w-full max-w-xs rounded-[var(--radius-field)] border-2 border-nuit/15 bg-white px-3 py-2 text-sm text-nuit focus:border-blue focus:ring-4 focus:ring-blue/25 focus:outline-none"
               data-testid="connexion-test-nom"
             />
             <Button variant="secondary" onClick={() => void generer(true)} disabled={nomTest.trim().length < 2 || busy || data.tableAbsente} data-testid="connexion-test">
@@ -168,7 +168,7 @@ export function ConnexionsWhatsAppCard() {
               {lien.url}
             </code>
             <br />
-            <button type="button" className="mt-1 text-sm font-semibold text-pink-3 underline" onClick={() => void navigator.clipboard?.writeText(lien.url)}>
+            <button type="button" className="mt-1 text-sm font-semibold text-rose underline" onClick={() => void navigator.clipboard?.writeText(lien.url)}>
               Copier le lien
             </button>
           </Notice>
@@ -188,9 +188,9 @@ export function ConnexionsWhatsAppCard() {
                     {c.termineLe ? ` · terminé le ${date(c.termineLe)}` : ` · expire le ${date(c.expireLe)}`}
                   </span>
                 </div>
-                {c.erreur && <p className="text-xs text-coral">{c.erreur}</p>}
+                {c.erreur && <p className="text-xs text-alerte">{c.erreur}</p>}
                 {c.etat === "terminee" && (
-                  <button type="button" className="text-xs font-semibold text-muted underline hover:text-coral" disabled={busy} onClick={() => void debrancher(c)}>
+                  <button type="button" className="text-xs font-semibold text-muted underline hover:text-alerte" disabled={busy} onClick={() => void debrancher(c)}>
                     Débrancher ce numéro
                   </button>
                 )}
@@ -314,21 +314,21 @@ export function ModelesLivraisonCard() {
                 </Button>
               )}
             </div>
-            {c.error && <p className="mt-1 text-xs text-coral">{c.error}</p>}
+            {c.error && <p className="mt-1 text-xs text-alerte">{c.error}</p>}
             {c.etat && (
               <ul className="mt-2 grid gap-1 sm:grid-cols-2">
                 {c.etat.map((t) => (
                   <li key={t.name} className="flex flex-wrap items-center gap-2">
                     <code className="text-xs">{t.name}</code>
                     {t.status ? <Badge tone={STATUTS[t.status]?.ton ?? "neutral"}>{STATUTS[t.status]?.texte ?? t.status}</Badge> : <Badge tone="neutral">Absent</Badge>}
-                    {t.motif && <span className="text-xs text-coral">{t.motif}</span>}
+                    {t.motif && <span className="text-xs text-alerte">{t.motif}</span>}
                   </li>
                 ))}
               </ul>
             )}
-            {c.crees && c.crees.length > 0 && <p className="mt-1 text-xs text-green-700">{c.crees.length} créé(s) et soumis à Meta (réponse en quelques heures, parfois 1 à 2 jours).</p>}
+            {c.crees && c.crees.length > 0 && <p className="mt-1 text-xs text-ok">{c.crees.length} créé(s) et soumis à Meta (réponse en quelques heures, parfois 1 à 2 jours).</p>}
             {c.echecs?.map((e) => (
-              <p key={e.name} className="mt-1 text-xs text-coral">
+              <p key={e.name} className="mt-1 text-xs text-alerte">
                 {e.name} : {e.erreur}
               </p>
             ))}

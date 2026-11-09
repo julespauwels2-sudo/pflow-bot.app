@@ -83,7 +83,7 @@ export default function ClientsPage() {
     <AppShell>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold">Clients</h1>
+          <h1 className="text-5xl">Vos <span className="text-rose">clients</span></h1>
           <p className="mt-1 text-sm text-muted">Chaque resto a son lien de commande, son fuseau horaire, sa fiche d&apos;infos et ses flux.</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -182,9 +182,9 @@ export default function ClientsPage() {
                   aria-selected={tab === id}
                   data-testid={`onglet-${id}`}
                   onClick={() => chooseTab(id)}
-                  className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold ${tab === id ? "border-pink text-navy" : "border-transparent text-muted hover:text-navy"}`}
+                  className={`-mb-px border-b-2 px-4 py-2 text-sm font-semibold ${tab === id ? "border-pink text-ink" : "border-transparent text-muted hover:text-ink"}`}
                 >
-                  {label} <span className="ml-1 rounded-full bg-navy/5 px-2 py-0.5 text-xs">{counts[id]}</span>
+                  {label} <span className="ml-1 rounded-full bg-ink/5 px-2 py-0.5 text-xs">{counts[id]}</span>
                 </button>
               ))}
             </div>
@@ -198,7 +198,7 @@ export default function ClientsPage() {
                 <li key={client.id}>
                   <Link
                     href={`/clients/${client.id}`}
-                    className="block h-full rounded-[var(--radius-card)] border border-rule bg-white p-5 shadow-card transition hover:-translate-y-0.5 hover:shadow-pop"
+                    className="block h-full rounded-[var(--radius-card)] border border-ink/10 carte p-5 shadow-card transition hover:-translate-y-0.5 hover:shadow-pop"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <h2 className="text-lg font-semibold">{client.nomResto}</h2>
@@ -210,8 +210,8 @@ export default function ClientsPage() {
                         {client.template && <Badge tone="info">Bot lié au modèle</Badge>}
                       </p>
                     )}
-                    <p className="mt-1 truncate text-sm text-blue">
-                      {client.orderSlug ? `${DEFAULT_ORDER_BASE_URL.replace("https://", "")}${client.orderSlug}` : <span className="text-coral">Pas de slug dans le CRM</span>}
+                    <p className="mt-1 truncate text-sm text-bleu">
+                      {client.orderSlug ? `${DEFAULT_ORDER_BASE_URL.replace("https://", "")}${client.orderSlug}` : <span className="text-alerte">Pas de slug dans le CRM</span>}
                     </p>
                     <p className="mt-2 text-xs text-muted">
                       {timezoneLabel(client.timezone)} · <LocalClock timezone={client.timezone} />
@@ -301,10 +301,10 @@ function BotStatus({ client, checklist }: { client: import("@/data/types").BotCl
     return <p className="mt-2 text-xs text-muted">{client.hasBotRecord ? "Bot détaché du modèle" : "Pas encore de bot"}</p>;
   }
   const blocking = checklist.filter((i) => i.level !== "info");
-  if (!blocking.length) return <p className="mt-2 text-xs font-semibold text-green-700">✓ Bot prêt (lié au modèle)</p>;
+  if (!blocking.length) return <p className="mt-2 text-xs font-semibold text-ok">✓ Bot prêt (lié au modèle)</p>;
   return (
     <div className="mt-2 text-xs" data-testid="client-checklist">
-      <p className="font-semibold text-coral">
+      <p className="font-semibold text-alerte">
         {blocking.length} point{blocking.length > 1 ? "s" : ""} à vérifier
       </p>
       <ul className="mt-0.5 space-y-0.5 text-muted">

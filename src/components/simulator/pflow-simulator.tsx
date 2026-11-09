@@ -116,7 +116,7 @@ export function PflowSimulator({ data }: { data: WorkspaceData }) {
   return (
     <div className="mx-auto grid max-w-6xl gap-4 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div className="flex h-[78vh] min-h-0 flex-col overflow-hidden rounded-[var(--radius-card)] border border-rule shadow-card" data-testid="pflow-sim">
-        <div className="flex items-center justify-between bg-navy px-4 py-2.5 text-sm text-white">
+        <div className="flex items-center justify-between bg-navy-2 px-4 py-2.5 text-sm text-white">
           <span className="font-semibold">📱 Numéro PFlow (démos)</span>
           <span className="text-xs opacity-80">{current?.clientId ? `Démo : ${names.get(current.clientId) ?? "?"}` : "Bot PFlow de base"}</span>
         </div>
@@ -134,7 +134,7 @@ export function PflowSimulator({ data }: { data: WorkspaceData }) {
       </div>
 
       <aside className="space-y-4 text-sm">
-        <section className="rounded-[var(--radius-card)] border border-rule bg-white p-4 shadow-card">
+        <section className="rounded-[var(--radius-card)] border border-ink/10 carte p-4 shadow-card">
           <h2 className="font-semibold">Démos (mots-clés)</h2>
           {demos.length === 0 ? (
             <p className="mt-2 text-muted">
@@ -146,10 +146,10 @@ export function PflowSimulator({ data }: { data: WorkspaceData }) {
                 const active = isDemoActive(d, now);
                 return (
                   <li key={d.clientId} className="flex items-center justify-between gap-2">
-                    <button type="button" className="font-semibold text-blue underline-offset-2 hover:underline" disabled={busy} onClick={() => void send({ kind: "text", text: d.keyword })}>
+                    <button type="button" className="font-semibold text-bleu underline-offset-2 hover:underline" disabled={busy} onClick={() => void send({ kind: "text", text: d.keyword })}>
                       {d.keyword}
                     </button>
-                    <span className={`text-xs ${active ? "text-muted" : "text-coral"}`}>{active ? `jusqu'au ${format(d.expiresAt)}` : "terminée"}</span>
+                    <span className={`text-xs ${active ? "text-muted" : "text-alerte"}`}>{active ? `jusqu'au ${format(d.expiresAt)}` : "terminée"}</span>
                   </li>
                 );
               })}
@@ -157,23 +157,23 @@ export function PflowSimulator({ data }: { data: WorkspaceData }) {
           )}
         </section>
 
-        <section className="rounded-[var(--radius-card)] border border-rule bg-white p-4 shadow-card">
+        <section className="rounded-[var(--radius-card)] border border-ink/10 carte p-4 shadow-card">
           <h2 className="font-semibold">Le temps</h2>
           <p className="mt-1 text-xs text-muted">Simulé : {format(sim.now)}. Session : {PFLOW_SESSION_MINUTES} min sans message.</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            <button type="button" className="rounded-full border border-line px-3 py-1 hover:bg-page" onClick={() => advance(PFLOW_SESSION_MINUTES + 1, `+${PFLOW_SESSION_MINUTES + 1} min (fin de session)`)}>
+            <button type="button" className="rounded-full border border-line px-3 py-1 hover:bg-ink/5" onClick={() => advance(PFLOW_SESSION_MINUTES + 1, `+${PFLOW_SESSION_MINUTES + 1} min (fin de session)`)}>
               +{PFLOW_SESSION_MINUTES + 1} min
             </button>
-            <button type="button" className="rounded-full border border-line px-3 py-1 hover:bg-page" onClick={() => advance(24 * 60, "+1 jour")}>
+            <button type="button" className="rounded-full border border-line px-3 py-1 hover:bg-ink/5" onClick={() => advance(24 * 60, "+1 jour")}>
               +1 jour
             </button>
-            <button type="button" className="rounded-full border border-line px-3 py-1 hover:bg-page" onClick={() => advance(6 * 24 * 60, "+6 jours (après l'expiration d'une démo de 5 jours)")}>
+            <button type="button" className="rounded-full border border-line px-3 py-1 hover:bg-ink/5" onClick={() => advance(6 * 24 * 60, "+6 jours (après l'expiration d'une démo de 5 jours)")}>
               +6 jours
             </button>
           </div>
         </section>
 
-        <section className="rounded-[var(--radius-card)] border border-rule bg-white p-4 shadow-card">
+        <section className="rounded-[var(--radius-card)] border border-ink/10 carte p-4 shadow-card">
           <h2 className="font-semibold">Aiguillage</h2>
           <ol className="mt-2 space-y-1 text-xs text-muted" data-testid="pflow-sim-journal">
             {journal.length === 0 && <li>Chaque message : mot-clé de démo ? démo en cours ? sinon bot PFlow.</li>}

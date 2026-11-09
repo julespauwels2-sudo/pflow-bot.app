@@ -14,21 +14,20 @@ export { Logo };
 export function AppShell({ children, breadcrumb, mobile = false }: { children: ReactNode; breadcrumb?: ReactNode; mobile?: boolean }) {
   const page = (
     <div className="min-h-screen">
-      <header className={`relative border-b border-rule bg-white/85 backdrop-blur ${mobile ? "hidden md:block" : ""}`}>
-        <div className="bg-filet absolute inset-x-0 bottom-0 h-[2px] opacity-70" aria-hidden />
+      <header className={`sticky top-0 z-20 border-b-2 border-ink/15 bg-fond ${mobile ? "hidden md:block" : ""}`}>
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
           <Logo />
-          <nav className="flex max-w-full items-center gap-1 overflow-x-auto text-sm font-semibold whitespace-nowrap">
-            <Link href="/modele" className="rounded-full px-3 py-1.5 transition hover:bg-pink/10 hover:text-pink-3">
+          <nav className="flex max-w-full items-center gap-1 overflow-x-auto whitespace-nowrap">
+            <Link href="/modele" className="rounded-full px-3.5 py-2 text-xs font-extrabold tracking-[0.08em] text-ink uppercase transition hover:bg-white hover:text-nuit">
               Modèle maître
             </Link>
-            <Link href="/clients" className="rounded-full px-3 py-1.5 transition hover:bg-pink/10 hover:text-pink-3">
+            <Link href="/clients" className="rounded-full px-3.5 py-2 text-xs font-extrabold tracking-[0.08em] text-ink uppercase transition hover:bg-white hover:text-nuit">
               Clients
             </Link>
-            <Link href="/demos" className="rounded-full px-3 py-1.5 transition hover:bg-pink/10 hover:text-pink-3">
+            <Link href="/demos" className="rounded-full px-3.5 py-2 text-xs font-extrabold tracking-[0.08em] text-ink uppercase transition hover:bg-white hover:text-nuit">
               Démos
             </Link>
-            <Link href="/inbox" className="rounded-full px-3 py-1.5 transition hover:bg-pink/10 hover:text-pink-3">
+            <Link href="/inbox" className="rounded-full px-3.5 py-2 text-xs font-extrabold tracking-[0.08em] text-ink uppercase transition hover:bg-white hover:text-nuit">
               Boîte de réception
             </Link>
             <AccountMenu />
@@ -42,7 +41,7 @@ export function AppShell({ children, breadcrumb, mobile = false }: { children: R
             : "mx-auto max-w-6xl px-4 py-8 sm:px-6"
         }
       >
-        {breadcrumb && <div className="mb-4 text-sm text-muted">{breadcrumb}</div>}
+        {breadcrumb && <div className="mb-4 text-sm font-semibold text-muted">{breadcrumb}</div>}
         {children}
       </main>
       {mobile && <MobileTabBar />}

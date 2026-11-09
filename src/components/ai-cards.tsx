@@ -37,7 +37,7 @@ export function AiKnowledgeCard({ input, template, infoSheet }: { input: BotInpu
           <Notice tone="error">À compléter dans la fiche d&apos;infos pour que l&apos;IA réponde bien : {missing.join(", ")}.</Notice>
         )}
         <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-          <pre className="max-h-96 min-w-0 overflow-auto rounded-xl bg-page p-3 text-xs leading-relaxed whitespace-pre-wrap">{knowledge}</pre>
+          <pre className="max-h-96 min-w-0 overflow-auto rounded-xl bg-ink/5 p-3 text-xs leading-relaxed whitespace-pre-wrap">{knowledge}</pre>
           <div className="space-y-3 text-sm">
             <div>
               <p className="font-semibold">Fonctions disponibles</p>
@@ -45,7 +45,7 @@ export function AiKnowledgeCard({ input, template, infoSheet }: { input: BotInpu
                 <ul className="mt-1 space-y-1.5">
                   {agent.functions.map((f) => (
                     <li key={f.name}>
-                      <span className="font-mono text-xs font-semibold text-pink">{f.name}</span>
+                      <span className="font-mono text-xs font-semibold text-rose">{f.name}</span>
                       <span className="text-xs text-muted"> → « {entries.find((e) => e.botId === f.flowId)?.name ?? f.flowId} »</span>
                     </li>
                   ))}
@@ -60,14 +60,14 @@ export function AiKnowledgeCard({ input, template, infoSheet }: { input: BotInpu
             {consigne && (
               <details>
                 <summary className="cursor-pointer text-xs font-semibold">Consigne de l&apos;agent, pour ce resto</summary>
-                <pre className="mt-2 max-h-72 overflow-auto rounded-xl bg-page p-2 text-[11px] whitespace-pre-wrap">{consigne}</pre>
+                <pre className="mt-2 max-h-72 overflow-auto rounded-xl bg-ink/5 p-2 text-[11px] whitespace-pre-wrap">{consigne}</pre>
               </details>
             )}
             <div className="flex flex-wrap gap-2 text-xs font-semibold">
-              <Link href="/modele/agent" className="text-blue hover:underline">
+              <Link href="/modele/agent" className="text-bleu hover:underline">
                 Agent IA du modèle
               </Link>
-              <Link href={`/simulateur?client=${client.id}`} className="text-blue hover:underline">
+              <Link href={`/simulateur?client=${client.id}`} className="text-bleu hover:underline">
                 Tester l&apos;IA dans le simulateur
               </Link>
             </div>
@@ -123,7 +123,7 @@ export function AiCallsCard({ clientId, calls, onChange }: { clientId: string; c
                       <td className="max-w-56 py-1.5 pr-3">{c.message}</td>
                       <td className="max-w-72 py-1.5 pr-3">
                         {c.error ? (
-                          <span className="font-semibold text-coral">Erreur : {c.error}</span>
+                          <span className="font-semibold text-alerte">Erreur : {c.error}</span>
                         ) : c.decision ? (
                           <>
                             <span className="font-semibold">{ACTION_LABELS[c.decision.action]}</span>
@@ -169,7 +169,7 @@ export function AiCallsCard({ clientId, calls, onChange }: { clientId: string; c
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-page px-3 py-2">
+    <div className="rounded-xl bg-ink/5 px-3 py-2">
       <span className="block text-[11px] text-muted">{label}</span>
       <span className="font-semibold">{value}</span>
     </div>

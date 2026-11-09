@@ -22,7 +22,7 @@ export default function ImportPage() {
 
   return (
     <AppShell breadcrumb={<>Importer les données du navigateur</>}>
-      <h1 className="text-3xl font-semibold">Importer les données du navigateur</h1>
+      <h1 className="text-5xl">Importer les données <span className="text-rose">du navigateur</span></h1>
       <p className="mt-1 max-w-2xl text-sm text-muted">
         Reprend ce que tu as construit à l&apos;étape A dans ce navigateur (modèle maître, agent IA, flux, fiche du bot, journal IA) et le range
         dans Supabase, rattaché aux restos du CRM. Rien n&apos;est écrit dans les tables du CRM, et les données du navigateur ne sont pas effacées.

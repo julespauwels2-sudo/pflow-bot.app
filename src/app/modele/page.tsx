@@ -23,7 +23,7 @@ export default function TemplatePage() {
     <AppShell>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold">Modèle maître</h1>
+          <h1 className="text-5xl">Modèle <span className="text-rose">maître</span></h1>
           <p className="mt-1 max-w-2xl text-sm text-muted">
             Ta trame commune à tous les bots, écrite uniquement avec des variables (nom du resto, lien de commande, horaires…) : rien de propre à
             un client. Les bots liés au modèle utilisent ses flux <strong>publiés</strong> et son agent IA.
@@ -120,7 +120,7 @@ export default function TemplatePage() {
                     </li>
                   </ul>
                 ) : (
-                  <p className="rounded-xl bg-page p-3 text-sm text-muted">Pas encore configuré : une configuration par défaut (ta consigne UChat) est prête.</p>
+                  <p className="rounded-xl bg-ink/5 p-3 text-sm text-muted">Pas encore configuré : une configuration par défaut (ta consigne UChat) est prête.</p>
                 )}
                 <ButtonLink href="/modele/agent" variant="secondary" className="mt-3">
                   Configurer l&apos;agent IA
@@ -130,7 +130,7 @@ export default function TemplatePage() {
                 <ul className="space-y-1.5 text-xs">
                   {BUILTIN_VARIABLES.map((v) => (
                     <li key={v.name}>
-                      <span className="font-mono font-semibold text-pink">{`{{${v.name}}}`}</span>
+                      <span className="font-mono font-semibold text-rose">{`{{${v.name}}}`}</span>
                       <span className="block text-muted">{v.label}</span>
                     </li>
                   ))}

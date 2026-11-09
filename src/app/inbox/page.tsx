@@ -188,7 +188,7 @@ export default function InboxPage() {
 
   return (
     <AppShell mobile>
-      <h1 className="text-3xl font-semibold">Boîte de réception</h1>
+      <h1 className="text-5xl">Boîte de <span className="text-rose">réception</span></h1>
       <p className="mt-1 max-w-2xl text-sm text-muted">
         Les conversations WhatsApp et Instagram de chaque resto. Reprends la main quand un client a besoin d&apos;une personne : le bot se tait jusqu&apos;à ce
         que tu le relances.
@@ -228,7 +228,7 @@ export default function InboxPage() {
                           <li key={conv.contactId}>
                             <button
                               type="button"
-                              className={`w-full rounded-xl px-2 py-2 text-left hover:bg-page ${selected === conv.contactId ? "bg-page" : ""}`}
+                              className={`w-full rounded-xl px-2 py-2 text-left hover:bg-ink/5 ${selected === conv.contactId ? "bg-ink/5" : ""}`}
                               onClick={() => show(conv.contactId)}
                             >
                               <span className="flex items-center gap-1.5">
@@ -310,17 +310,17 @@ function ConversationView({
         )}
         <span className="ml-auto text-xs text-muted">{conv.fenetreOuverte ? "Fenêtre de 24 h ouverte" : "Fenêtre de 24 h fermée"}</span>
       </div>
-      <div className="max-h-[60vh] space-y-1.5 overflow-y-auto rounded-2xl bg-[#efeae2] p-3">
+      <div className="max-h-[60vh] space-y-1.5 overflow-y-auto rounded-2xl bg-chat-motif p-3 aplat-nuit">
         {thread.messages.map((m) => (
           <div key={m.id} className={`flex ${m.sens === "entrant" ? "justify-start" : "justify-end"}`}>
             <div
-              className={`max-w-[80%] overflow-hidden rounded-xl px-3 py-1.5 text-sm whitespace-pre-wrap shadow-sm ${
-                m.sens === "entrant" ? "bg-white" : m.auteur === "humain" ? "bg-[#d9fdd3]" : "bg-[#e7f0ff]"
+              className={`max-w-[80%] overflow-hidden rounded-2xl px-3 py-1.5 text-sm font-medium whitespace-pre-wrap ${
+                m.sens === "entrant" ? "carte" : m.auteur === "humain" ? "aplat-rose" : "aplat-bleu"
               }`}
             >
               <span className="mb-0.5 block text-[10px] font-semibold text-muted">
                 {m.sens === "entrant" ? "Client" : m.sens === "echo" ? "Gérant (appli)" : m.auteur === "humain" ? "Équipe" : "Bot"} · {time(m.at)}
-                {m.statut === "echec" && <span className="text-coral"> · échec{m.erreur ? ` : ${m.erreur}` : ""}</span>}
+                {m.statut === "echec" && <span className="text-alerte"> · échec{m.erreur ? ` : ${m.erreur}` : ""}</span>}
                 {m.statut === "lu" && " · lu"}
               </span>
               <MessageContent texte={m.texte} contenu={m.contenu} />
@@ -345,7 +345,7 @@ function ConversationView({
           value={texte}
           onChange={(e) => setTexte(e.target.value)}
         />
-        <Button type="submit" disabled={!conv.fenetreOuverte || !texte.trim()}>
+        <Button type="submit" className="self-end" disabled={!conv.fenetreOuverte || !texte.trim()}>
           Envoyer
         </Button>
       </form>
@@ -360,7 +360,7 @@ function SimulateForm({ plateformes, onSent, onError }: { plateformes: InboxCana
   const [nom, setNom] = useState("Léa");
   return (
     <form
-      className="flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] border border-dashed border-pink/40 bg-white p-3 text-sm shadow-card"
+      className="flex flex-wrap items-center gap-2 rounded-[var(--radius-card)] border border-dashed border-pink/40 carte p-3 text-sm shadow-card"
       onSubmit={async (e) => {
         e.preventDefault();
         try {

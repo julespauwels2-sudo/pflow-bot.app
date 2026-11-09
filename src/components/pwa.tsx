@@ -285,7 +285,7 @@ export function PushControls({ compact = false, onChange }: { compact?: boolean;
                   {a.creeLe && <span className="text-xs text-muted">ajouté le {time(a.creeLe)}</span>}
                   {a.dernierEnvoiLe && <span className="text-xs text-muted">· dernière notification {time(a.dernierEnvoiLe)}</span>}
                   {a.dernierEchecLe && (!a.dernierEnvoiLe || a.dernierEchecLe > a.dernierEnvoiLe) && (
-                    <span className="text-xs text-coral">
+                    <span className="text-xs text-alerte">
                       · échec {time(a.dernierEchecLe)} : {a.dernierEchec}
                     </span>
                   )}

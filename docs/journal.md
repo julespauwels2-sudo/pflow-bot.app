@@ -1085,3 +1085,21 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
   les 2 tables ; règle « admins du bot » sur les connexions ; aucune règle et aucun droit anon/authenticated sur les
   jetons : serveur seulement).
 
+
+## 9 novembre 2026 (nuit) — refonte sombre de PFlow Bots (PR séparée, sans fusion)
+
+- Toutes les pages, ordinateur et iPhone, aux couleurs de pflow.fr/demo : fond navy et halos, cartes translucides,
+  titres Fredoka, boutons roses en pilule, badges colorés, éditeur de flux et boîte de réception en sombre.
+- Contrastes vérifiés ; aucun changement de fonctionnement (452 tests). Remplacée ensuite par la charte PFlow
+  (entrée suivante).
+
+
+## 9 novembre 2026 (nuit, suite) — charte PFlow sur PFlow Bots, preview Vercel réparée
+
+- La preview de la PR n° 20 répondait 503 sur toutes les pages (variables Vercel réservées à la production) : ajout de
+  `BASIC_AUTH_PASSWORD` pour Preview seulement. Production inchangée.
+- La charte de Jules devient la référence : aplats nuit, bleu et rose (aucun dégradé, halo ni flou), Anton en
+  majuscules et Plus Jakarta Sans, ombres plates, cartes blanches, pills, P bulle, grille de points, ticket de
+  commande. Détail et contrastes : `docs/etape-c/direction-artistique.md`. Captures sur la preview :
+  `docs/captures/charte/`. 452 tests OK.
+

@@ -22,12 +22,12 @@ import { useEditor } from "./context";
 import { VariableField } from "./variable-field";
 
 const inputCls =
-  "w-full rounded-xl border border-line bg-white px-3 py-2 text-sm text-navy placeholder:text-muted/60 focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue/20";
+  "w-full rounded-xl border border-line carte px-3 py-2 text-sm text-ink placeholder:text-muted/60 focus:border-blue focus:outline-none focus:ring-2 focus:ring-blue/20";
 
 function Row({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
   return (
     <div>
-      <p className="mb-1 text-xs font-semibold text-navy">{label}</p>
+      <p className="mb-1 text-xs font-semibold text-ink">{label}</p>
       {children}
       {hint && <p className="mt-1 text-[11px] text-muted">{hint}</p>}
     </div>
@@ -36,7 +36,7 @@ function Row({ label, hint, children }: { label: string; hint?: ReactNode; child
 
 function Counter({ value, max }: { value: string | undefined; max: number }) {
   const n = [...(value ?? "")].length;
-  return <span className={`text-[11px] ${n > max ? "font-semibold text-coral" : "text-muted"}`}>{n}/{max}</span>;
+  return <span className={`text-[11px] ${n > max ? "font-semibold text-alerte" : "text-muted"}`}>{n}/{max}</span>;
 }
 
 /** Liste éditable de boutons ou de choix de liste. */
@@ -88,7 +88,7 @@ function OptionsEditor({
             <button
               type="button"
               disabled={i === 0}
-              className="text-muted hover:text-navy disabled:opacity-30"
+              className="text-muted hover:text-ink disabled:opacity-30"
               onClick={() => {
                 const next = [...options];
                 [next[i - 1], next[i]] = [next[i], next[i - 1]];
@@ -97,7 +97,7 @@ function OptionsEditor({
             >
               ↑ Monter
             </button>
-            <button type="button" className="text-coral hover:underline" onClick={() => onChange(options.filter((x) => x.id !== o.id), "remove")}>
+            <button type="button" className="text-alerte hover:underline" onClick={() => onChange(options.filter((x) => x.id !== o.id), "remove")}>
               Supprimer
             </button>
           </div>
@@ -106,7 +106,7 @@ function OptionsEditor({
       <button
         type="button"
         disabled={options.length >= max}
-        className="w-full rounded-xl border border-dashed border-blue/40 py-2 text-sm font-semibold text-blue hover:bg-blue/5 disabled:cursor-not-allowed disabled:opacity-40"
+        className="w-full rounded-xl border border-dashed border-blue/40 py-2 text-sm font-semibold text-bleu hover:bg-blue/5 disabled:cursor-not-allowed disabled:opacity-40"
         onClick={() => onChange([...options, { id: `${prefix}${shortId()}`, title: `${prefix === "b" ? "Option" : "Choix"} ${options.length + 1}` }], "add")}
       >
         + {addLabel} ({options.length}/{max})
@@ -126,7 +126,7 @@ function KeywordsEditor({ keywords, onChange }: { keywords: string[]; onChange: 
     <div>
       <div className="mb-2 flex flex-wrap gap-1.5">
         {keywords.map((k) => (
-          <span key={k} className="inline-flex items-center gap-1 rounded-full bg-pink/10 px-2.5 py-1 text-xs font-semibold text-pink">
+          <span key={k} className="inline-flex items-center gap-1 rounded-full bg-pink/10 px-2.5 py-1 text-xs font-semibold text-rose">
             {k}
             <button type="button" aria-label={`Retirer ${k}`} onClick={() => onChange(keywords.filter((x) => x !== k))}>
               ✕
@@ -178,7 +178,7 @@ function RuleEditor({ rule, onChange, onRemove, variables }: { rule: ConditionRu
           <option value="ouvert_maintenant">Resto ouvert (fiche d&apos;infos)</option>
           <option value="variable">Variable</option>
         </select>
-        <button type="button" className="px-1 text-coral" aria-label="Supprimer la règle" onClick={onRemove}>
+        <button type="button" className="px-1 text-alerte" aria-label="Supprimer la règle" onClick={onRemove}>
           ✕
         </button>
       </div>
@@ -192,7 +192,7 @@ function RuleEditor({ rule, onChange, onRemove, variables }: { rule: ConditionRu
                 key={d}
                 type="button"
                 aria-pressed={on}
-                className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${on ? "bg-navy text-white" : "bg-navy/5 text-muted"}`}
+                className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${on ? "bg-navy-2 text-white" : "bg-ink/5 text-muted"}`}
                 onClick={() => onChange({ ...rule, jours: on ? rule.jours.filter((x) => x !== d) : [...rule.jours, d].sort() })}
               >
                 {WEEKDAY_LABELS[d].slice(0, 3)}
@@ -260,18 +260,18 @@ function MessageFields({ node }: { node: Extract<FlowNode, { type: "message" }> 
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold">Bulle {i + 1}</p>
               <div className="flex gap-2 text-[11px] font-semibold">
-                <button type="button" disabled={i === 0} className="text-muted hover:text-navy disabled:opacity-30" onClick={() => update(moveBubble(data, bubble.id, -1), "bubble:move")}>
+                <button type="button" disabled={i === 0} className="text-muted hover:text-ink disabled:opacity-30" onClick={() => update(moveBubble(data, bubble.id, -1), "bubble:move")}>
                   ↑
                 </button>
                 <button
                   type="button"
                   disabled={i === data.bubbles.length - 1}
-                  className="text-muted hover:text-navy disabled:opacity-30"
+                  className="text-muted hover:text-ink disabled:opacity-30"
                   onClick={() => update(moveBubble(data, bubble.id, 1), "bubble:move")}
                 >
                   ↓
                 </button>
-                <button type="button" disabled={data.bubbles.length <= 1} className="text-coral hover:underline disabled:opacity-30" onClick={() => update(removeBubble(data, bubble.id), "bubble:remove")}>
+                <button type="button" disabled={data.bubbles.length <= 1} className="text-alerte hover:underline disabled:opacity-30" onClick={() => update(removeBubble(data, bubble.id), "bubble:remove")}>
                   Supprimer
                 </button>
               </div>
@@ -289,7 +289,7 @@ function MessageFields({ node }: { node: Extract<FlowNode, { type: "message" }> 
             {bubble.buttons.map((b) =>
               b.kind === "reply" ? (
                 <div key={b.id} className="flex items-center gap-1.5">
-                  <span className="text-xs text-blue" title="Bouton de réponse">↩︎</span>
+                  <span className="text-xs text-bleu" title="Bouton de réponse">↩︎</span>
                   <input
                     className={inputCls}
                     aria-label="Titre du bouton de réponse"
@@ -297,12 +297,12 @@ function MessageFields({ node }: { node: Extract<FlowNode, { type: "message" }> 
                     onChange={(e) => update(updateButton(data, bubble.id, { ...b, title: e.target.value }), `${b.id}:title`)}
                   />
                   <Counter value={b.title} max={WA_LIMITS.buttonTitle} />
-                  <button type="button" aria-label="Supprimer le bouton" className="px-1 text-coral" onClick={() => update(removeButton(data, bubble.id, b.id), "button:remove")}>
+                  <button type="button" aria-label="Supprimer le bouton" className="px-1 text-alerte" onClick={() => update(removeButton(data, bubble.id, b.id), "button:remove")}>
                     ✕
                   </button>
                 </div>
               ) : (
-                <div key={b.id} className="space-y-1.5 rounded-xl bg-page p-2">
+                <div key={b.id} className="space-y-1.5 rounded-xl bg-ink/5 p-2">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs" title="Bouton lien">🔗</span>
                     <input
@@ -312,7 +312,7 @@ function MessageFields({ node }: { node: Extract<FlowNode, { type: "message" }> 
                       onChange={(e) => update(updateButton(data, bubble.id, { ...b, title: e.target.value }), `${b.id}:title`)}
                     />
                     <Counter value={b.title} max={WA_LIMITS.ctaButtonLabel} />
-                    <button type="button" aria-label="Supprimer le bouton" className="px-1 text-coral" onClick={() => update(removeButton(data, bubble.id, b.id), "button:remove")}>
+                    <button type="button" aria-label="Supprimer le bouton" className="px-1 text-alerte" onClick={() => update(removeButton(data, bubble.id, b.id), "button:remove")}>
                       ✕
                     </button>
                   </div>
@@ -350,7 +350,7 @@ function MessageFields({ node }: { node: Extract<FlowNode, { type: "message" }> 
                 type="button"
                 disabled={!reply.allowed}
                 title={reply.reason}
-                className="rounded-xl border border-dashed border-blue/40 py-1.5 text-xs font-semibold text-blue hover:bg-blue/5 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-xl border border-dashed border-blue/40 py-1.5 text-xs font-semibold text-bleu hover:bg-blue/5 disabled:cursor-not-allowed disabled:opacity-40"
                 onClick={() => update(addReplyButton(data, bubble.id), "reply:add")}
               >
                 + Bouton de réponse
@@ -359,7 +359,7 @@ function MessageFields({ node }: { node: Extract<FlowNode, { type: "message" }> 
                 type="button"
                 disabled={!link.allowed}
                 title={link.reason}
-                className="rounded-xl border border-dashed border-blue/40 py-1.5 text-xs font-semibold text-blue hover:bg-blue/5 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-xl border border-dashed border-blue/40 py-1.5 text-xs font-semibold text-bleu hover:bg-blue/5 disabled:cursor-not-allowed disabled:opacity-40"
                 onClick={() => update(addLinkButton(data, bubble.id), "link:add")}
               >
                 + Bouton lien
@@ -376,7 +376,7 @@ function MessageFields({ node }: { node: Extract<FlowNode, { type: "message" }> 
       <button
         type="button"
         disabled={!canAddBubble(data)}
-        className="w-full rounded-xl border border-dashed border-line py-2 text-sm font-semibold text-muted hover:border-navy/30 hover:text-navy disabled:opacity-40"
+        className="w-full rounded-xl border border-dashed border-line py-2 text-sm font-semibold text-muted hover:border-ink/30 hover:text-ink disabled:opacity-40"
         onClick={() => update(addBubble(data), "bubble:add")}
       >
         + Ajouter une bulle
@@ -424,7 +424,7 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
                   ))}
                 </select>
               </Row>
-              <p className="rounded-xl bg-page p-2.5 text-[11px] text-muted">
+              <p className="rounded-xl bg-ink/5 p-2.5 text-[11px] text-muted">
                 Envoyé seulement si le client a écrit au bot depuis moins de 24 h (sinon : rien). Envoyé même si le bot est en pause pour ce
                 contact, sans relancer la conversation. Branchement avec PFlow Order à l&apos;étape C.
               </p>
@@ -432,7 +432,7 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
                 <ul className="space-y-1 text-[11px]">
                   {ORDER_EVENTS[event].variables.map((v) => (
                     <li key={v.name}>
-                      <span className="font-mono font-semibold text-pink">{`{{${v.name}}}`}</span> <span className="text-muted">· {v.label}</span>
+                      <span className="font-mono font-semibold text-rose">{`{{${v.name}}}`}</span> <span className="text-muted">· {v.label}</span>
                     </li>
                   ))}
                 </ul>
@@ -594,7 +594,7 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
               ))}
               <button
                 type="button"
-                className="w-full rounded-xl border border-dashed border-blue/40 py-2 text-sm font-semibold text-blue hover:bg-blue/5"
+                className="w-full rounded-xl border border-dashed border-blue/40 py-2 text-sm font-semibold text-bleu hover:bg-blue/5"
                 onClick={() => set({ rules: [...node.data.rules, { kind: "jour", jours: [6, 7] }] }, "rules")}
               >
                 + Ajouter une règle
@@ -615,7 +615,7 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
       };
       return (
         <>
-          <p className="rounded-xl bg-page p-2.5 text-[11px] text-muted">
+          <p className="rounded-xl bg-ink/5 p-2.5 text-[11px] text-muted">
             Le bot reste sur ce bloc : l&apos;IA répond à chaque message avec la fiche d&apos;infos du client, jusqu&apos;à une fonction, un transfert,
             un mot-clé ou le délai d&apos;inactivité.
           </p>
@@ -656,9 +656,9 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
                   <span className="font-mono">{f.name}</span>
                 </label>
               ))}
-              {unknown.length > 0 && <p className="text-[11px] font-semibold text-coral">Fonctions inconnues de l&apos;agent : {unknown.join(", ")}</p>}
+              {unknown.length > 0 && <p className="text-[11px] font-semibold text-alerte">Fonctions inconnues de l&apos;agent : {unknown.join(", ")}</p>}
               {allowed && agentFunctions.length > 0 && (
-                <button type="button" className="text-[11px] font-semibold text-blue" onClick={() => set({ functions: undefined }, "functions")}>
+                <button type="button" className="text-[11px] font-semibold text-bleu" onClick={() => set({ functions: undefined }, "functions")}>
                   Toutes les fonctions de l&apos;agent
                 </button>
               )}
@@ -749,7 +749,7 @@ export function NodeProperties({ node, onDuplicate, onDelete }: { node: FlowNode
       {nodeIssues.length > 0 && (
         <ul className="space-y-1 rounded-xl bg-coral/5 p-2.5 text-xs">
           {nodeIssues.map((i, k) => (
-            <li key={k} className={i.level === "error" ? "font-semibold text-coral" : "text-amber-700"}>
+            <li key={k} className={i.level === "error" ? "font-semibold text-alerte" : "text-alerte"}>
               {i.level === "error" ? "⚠" : "•"} {i.message}
             </li>
           ))}
@@ -760,10 +760,10 @@ export function NodeProperties({ node, onDuplicate, onDelete }: { node: FlowNode
 
       {node.type !== "trigger" && (
         <div className="flex gap-2 border-t border-rule pt-3">
-          <button type="button" className="flex-1 rounded-full border border-line py-1.5 text-sm font-semibold hover:border-navy/30" onClick={onDuplicate}>
+          <button type="button" className="flex-1 rounded-full border border-line py-1.5 text-sm font-semibold hover:border-ink/30" onClick={onDuplicate}>
             Dupliquer
           </button>
-          <button type="button" className="flex-1 rounded-full border border-coral/40 py-1.5 text-sm font-semibold text-coral hover:bg-coral/10" onClick={onDelete}>
+          <button type="button" className="flex-1 rounded-full border border-coral/40 py-1.5 text-sm font-semibold text-alerte hover:bg-coral/10" onClick={onDelete}>
             Supprimer
           </button>
         </div>
