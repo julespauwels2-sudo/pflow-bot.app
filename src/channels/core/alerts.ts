@@ -20,7 +20,10 @@ const WINDOW_MS = 24 * 3600_000 - 10 * 60_000;
 export interface AlertConfig {
   /** Modèle approuvé (nom exact chez Meta) et sa langue. */
   template?: { name: string; language: string };
-  /** E-mail de secours (Resend). */
+  /**
+   * E-mail de secours (Resend). Sans domaine vérifié chez Resend : expéditeur par défaut onboarding@resend.dev, qui
+   * n'envoie QU'À l'adresse du compte Resend (ici jules.pauwels2@gmail.com = ALERTE_EMAIL) ; aucun domaine supposé.
+   */
   email?: { apiKey: string; to: string; from: string };
   fetch?: typeof fetch;
 }
@@ -92,7 +95,9 @@ async function sendEmail(config: NonNullable<AlertConfig["email"]>, input: Alert
   });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(`e-mail refusé (${response.status}) ${body.slice(0, 160)}`);
+    // Sans domaine vérifié, Resend n'envoie depuis onboarding@resend.dev qu'à l'adresse du compte Resend (sinon 403).
+    const hint = response.status === 403 ? " — sans domaine vérifié, ALERTE_EMAIL doit être l'adresse du compte Resend" : "";
+    throw new Error(`e-mail refusé (${response.status}) ${body.slice(0, 160)}${hint}`);
   }
 }
 

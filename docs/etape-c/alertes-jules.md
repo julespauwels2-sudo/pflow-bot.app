@@ -85,11 +85,14 @@ jour, cela fait moins de 10 € par mois.
   2. Créer une clé API (droit « Sending access ») ;
   3. Dans Vercel (pflow-bot-app), ajouter `RESEND_API_KEY` = la clé (variable « Sensitive ») et
      `ALERTE_EMAIL = jules.pauwels2@gmail.com`. Ne jamais coller la clé ailleurs.
+  Confirmé (doc Resend + test) : sans domaine vérifié, le code envoie depuis `PFlow Bots <onboarding@resend.dev>`
+  vers `ALERTE_EMAIL` ; Resend l'accepte seulement si c'est l'adresse du compte (sinon 403, expliqué sur la page État).
+  Limites de l'offre gratuite : environ 100 e-mails par jour, 3 000 par mois.
   4. Facultatif, plus tard : vérifier le domaine pflow.fr chez Resend, puis `ALERTE_EMAIL_FROM = PFlow Bots <alertes@pflow.fr>`.
      Par défaut, l'expéditeur est `PFlow Bots <onboarding@resend.dev>`.
 - Objet : « 🔔 PFlow Bots : <motif> (<nom du contact>) ». Le corps reprend le texte de l'alerte.
 
-## 5. SQL (à valider, NON appliqué)
+## 5. SQL (APPLIQUÉ le 9 novembre 2026, accord de Jules)
 
 Fichier `supabase/migrations/20261109000000_bot_transferts_alerte.sql` : deux colonnes sur la table **bot_**
 `bot_transferts` (aucune table du CRM touchée ; RLS déjà active, inchangée).
@@ -101,8 +104,8 @@ alter table public.bot_transferts
   add column if not exists alerte_erreur text;
 ```
 
-**Sans cette migration**, le code enregistre les transferts comme avant, sans ces deux colonnes. La page État montre
-alors seulement « envoyée » ou « non envoyée » (`gerant_prevenu`), sans la voie ni l'erreur.
+Résultat : colonnes `alerte_voie` (text, avec contrainte) et `alerte_erreur` (text) créées, RLS toujours active,
+3 transferts existants intacts (colonnes vides). Le code garde un repli si les colonnes manquaient.
 
 ## 6. Variables Vercel (pflow-bot-app)
 

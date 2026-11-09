@@ -177,4 +177,30 @@ describe("alertes au gérant", () => {
     expect(t2.alerteErreur).toContain("WHATSAPP_ALERTE_MODELE non défini");
     expect(r2.errors.join()).toContain("Alerte non envoyée");
   });
+
+  it("paramètres du modèle : coupés à 80 / 60 / 60 / 200 caractères, sur une ligne, « — » si vide", () => {
+    const long = { ...input, contactName: "N".repeat(200), canal: { ...canal, numeroAffiche: "C".repeat(200) }, motif: "M".repeat(200), extrait: "ligne 1\nligne 2 " + "E".repeat(400) };
+    const [p1, p2, p3, p4] = alertTemplateParams(long);
+    expect([p1.length, p2.length, p3.length, p4.length]).toEqual([80, 60, 60, 200]);
+    expect([p1, p2, p3, p4].every((p) => !/[\r\n\t]/.test(p) && !/\s{2,}/.test(p))).toBe(true);
+    expect(p4.startsWith("ligne 1 ligne 2 E")).toBe(true);
+    expect(alertTemplateParams({ ...input, extrait: "   \n  " })[3]).toBe("—");
+  });
+
+  it("Resend SANS domaine vérifié : expéditeur par défaut onboarding@resend.dev, envoi vers l'adresse du compte ; 403 expliqué", async () => {
+    const store = createMemoryChannelStore([{ ...canal, telAlerte: undefined }]);
+    // Exactement les variables que Jules va mettre dans Vercel (pas d'ALERTE_EMAIL_FROM, pas de domaine).
+    const config = alertConfigFromEnv((name) => ({ RESEND_API_KEY: "re_cle_de_test", ALERTE_EMAIL: "jules.pauwels2@gmail.com" })[name] ?? "");
+    expect(config.email).toEqual({ apiKey: "re_cle_de_test", to: "jules.pauwels2@gmail.com", from: "PFlow Bots <onboarding@resend.dev>" });
+    const ok = fakeEmail();
+    const res = await sendAlert({ store, graph: createGraphClient({ token: "t", base, version: "v24.0" }), config: { ...config, fetch: ok.doFetch }, now: new Date() }, input);
+    expect(res.voie).toBe("email");
+    expect(ok.calls[0].body).toMatchObject({ from: "PFlow Bots <onboarding@resend.dev>", to: ["jules.pauwels2@gmail.com"] });
+    // Mauvaise adresse (pas celle du compte) : Resend répond 403 ; l'erreur le dit sur la page État.
+    const refuse = fakeEmail(403);
+    const bad = await sendAlert({ store, graph: createGraphClient({ token: "t", base, version: "v24.0" }), config: { ...config, fetch: refuse.doFetch }, now: new Date() }, input);
+    expect(bad.voie).toBe("aucune");
+    expect(bad.erreurs.join()).toContain("ALERTE_EMAIL doit être l'adresse du compte Resend");
+  });
 });
+

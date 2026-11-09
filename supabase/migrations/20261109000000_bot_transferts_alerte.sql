@@ -1,6 +1,6 @@
--- PFlow Bots : par où est partie l'alerte d'un transfert (page État). NE PAS APPLIQUER sans l'accord de Jules.
+-- PFlow Bots : par où est partie l'alerte d'un transfert (page État). APPLIQUÉE le 9 novembre 2026, avec l'accord de Jules.
 -- Table bot_ uniquement ; aucune table ni donnée du CRM touchée. RLS : inchangée (déjà active sur bot_transferts).
--- Sans cette migration, le code enregistre les transferts comme avant (sans ces deux colonnes).
+-- (Le code reste compatible avec une base sans ces colonnes : repli automatique.)
 alter table public.bot_transferts
   add column if not exists alerte_voie text
     constraint bot_transferts_alerte_voie_check check (alerte_voie in ('texte', 'modele', 'email', 'aucune')),
