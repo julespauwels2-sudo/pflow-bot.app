@@ -13,6 +13,7 @@ interface SystemStatus {
   services: { stockage: "supabase" | "memory"; ia: { active: boolean; modele: string }; transcription: { active: boolean; service?: string }; deploiement: string };
   comptes: { id: string; plateforme: string; etat: string; numero: string; role: string; resto: string; testNumeros: number }[];
   evenements: { source: string; cle: string; at: string; erreur?: string }[];
+  alertes?: { at: string; canal: string; source: string; prevenu: boolean; voie?: string; erreur?: string }[];
   erreurCanaux?: string;
 }
 
@@ -151,6 +152,8 @@ function ServerCards({ data }: { data: SystemStatus }) {
       {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && <WhatsAppAccessCard />}
       {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && data.comptes.some((c) => c.plateforme === "whatsapp" && c.etat === "test") && <OrderEventTestCard canaux={data.comptes.filter((c) => c.plateforme === "whatsapp" && c.etat === "test" && c.role === "resto" && c.testNumeros > 0)} />}
 
+      {data.alertes && <AlertesCard alertes={data.alertes} />}
+
       <Card title="Clés détectées" className="lg:col-span-2">
         <ul className="grid gap-x-8 gap-y-1 text-sm md:grid-cols-2" data-testid="etat-cles">
           {data.cles.map((k) => (
@@ -181,6 +184,39 @@ function ServerCards({ data }: { data: SystemStatus }) {
         {errors.length > 0 && <p className="mt-2 text-xs text-muted">{errors.length} événement(s) avec une erreur ou ignoré(s) parmi les 30 derniers.</p>}
       </Card>
     </>
+  );
+}
+
+const VOIES: Record<string, string> = { texte: "WhatsApp (message libre)", modele: "WhatsApp (modèle)", email: "e-mail de secours", aucune: "NON ENVOYÉE" };
+
+/** Alertes au gérant (« un client attend une réponse ») : par où elles sont parties, et les échecs. */
+function AlertesCard({ alertes }: { alertes: NonNullable<SystemStatus["alertes"]> }) {
+  const echecs = alertes.filter((a) => !a.prevenu);
+  return (
+    <Card title="Alertes au gérant (un client attend une réponse)" className="lg:col-span-2">
+      <p className="mb-2 text-xs text-muted">
+        Message libre si le destinataire a écrit au numéro dans les 24 h, sinon modèle approuvé par Meta, sinon e-mail de secours.
+      </p>
+      {echecs.length > 0 && (
+        <div className="mb-2" data-testid="alertes-echecs">
+          <Notice tone="error">{echecs.length} alerte(s) non reçue(s) parmi les {alertes.length} dernières : voir la boîte de réception.</Notice>
+        </div>
+      )}
+      {alertes.length === 0 ? (
+        <p className="text-sm text-muted">Aucune alerte pour le moment.</p>
+      ) : (
+        <ul className="divide-y divide-rule text-sm" data-testid="alertes">
+          {alertes.map((a) => (
+            <li key={a.at + a.canal} className="flex flex-wrap items-baseline gap-2 py-1">
+              <span className="text-muted">{time(a.at)}</span>
+              <span>{a.canal}</span>
+              {a.prevenu ? <Badge tone="success">{a.voie ? VOIES[a.voie] : "envoyée"}</Badge> : <Badge>{VOIES.aucune}</Badge>}
+              {a.erreur && <span className="text-xs text-coral">{a.erreur}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 

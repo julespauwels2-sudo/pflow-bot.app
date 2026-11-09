@@ -13,6 +13,7 @@ import { pflowBaseBot, PFLOW_BOT_ID, PFLOW_TEXTS } from "@/demos/pflow-bot";
 import { nextContactDemo, routePflowMessage, type DemoDirectoryEntry } from "@/demos/router";
 import { canAlertQuestion, guide, nextParcours } from "@/demos/parcours";
 import { DEFAULT_BOTS_URL, demoLinks } from "@/demos/demo-auto";
+import { sendAlert, type AlertConfig } from "./alerts";
 
 /** Plafond d'un « en train d'écrire » côté serveur (le webhook ne doit pas attendre trop longtemps). */
 export const MAX_TYPING_MS = 3000;
@@ -37,6 +38,8 @@ export interface ProcessorDeps {
   maxTypingMs?: number;
   /** Secret partagé avec PFlow Order : jeton de pré-remplissage dans le lien « Commander ». */
   pflowBotsSecret?: string;
+  /** Alertes au gérant : modèle approuvé et e-mail de secours (src/channels/core/alerts.ts). */
+  alerts?: AlertConfig;
   /** Adresse publique de PFlow Bots (lien du dashboard de la démo permanente). Défaut : DEFAULT_BOTS_URL. */
   demoBotsUrl?: string;
   /** Numéro PFlow : démos (mot-clé, expiration) avec le nom du resto. */
@@ -255,46 +258,34 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     report.errors.push(`Conversation de ${event.waId} modifiée en parallèle : état gardé tel quel`);
   }
 
+  // Alertes au gérant (Jules pour PFlow Démo) : message libre si sa fenêtre de 24 h est ouverte, sinon modèle
+  // approuvé, sinon e-mail (src/channels/core/alerts.ts). La voie et les erreurs restent avec le transfert (page État).
+  const alertDeps = { store, graph, config: deps.alerts, now };
+  const flowsStarted = result.events.flatMap((e) => (e.type === "flow_started" ? [e.flowId] : []));
   for (const e of result.events) {
     if (e.type !== "handoff") continue;
-    let gerantPrevenu = false;
-    if (canal.telAlerte) {
-      // Le gérant n'est prévenu par WhatsApp que si sa propre fenêtre de 24 h est ouverte (sinon Meta refuse).
-      try {
-        await graph.send(
-          canal.accountId,
-          canal.telAlerte,
-          { kind: "text", text: `🔔 ${bot.client.nomResto} : un client (${event.profileName ?? event.waId}) attend une réponse. Ouvrez la boîte de réception PFlow Bots.` },
-          sendOptions(canal),
-        );
-        gerantPrevenu = true;
-      } catch {
-        gerantPrevenu = false;
-      }
-    }
-    await store.addTransfert({ canalId: canal.id, contactId: contact.id, source: e.source, dernierMessage: e.message, gerantPrevenu });
+    const alert = await sendAlert(alertDeps, {
+      canal,
+      motif: handoffMotif(e.source, flowsStarted),
+      contactName: event.profileName,
+      contactId: event.waId,
+      extrait: e.message,
+    });
+    await store.addTransfert({
+      canalId: canal.id, contactId: contact.id, source: e.source, dernierMessage: e.message, gerantPrevenu: alert.voie !== "aucune",
+      alerteVoie: alert.voie, ...(alert.erreurs.length ? { alerteErreur: alert.erreurs.join(" | ") } : {}),
+    });
+    if (alert.voie === "aucune") report.errors.push(`Alerte non envoyée (${canal.id}) : ${alert.erreurs.join(" | ")}`);
   }
 
   if (question) {
-    let gerantPrevenu = false;
-    if (canal.telAlerte) {
-      try {
-        await graph.send(
-          canal.accountId,
-          canal.telAlerte,
-          {
-            kind: "text",
-            text: `❓ ${bot.client.nomResto} : ${event.profileName ?? event.waId} pose une question pendant la démo : « ${question.slice(0, 500)} ». Le bot continue ; répondez depuis la boîte de réception PFlow Bots.`,
-          },
-          sendOptions(canal),
-        );
-        gerantPrevenu = true;
-      } catch {
-        gerantPrevenu = false;
-      }
-    }
+    const alert = await sendAlert(alertDeps, { canal, motif: "Question pendant la démo (le bot continue)", contactName: event.profileName, contactId: event.waId, extrait: question });
     // Source « bloc » : les sources possibles sont fixées en base (bot_transferts_source_check), sans migration.
-    await store.addTransfert({ canalId: canal.id, contactId: contact.id, source: "bloc", dernierMessage: question.slice(0, 1000), gerantPrevenu });
+    await store.addTransfert({
+      canalId: canal.id, contactId: contact.id, source: "bloc", dernierMessage: question.slice(0, 1000), gerantPrevenu: alert.voie !== "aucune",
+      alerteVoie: alert.voie, ...(alert.erreurs.length ? { alerteErreur: alert.erreurs.join(" | ") } : {}),
+    });
+    if (alert.voie === "aucune") report.errors.push(`Alerte non envoyée (${canal.id}) : ${alert.erreurs.join(" | ")}`);
   }
 
   report.handled.push({ wamid: event.wamid, outgoing: sent });
@@ -332,4 +323,14 @@ function orderLinkQuery(bot: LoadedBot, event: InboundEvent, secret: string | un
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Motif lisible d'un transfert, pour l'alerte. */
+function handoffMotif(source: "bloc" | "ia" | "limite_ia" | "erreur_ia", flows: string[]): string {
+  if (flows.includes("pflow-mien")) return "Je veux le mien";
+  if (flows.includes("pflow-jules")) return "Parler à Jules";
+  if (source === "ia") return "L'assistant passe la main";
+  if (source === "limite_ia") return "Limite de l'assistant atteinte";
+  if (source === "erreur_ia") return "Erreur de l'assistant";
+  return "Le client demande une personne";
 }

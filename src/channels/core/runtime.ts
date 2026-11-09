@@ -5,6 +5,7 @@
  * - « memory » (tests locaux, CHANNELS_STORE=memory ou WHATSAPP_STORE=memory, données de démonstration) :
  *   jamais sur Vercel.
  */
+import { alertConfigFromEnv } from "./alerts";
 import { createClient } from "@supabase/supabase-js";
 import { serverAiPort } from "@/ai/server-port";
 import { createLocalRepositories } from "@/data/local/repositories";
@@ -181,6 +182,7 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
         onAiCall: async (info) => void (await logAiCall(repos, info)),
         pflowBotsSecret: secret,
         demoBotsUrl: env("PFLOW_BOTS_PUBLIC_URL") || undefined,
+        alerts: alertConfigFromEnv(env),
         transcriber,
         orderBridge: storeMode() === "memory" ? undefined : orderBridgeFromEnv(),
       };

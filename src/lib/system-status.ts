@@ -28,7 +28,10 @@ const KEYS: { name: string; role: string }[] = [
   { name: "PFLOW_ORDER_PONT_CLE", role: "Suivi et annulation de commande par l'IA (= PONT_CLE du CRM)" },
   { name: "TRANSCRIPTION_PROVIDER", role: "Messages vocaux : service" },
   { name: "TRANSCRIPTION_API_KEY", role: "Messages vocaux : clé" },
-  { name: "CRON_SECRET", role: "Suppression automatique quotidienne (12 mois / 30 jours)" },
+  { name: "CRON_SECRET", role: "Tâches planifiées (suppression quotidienne, démo à la minute)" },
+  { name: "WHATSAPP_ALERTE_MODELE", role: "Alertes : modèle approuvé par Meta (fenêtre de 24 h fermée)" },
+  { name: "RESEND_API_KEY", role: "Alertes : e-mail de secours (Resend)" },
+  { name: "ALERTE_EMAIL", role: "Alertes : adresse de l'e-mail de secours" },
   { name: "BASIC_AUTH_PASSWORD", role: "Mot de passe provisoire du site" },
 ];
 

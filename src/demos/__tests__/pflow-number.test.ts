@@ -48,6 +48,12 @@ const text = (t: string) => notif({ type: "text", text: { body: t } });
 const click = (id: string, title: string) => notif({ type: "interactive", interactive: { type: "button_reply", button_reply: { id, title } } });
 const texts = (from: number) => sent.slice(from).map((m) => JSON.stringify(m));
 
+/** Jules (numéro d'alerte 590690938108) a écrit au numéro PFlow il y a peu : sa fenêtre de 24 h est ouverte. */
+async function julesWroteRecently(store: ReturnType<typeof createMemoryChannelStore>) {
+  const jules = await store.getOrCreateContact("pflow", "590690938108", "Jules");
+  await store.saveContact({ ...jules, state: { ...jules.state, lastInboundAt: "2026-11-08T14:00:00Z" } });
+}
+
 describe("numéro PFlow partagé par les démos (faux Meta)", () => {
   it("bot PFlow, mot-clé de démo, session, autre démo, démo expirée ; jamais le vrai slug ni de jeton", async () => {
     const clock = { now: new Date("2026-11-10T15:00:00Z") };
@@ -251,6 +257,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
       coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "actif", testNumeros: [], telAlerte: "590690938108",
     };
     const store = createMemoryChannelStore([canal]);
+    await julesWroteRecently(store); // Jules (numéro d'alerte) a écrit au numéro PFlow : fenêtre de 24 h ouverte, alerte en message libre
     let calls = 0;
     const clock = { now: new Date("2026-11-08T15:00:00Z") };
     const deps = {
@@ -492,6 +499,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
         coexistence: true, echoPauseHours: 12, handoffPauseHours: 24, sessionMinutes: 30, etat: "actif", testNumeros: [], telAlerte: ALERTE,
       };
       const store = createMemoryChannelStore([canal]);
+      await julesWroteRecently(store); // Jules (numéro d'alerte) a écrit au numéro PFlow : fenêtre de 24 h ouverte, alerte en message libre
       const clock = { now: new Date("2026-11-08T15:00:00Z") };
       const deps = {
         store,
@@ -561,7 +569,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
       expect(r.msgs[1].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.remind1 }, action: { parameters: { url: DEMO_PERMANENTE.commandeUrl } } });
       expect(t.titles(r.msgs[2])).toEqual(["✅ C'est fait", "💬 Parler à Jules"]);
       expect(r.alerts).toHaveLength(1);
-      expect(r.alerts[0]).toContain("pose une question");
+      expect(r.alerts[0]).toContain("Motif : Question pendant la démo");
       expect(r.alerts[0]).toContain("« C'est payant ? »");
       expect(await t.paused()).toBe(false);
       const transferts = await t.store.listTransferts("pflow");

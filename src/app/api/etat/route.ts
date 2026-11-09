@@ -19,6 +19,8 @@ export async function GET(request: Request) {
   let evenements: { source: string; cle: string; at: string; erreur?: string }[] = [];
   let comptes: { id: string; plateforme: string; etat: string; numero: string; role: string; resto: string; testNumeros: number }[] = [];
   let erreurCanaux: string | undefined;
+  /** Les dernières alertes au gérant (transferts) : par où elles sont parties, et les échecs. */
+  let alertes: { at: string; canal: string; source: string; prevenu: boolean; voie?: string; erreur?: string }[] = [];
   if (canaux.some((c) => c.configure)) {
     try {
       const rt = await getChannelsRuntime();
@@ -35,13 +37,25 @@ export async function GET(request: Request) {
         resto: c.role === "pflow" ? "Numéro PFlow (démos)" : (names.get(c.restaurantId) ?? "?"),
         testNumeros: c.testNumeros.length,
       }));
+      const transferts = (await Promise.all(list.map(async (c) => (await rt.store.listTransferts(c.id)).map((t) => ({ t, canal: c.numeroAffiche ?? c.id }))))).flat();
+      alertes = transferts
+        .sort((a, b) => b.t.at.localeCompare(a.t.at))
+        .slice(0, 20)
+        .map(({ t, canal }) => ({
+          at: t.at,
+          canal,
+          source: t.source,
+          prevenu: t.gerantPrevenu,
+          ...(t.alerteVoie ? { voie: t.alerteVoie } : {}),
+          ...(t.alerteErreur ? { erreur: maskId(t.alerteErreur) } : {}),
+        }));
     } catch (error) {
       erreurCanaux = error instanceof Error ? error.message : String(error);
     }
   }
 
   return NextResponse.json(
-    { cles: keyStatuses(), canaux, services: servicesStatus(), comptes, evenements, ...(erreurCanaux ? { erreurCanaux } : {}) },
+    { cles: keyStatuses(), canaux, services: servicesStatus(), comptes, evenements, alertes, ...(erreurCanaux ? { erreurCanaux } : {}) },
     { headers: { "cache-control": "no-store" } },
   );
 }

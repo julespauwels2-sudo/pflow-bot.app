@@ -10,6 +10,13 @@ export type EventSource = Plateforme | "pflow_order";
 
 /** Envoi vers une plateforme (API Graph de WhatsApp, API d'Instagram). */
 /** Options d'envoi (WhatsApp). */
+export interface TemplateMessage {
+  name: string;
+  /** Code de langue du modèle (ex. « fr »). */
+  language: string;
+  bodyParams: string[];
+}
+
 export interface SendOptions {
   /**
    * Compte de messagerie qui envoie (et paie) le message (bot_canaux.messaging_account_id, PAS le WABA).
@@ -22,6 +29,11 @@ export interface SendOptions {
 export interface ChannelSender {
   /** Envoie un message et renvoie son identifiant sur la plateforme. */
   send(accountId: string, to: string, message: OutgoingMessage, options?: SendOptions): Promise<string | undefined>;
+  /**
+   * Modèle de message approuvé par Meta (hors fenêtre de 24 h) : alertes au gérant ou à Jules. Absent pour
+   * Instagram. Paramètres du corps dans l'ordre ({{1}}, {{2}}…).
+   */
+  sendTemplate?(accountId: string, to: string, template: TemplateMessage, options?: SendOptions): Promise<string | undefined>;
   /** Accusé de lecture et « en train d'écrire ». */
   markRead(accountId: string, messageId: string, typing: boolean, to?: string): Promise<void>;
   /** Téléchargement d'un média reçu (message vocal). */
@@ -104,10 +116,17 @@ export interface Transfert {
   source: "bloc" | "ia" | "limite_ia" | "erreur_ia";
   dernierMessage?: string;
   gerantPrevenu: boolean;
+  /** Par où l'alerte est partie (src/channels/core/alerts.ts) ; absent sur les anciens transferts. */
+  alerteVoie?: AlertVoie;
+  /** Erreurs des tentatives (message libre, modèle, e-mail), si une a échoué. */
+  alerteErreur?: string;
   at: string;
   vuLe?: string;
   resoluLe?: string;
 }
+
+/** Message libre (fenêtre de 24 h ouverte), modèle approuvé, e-mail de secours, ou rien n'est parti. */
+export type AlertVoie = "texte" | "modele" | "email" | "aucune";
 
 /** Dates limites de conservation : tout ce qui est plus ancien est supprimé. */
 export interface PurgeCutoffs {
