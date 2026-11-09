@@ -290,7 +290,7 @@ export function PushControls({ compact = false, onChange }: { compact?: boolean;
                     </span>
                   )}
                   {a.endpoint !== endpoint && (
-                    <button type="button" className="ml-auto text-xs text-muted underline" onClick={() => remove(a.endpoint)} disabled={busy}>
+                    <button type="button" className="ml-auto text-xs text-muted underline max-md:min-h-11" onClick={() => remove(a.endpoint)} disabled={busy}>
                       Retirer
                     </button>
                   )}

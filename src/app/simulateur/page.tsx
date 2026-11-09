@@ -1,5 +1,6 @@
 "use client";
 
+import { DesktopOnly } from "@/components/mobile";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
@@ -15,9 +16,11 @@ import { useLoad } from "@/data/browser";
  */
 export default function SimulatorPage() {
   return (
-    <Suspense fallback={<Loading />}>
-      <SimulatorLoader />
-    </Suspense>
+    <DesktopOnly>
+      <Suspense fallback={<Loading />}>
+        <SimulatorLoader />
+      </Suspense>
+    </DesktopOnly>
   );
 }
 

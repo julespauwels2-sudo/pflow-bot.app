@@ -919,3 +919,18 @@ Retour de test de Jules : le parcours guidé marche ; il faut qu'il avance sans 
 - **Aucune contrainte SQL à changer** : `alerte_voie` n'est plus écrite (historique), la voie se déduit de
   `alerte_push`.
 - Plan, « Plus tard » : notifications push pour le CRM (chantier séparé).
+
+
+## 9 novembre 2026 (suite) — version mobile (PR séparée)
+
+Retour de test de Jules : sur iPhone, PFlow Bots était inutilisable (dimensions, boîte de réception
+incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`docs/etape-c/mobile.md`) :
+- **boîte de réception façon WhatsApp** :
+  - liste en plein écran, celles qui attendent Jules en haut, non lus en gras ;
+  - conversation en plein écran, flèche retour, zone de réponse au-dessus du clavier iOS, boutons de 44 px ;
+  - une notification ouvre directement la conversation ;
+- **barre d'onglets** (Boîte de réception, État) avec les zones sûres ;
+- **État** en une colonne ;
+- **autres pages** : « Cette page s'utilise sur ordinateur » ;
+- champs 16 px, boutons 44 px, aucun défilement horizontal (vérifié à 390 × 844, mode app installée).
+- Mode démo : `/api/inbox/simuler` accepte un canal (`canal-pflow`) pour simuler le numéro PFlow.
