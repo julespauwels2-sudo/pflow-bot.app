@@ -6,6 +6,7 @@
  *   jamais sur Vercel.
  */
 import { alertConfigFromEnv } from "./alerts";
+import { demoCompletionFromEnv } from "@/ai/demo-claude";
 import { createClient } from "@supabase/supabase-js";
 import { serverAiPort } from "@/ai/server-port";
 import { createLocalRepositories } from "@/data/local/repositories";
@@ -131,6 +132,7 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
   const sendersByPlatform = senders();
   const secret = env("PFLOW_BOTS_SECRET") || undefined;
   const transcriber = transcriberFromEnv();
+  const demoAnswer = demoCompletionFromEnv();
   let store: ChannelStore;
   let repos: Repositories;
   let workspace: () => Promise<WorkspaceData>;
@@ -184,6 +186,7 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
         demoBotsUrl: env("PFLOW_BOTS_PUBLIC_URL") || undefined,
         alerts: alertConfigFromEnv(env),
         transcriber,
+        demoAnswer,
         voiceLimits: voiceLimitsFromEnv(),
         orderBridge: storeMode() === "memory" ? undefined : orderBridgeFromEnv(),
       };

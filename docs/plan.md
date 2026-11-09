@@ -58,6 +58,9 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   étape 3, « Je veux le mien », notification push reçue par Jules. Historique de la démo permanente :
   `docs/etape-c/demo-permanente.md` et `docs/journal.md`. Suites : étape 3 en ≈ 20 s, vrais boutons dans la boîte
   de réception, diagnostic des comptes WhatsApp (PR du 9 novembre).
+- **Réponses intelligentes** (PR du 9 novembre, nuit) : politesse sans alerte, questions répondues par l'IA à partir
+  d'une base modifiable sans code (page Démos), alerte à Jules seulement si l'IA ne sait pas, inscription, prix,
+  livraison ou demande de Jules. Détail : `docs/etape-c/demo-reponses.md`.
 - **Test réel encore à faire** : boutons « Retour sur WhatsApp » (wa.me + texte prérempli) depuis le navigateur
   intégré de WhatsApp, sur Android (secours codé : rappel de l'étape avec [✅ C'est fait]).
 
@@ -128,7 +131,23 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   tard, PR séparée). Sous-test « un réel avec son tendance ne part jamais par l'API : notification avec le son,
   relance, « C'est posté » » ; les 3 autres passent. Sans rapport avec la démo permanente (même échec sur `main`).
   Lancer : `cd repo && node --test tests/sons-tendance.test.js`.
-- **Notifications push pour le CRM** (noté le 9 novembre 2026, chantier séparé) : même principe que la boîte de
+- **Centre d'alertes unique dans PFlow Bots** (audit du 9 novembre 2026, `docs/etape-c/audit-notifications-crm.md`) :
+  PFlow Bots lit la table `alertes` du CRM (lecture seule) et pousse les alertes critiques ; le QG garde le personnel.
+  ≈ 1 jour, après Embedded Signup. **Urgent avant** : ajouter `COMMANDE_EN_ATTENTE` (et paiements, silence) au push du
+  QG (1 ligne SQL, à jouer par Jules).
+- **Livraison : route `POST /api/webhooks/pflow-livraison`** (contrat `docs/livraison/INTERFACE-PFLOW-BOTS.md` du
+  CRM, version 1 du 9 novembre 2026, décision finale de Jules). Les messages de suivi partent **toujours du numéro du
+  resto**, **jamais** du numéro PFlow (aucun secours) : texte libre avec bouton « Suivre ma livraison » si la fenêtre
+  de 24 h est ouverte, modèle sinon ; sinon `pas_de_canal` / `modele_absent` / `erreur_meta`, et PFlow Order réessaie
+  puis alerte Jules. À construire : même signature que `/api/webhooks/pflow-order` ; envoi de **modèles** (absent du
+  client Graph aujourd'hui) ; idempotence gardée 24 h **avant** l'appel à Meta (nouvelle table `bot_`, SQL à montrer) ;
+  code de livraison jamais dans les journaux ; réponse en moins de 8 s. ≈ 1 jour. Prérequis : canaux **actifs** des
+  restos (bascule 19-21 et Embedded Signup) et les **10 modèles** `pflow_livraison_*` approuvés sur le compte WhatsApp
+  de chaque resto (création par l'API de Meta, intégrée à Embedded Signup). À signaler au CRM : le §5 (points 2 et 4)
+  parle encore d'un envoi « par le numéro PFlow », en contradiction avec la décision finale.
+- **Supervision du CRM et arrêt d'UChat** : les sondes interrogent encore UChat (fausses pannes après l'arrêt). À
+  adapter avec la bascule (PR CRM).
+- ~~**Notifications push pour le CRM**~~ : le CRM en a déjà (app QG). Ancienne note : (noté le 9 novembre 2026, chantier séparé) : même principe que la boîte de
   réception de PFlow Bots (app installée, Web Push, clés VAPID), pour les alertes du CRM. Pas maintenant.
 
 ### Phase 2

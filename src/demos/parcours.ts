@@ -6,15 +6,19 @@
  * - un mot-clé du bot PFlow (« tester la démo », « J'ai passé ma commande ✅ », « je veux le mien »…) lance
  *   directement son flux, quelle que soit la longueur du message ;
  * - « c'est fait », « ok »… fait passer à l'étape suivante (étapes 1 et 2) ;
- * - une QUESTION en plein parcours (« ? », ou plus de 4 mots) : « Bonne question ! Jules vous répond très vite »,
- *   Jules est prévenu (notification push + boîte de réception, avec la question ; une alerte au plus toutes les 30 min par
- *   contact), le bot n'est PAS mis en pause, puis l'étape en cours est rappelée ;
- * - tout autre message (salutation comprise) RAPPELLE l'étape en cours, avec son bouton : le prospect ne se
+ * - une POLITESSE (« Salut, ça va ? », « merci », « ok ») : une réponse courte et sympa, puis le rappel de l'étape.
+ *   Aucune alerte ;
+ * - une QUESTION (« ? », ou plus de 4 mots) : le serveur la confie à l'IA, qui répond à partir de la base de
+ *   connaissances (src/demos/demo-knowledge.ts), puis l'étape est rappelée. Jules n'est prévenu (notification push +
+ *   boîte de réception, une alerte au plus toutes les 30 min par contact, sans pause du bot) que si l'IA ne trouve pas,
+ *   ou pour une inscription, un prix, la livraison, une demande de Jules. Sans IA : « Bonne question ! » + alerte ;
+ * - tout autre message RAPPELLE l'étape en cours, avec son bouton : le prospect ne se
  *   perd jamais. Chaque rappel propose aussi [💬 Parler à Jules]. Sans parcours : l'accueil.
  * Aucune relance automatique : le bot ne parle que quand le prospect écrit.
  */
 import { matchKeyword, normalize, type EngineEvent, type Flow, type IncomingMessage } from "@/engine";
 import { PFLOW_FLOWS } from "./pflow-bot";
+import { courtesyReply } from "./demo-knowledge";
 
 export type ParcoursEtape = 0 | 1 | 2 | 3;
 
@@ -89,8 +93,12 @@ export function looksLikeQuestion(text: string): boolean {
 
 export interface GuidedMessage {
   message: IncomingMessage;
-  /** Question en plein parcours : son texte (le serveur prévient Jules, sans mettre le bot en pause). */
+  /** Question : son texte (le serveur la confie à l'IA ; Jules prévenu seulement si elle ne sait pas). */
   question?: string;
+  /** Politesse : la réponse courte à envoyer avant le rappel de l'étape (aucune alerte). */
+  courtesy?: string;
+  /** Étape en cours (absente : la démo n'a pas commencé). */
+  step?: ParcoursEtape;
 }
 
 /** Ce que le moteur doit jouer pour le bot PFlow de base, et s'il faut prévenir Jules. Boutons, médias… : inchangés. */
@@ -106,8 +114,16 @@ export function guide(message: IncomingMessage, flows: Flow[], parcours: Parcour
   const passed = step !== undefined && match && ((match.flow.id === PFLOW_FLOWS.etape2 && step >= 2) || (match.flow.id === PFLOW_FLOWS.etape3 && step >= 3));
   if (passed) return { message: { kind: "start_flow", flowId: REMINDER_OF_STEP[step] } };
   if (match && match.flow.id !== PFLOW_FLOWS.accueil) return { message: { kind: "start_flow", flowId: match.flow.id } };
-  if (step !== undefined && looksLikeQuestion(message.text)) {
-    return { message: { kind: "start_flow", flowId: `${PFLOW_FLOWS.question}${step}` }, question: message.text.trim() };
+  // Politesse (« Salut, ça va ? » : un vocal transcrit ajoute souvent un « ? ») : jamais une question.
+  const courtesy = courtesyReply(message.text);
+  if (courtesy) {
+    if (step === undefined) return { message: { kind: "start_flow", flowId: PFLOW_FLOWS.accueil } };
+    return { message: { kind: "start_flow", flowId: `${PFLOW_FLOWS.question}${step}` }, courtesy, step };
+  }
+  if (looksLikeQuestion(message.text)) {
+    // Avant la démo, sans IA : l'accueil (le serveur remplace par la réponse de l'IA quand elle sait).
+    const fallback = step === undefined ? PFLOW_FLOWS.accueil : `${PFLOW_FLOWS.question}${step}`;
+    return { message: { kind: "start_flow", flowId: fallback }, question: message.text.trim(), ...(step === undefined ? {} : { step }) };
   }
   return { message: { kind: "start_flow", flowId: REMINDER_OF_STEP[step ?? 0] } };
 }

@@ -987,6 +987,44 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
   « commande prête » en bas de l'écran.
 
 
+## 9 novembre 2026 (nuit) — PFlow Démo : réponses intelligentes (PR séparée)
+
+- **Constat du test réel** : « Salut, ça va ? » (vocal transcrit avec un « ? ») et une vraie question sur les horaires
+  recevaient « Bonne question ! Jules vous répond très vite » + une alerte.
+- **Politesse** (salut, bonjour, ça va, merci, ok, super…) : réponse courte, puis rappel de l'étape. Aucune alerte, pas
+  d'appel à l'IA.
+- **Questions** : Claude Haiku répond **à partir de la base de connaissances seulement**, puis la démo reprend (bouton de
+  l'étape + [💬 Parler à Jules]). Pas d'alerte quand elle sait.
+- **Alerte à Jules** seulement si : pas de réponse dans la base, inscription, négociation ou prix non renseigné,
+  livraison (« en préparation », aucun détail), demande de Jules. Une réponse avec un montant absent de la base est
+  refusée (jamais de prix inventé).
+- **Base modifiable sans code** : page Démos → « Bot PFlow Démo : base de connaissances » (FAQ + règles),
+  pré-remplie avec la liste de Jules (frais de mise en place et livraison selon son complément). Rangée dans
+  `bot_fiches` sous un identifiant fixe : **aucun SQL**.
+- `ANTHROPIC_API_KEY` est bien dans Vercel (production) : actif dès le déploiement. Coût ≈ 0,05 centime par question.
+- Détail : `docs/etape-c/demo-reponses.md`. Tests : `src/demos/__tests__/demo-reponses.test.ts`.
+
+
+## 9 novembre 2026 (nuit) — audit des notifications du CRM (lecture seule, aucun code)
+
+- **Seul canal vers Jules : le push de l'app QG du CRM** (marche, indépendant de Vercel et d'UChat). WhatsApp coupé
+  depuis le 26 octobre (code + pause jusqu'en 2100 en base). Ni e-mail, ni SMS.
+- 🔴 **Commande non acceptée** : détectée (10 min, 12 fois en 30 jours, dont Cookies An Nou 6 h 19 le 8 nov. et Mexico
+  plus d'1 jour le 1er nov.) mais **Jules n'est plus prévenu** : la règle n'est pas dans la liste du push.
+  Correctif d'1 ligne proposé (réglage `qg_settings.alertes_push`), **non appliqué**.
+- **Resto sans commande depuis X jours** : n'existe pas en jours (silence en heures, décrochage à la semaine,
+  affichage seulement).
+- **Résumé du matin** : push chaque jour à 8 h, marche.
+- **Stripe** (abonnement PFlow) : branché, push en temps réel, jamais déclenché (aucune facture d'abonnement).
+- Appareils abonnés au push du QG : 1 seul (5 fin octobre).
+- Recommandation : pas de nouveau push dans le CRM ; à terme, **PFlow Bots centre d'alertes unique** pour tout ce qui
+  touche un resto (lecture de la table `alertes`, aucune modification du CRM). Détail :
+  `docs/etape-c/audit-notifications-crm.md`.
+- **Contrat livraison mis à jour (9 nov., version 1)** : plus aucun secours par le numéro PFlow. Rien n'était encore
+  construit côté PFlow Bots pour la livraison : la route `pflow-livraison` est ajoutée au plan (≈ 1 jour, après les
+  canaux actifs des restos et Embedded Signup, qui créera aussi les 10 modèles de livraison sur chaque compte resto).
+
+
 ## 9 novembre 2026 (nuit) — direction artistique de PFlow Bots (PR séparée)
 
 - Thème centralisé dans `src/app/globals.css` : couleurs, polices (Fredoka et Manrope, fichiers du site), arrondis,

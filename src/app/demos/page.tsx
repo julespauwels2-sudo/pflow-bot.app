@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
-import { Badge, Button, Card, Input, Loading, Notice } from "@/components/ui";
+import { Badge, Button, Card, Field, Input, Loading, Notice, Textarea } from "@/components/ui";
 import { errorText, getRepositories, isCrmMode, useLoad } from "@/data/browser";
 import type { BotClient, DemoRecord } from "@/data/types";
 import { DEFAULT_DEMO_DAYS, demoOrderUrl } from "@/demos/keyword";
@@ -97,6 +97,8 @@ export default function DemosPage() {
             normalement, sans mot-clé ni expiration.
           </Notice>
         )}
+
+        <KnowledgeCard />
 
         {state.status === "ready" && (
           <Card title={`En cours (${current.length})`}>
@@ -243,5 +245,99 @@ function DemoRow({
         </Button>
       </div>
     </li>
+  );
+}
+
+interface Knowledge {
+  faq: string;
+  regles: string;
+  parDefaut: boolean;
+  iaActive: boolean;
+}
+
+/** Base de connaissances du bot PFlow Démo : ce que l'IA a le droit de dire aux prospects (modifiable sans code). */
+function KnowledgeCard() {
+  const [kb, setKb] = useState<Knowledge | null>(null);
+  const [draft, setDraft] = useState({ faq: "", regles: "" });
+  const [status, setStatus] = useState<{ tone: "error" | "success"; text: string } | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await accessToken();
+        const response = await fetch("/api/demos/base-connaissances", { headers: token ? { authorization: `Bearer ${token}` } : {} });
+        const body = (await response.json().catch(() => ({}))) as Partial<Knowledge> & { error?: string };
+        if (cancelled) return;
+        if (!response.ok) throw new Error(body.error ?? `Erreur ${response.status}`);
+        const loaded = { faq: body.faq ?? "", regles: body.regles ?? "", parDefaut: Boolean(body.parDefaut), iaActive: Boolean(body.iaActive) };
+        setKb(loaded);
+        setDraft({ faq: loaded.faq, regles: loaded.regles });
+      } catch (error) {
+        if (!cancelled) setStatus({ tone: "error", text: `Base de connaissances indisponible : ${errorText(error)}` });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const token = await accessToken();
+      const response = await fetch("/api/demos/base-connaissances", {
+        method: "PUT",
+        headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(draft),
+      });
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(body.error ?? `Erreur ${response.status}`);
+      setKb((k) => (k ? { ...k, ...draft, parDefaut: false } : k));
+      setStatus({ tone: "success", text: "Base enregistrée : le bot PFlow Démo l'utilise dès le prochain message." });
+    } catch (error) {
+      setStatus({ tone: "error", text: errorText(error) });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const changed = kb !== null && (draft.faq !== kb.faq || draft.regles !== kb.regles);
+  return (
+    <Card
+      title="Bot PFlow Démo : base de connaissances"
+      description="Quand un prospect pose une question pendant la démo, l'IA répond seulement avec ce qui est écrit ici, puis la démo reprend. Si la réponse n'y est pas, Jules est prévenu (notification push). Livraison, inscription, négociation et « parler à Jules » passent toujours par toi."
+    >
+      <div className="space-y-3" data-testid="demo-knowledge">
+        {status && (
+          <Notice tone={status.tone} onClose={() => setStatus(null)}>
+            {status.text}
+          </Notice>
+        )}
+        {kb === null && !status && <Loading />}
+        {kb && (
+          <>
+            <div className="flex flex-wrap gap-2">
+              {kb.parDefaut ? <Badge tone="info">Base par défaut (jamais enregistrée)</Badge> : <Badge tone="success">Base enregistrée</Badge>}
+              {kb.iaActive ? (
+                <Badge tone="success">IA active</Badge>
+              ) : (
+                <Badge tone="warning">IA inactive (ANTHROPIC_API_KEY absente) : toute question prévient Jules</Badge>
+              )}
+            </div>
+            <Field label="FAQ : ce que PFlow propose" hint="Une information par ligne. L'IA ne cite jamais un prix ou une fonctionnalité absente d'ici.">
+              <Textarea rows={10} value={draft.faq} maxLength={8000} onChange={(e) => setDraft((d) => ({ ...d, faq: e.target.value }))} data-testid="demo-knowledge-faq" />
+            </Field>
+            <Field label="Règles de réponse" hint="Ce que l'IA ne doit jamais dire, et quand elle passe la main.">
+              <Textarea rows={5} value={draft.regles} maxLength={4000} onChange={(e) => setDraft((d) => ({ ...d, regles: e.target.value }))} data-testid="demo-knowledge-regles" />
+            </Field>
+            <Button disabled={!changed || saving} onClick={save} data-testid="demo-knowledge-save">
+              {saving ? "Enregistrement…" : "Enregistrer la base"}
+            </Button>
+          </>
+        )}
+      </div>
+    </Card>
   );
 }
