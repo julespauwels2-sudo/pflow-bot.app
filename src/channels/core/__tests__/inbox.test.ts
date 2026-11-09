@@ -58,7 +58,7 @@ describe("boîte de réception", () => {
 
   it("affiche les messages du bot lisiblement", () => {
     expect(messageText({ type: "buttons", contenu: { kind: "buttons", text: "Choisissez", buttons: [{ id: "a", title: "Oui" }] } })).toBe("Choisissez\n[Oui]");
-    expect(messageText({ type: "link", contenu: { kind: "link", text: "Go", url: "https://x", buttonLabel: "Commander" } })).toBe("Go\n[🔗 Commander] https://x");
+    expect(messageText({ type: "link", contenu: { kind: "link", text: "Go", url: "https://x", buttonLabel: "Commander" } })).toBe("Go\n[🔗 Commander]");
     expect(messageText({ type: "audio", contenu: {} })).toBe("🎤 Message vocal");
   });
 });

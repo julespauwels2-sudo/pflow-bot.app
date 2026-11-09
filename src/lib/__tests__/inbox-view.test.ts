@@ -56,3 +56,15 @@ describe("boîte de réception (téléphone)", () => {
     expect(shortTime(new Date(2026, 10, 2, 9, 0).toISOString(), now)).toBe("02/11");
   });
 });
+
+describe("boîte de réception : messages du bot avec boutons", () => {
+  it("boutons, lien et liste reconnus dans le contenu enregistré ; texte simple sinon", async () => {
+    const { interactiveContent } = await import("@/components/message-content");
+    expect(interactiveContent({ kind: "buttons", text: "Bienvenue", buttons: [{ id: "demo", title: "Tester la démo" }] })).toMatchObject({ kind: "buttons" });
+    expect(interactiveContent({ kind: "link", text: "Étape 1/3", url: "https://order.pflow.fr/demo/commande?r=pflow", buttonLabel: "Je commande" })).toMatchObject({ kind: "link", buttonLabel: "Je commande" });
+    expect(interactiveContent({ kind: "list", text: "Choisissez", buttonLabel: "Voir", items: [] })).toMatchObject({ kind: "list" });
+    expect(interactiveContent({ kind: "text", text: "Bonjour" })).toBeNull();
+    expect(interactiveContent({ texte: "Tester la démo", reponse: "demo" })).toBeNull(); // réponse du client à un bouton : sa bulle
+    expect(interactiveContent(null)).toBeNull();
+  });
+});
