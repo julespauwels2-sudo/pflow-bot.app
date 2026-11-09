@@ -934,3 +934,24 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
 - **autres pages** : « Cette page s'utilise sur ordinateur » ;
 - champs 16 px, boutons 44 px, aucun défilement horizontal (vérifié à 390 × 844, mode app installée).
 - Mode démo : `/api/inbox/simuler` accepte un canal (`canal-pflow`) pour simuler le numéro PFlow.
+
+
+## 9 novembre 2026 (suite) — migration des 3 clients (19-21) et nouveau client : vérifications en lecture seule
+
+- **Runbook** : `docs/etape-c/migration-3-clients.md`.
+  - Bots des 3 restos liés au modèle maître.
+  - Liens de commande en ligne, cartes et horaires présents.
+  - **Fiches du bot vides** (à remplir).
+  - IDs Meta inconnus de mon côté : diagnostic à faire par Jules avant le 12.
+  - SQL des 3 canaux en test préparé, **non appliqué**.
+  - Runbooks cochables du 19 au 21, avec retour arrière.
+- **Risque à l'arrêt d'UChat** : surtout le **moyen de paiement** (ligne de crédit Smart Link révocable). À
+  vérifier et remplacer par la carte de Jules avant le 12.
+  - Ne jamais « De-register » dans UChat ; ne pas retirer Smart Link.
+  - Coexistence : appli à ouvrir au moins tous les 13 à 14 jours.
+- **ag pizza** : sa copie de l'Accueil n'a aucune personnalisation (textes et boutons identiques au modèle) :
+  « Revenir au modèle » le 19 (SQL équivalent montré, non appliqué).
+- **Nouveau client** : `docs/etape-c/nouveau-client.md`.
+  - Sans UChat, le numéro d'un resto ne peut plus être mis sur l'API en gardant son appli : il faut l'Embedded
+    Signup v4 (statut Tech Provider).
+  - Démarches Meta à lancer maintenant (1 à 3 semaines), développement ≈ 4 à 5 jours après le 21.
