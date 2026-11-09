@@ -58,6 +58,9 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   étape 3, « Je veux le mien », notification push reçue par Jules. Historique de la démo permanente :
   `docs/etape-c/demo-permanente.md` et `docs/journal.md`. Suites : étape 3 en ≈ 20 s, vrais boutons dans la boîte
   de réception, diagnostic des comptes WhatsApp (PR du 9 novembre).
+- **Réponses intelligentes** (PR du 9 novembre, nuit) : politesse sans alerte, questions répondues par l'IA à partir
+  d'une base modifiable sans code (page Démos), alerte à Jules seulement si l'IA ne sait pas, inscription, prix,
+  livraison ou demande de Jules. Détail : `docs/etape-c/demo-reponses.md`.
 - **Test réel encore à faire** : boutons « Retour sur WhatsApp » (wa.me + texte prérempli) depuis le navigateur
   intégré de WhatsApp, sur Android (secours codé : rappel de l'étape avec [✅ C'est fait]).
 

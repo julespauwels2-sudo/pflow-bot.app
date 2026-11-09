@@ -7,6 +7,7 @@
 import type { Session } from "@/engine";
 import type { Db, Row } from "@/data/supabase/db";
 import type { Canal, ChannelContact, ChannelStore, PushSubscriptionRecord, StoredMessage, Transfert } from "./types";
+import { DEMO_KNOWLEDGE_ID } from "@/demos/demo-knowledge";
 
 const iso = (v: unknown) => (v ? new Date(String(v)).toISOString() : undefined);
 const eq = (column: string, value: string) => ({ in: { column, values: [value] } });
@@ -322,6 +323,16 @@ export function createSupabaseChannelStore(db: Db, newId: () => string = () => c
     },
     async deletePushSubscription(endpoint) {
       await db.remove("bot_push_abonnements", "endpoint", [endpoint]);
+    },
+    // Base de connaissances du bot PFlow Démo : une ligne de bot_fiches sous un identifiant fixe (hors CRM).
+    async getDemoKnowledge() {
+      const [row] = await db.select("bot_fiches", "donnees, maj_le", eq("restaurant_id", DEMO_KNOWLEDGE_ID));
+      const d = (row?.donnees ?? null) as { faq?: unknown; reglesSpeciales?: unknown } | null;
+      if (!d) return null;
+      return { faq: typeof d.faq === "string" ? d.faq : "", regles: typeof d.reglesSpeciales === "string" ? d.reglesSpeciales : "", ...(row?.maj_le ? { majLe: String(row.maj_le) } : {}) };
+    },
+    async saveDemoKnowledge(k) {
+      await db.upsert("bot_fiches", [{ restaurant_id: DEMO_KNOWLEDGE_ID, donnees: { faq: k.faq, reglesSpeciales: k.regles }, maj_le: new Date().toISOString() }], "restaurant_id");
     },
   };
 }

@@ -987,6 +987,24 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
   « commande prête » en bas de l'écran.
 
 
+## 9 novembre 2026 (nuit) — PFlow Démo : réponses intelligentes (PR séparée)
+
+- **Constat du test réel** : « Salut, ça va ? » (vocal transcrit avec un « ? ») et une vraie question sur les horaires
+  recevaient « Bonne question ! Jules vous répond très vite » + une alerte.
+- **Politesse** (salut, bonjour, ça va, merci, ok, super…) : réponse courte, puis rappel de l'étape. Aucune alerte, pas
+  d'appel à l'IA.
+- **Questions** : Claude Haiku répond **à partir de la base de connaissances seulement**, puis la démo reprend (bouton de
+  l'étape + [💬 Parler à Jules]). Pas d'alerte quand elle sait.
+- **Alerte à Jules** seulement si : pas de réponse dans la base, inscription, négociation ou prix non renseigné,
+  livraison (« en préparation », aucun détail), demande de Jules. Une réponse avec un montant absent de la base est
+  refusée (jamais de prix inventé).
+- **Base modifiable sans code** : page Démos → « Bot PFlow Démo : base de connaissances » (FAQ + règles),
+  pré-remplie avec la liste de Jules (frais de mise en place et livraison selon son complément). Rangée dans
+  `bot_fiches` sous un identifiant fixe : **aucun SQL**.
+- `ANTHROPIC_API_KEY` est bien dans Vercel (production) : actif dès le déploiement. Coût ≈ 0,05 centime par question.
+- Détail : `docs/etape-c/demo-reponses.md`. Tests : `src/demos/__tests__/demo-reponses.test.ts`.
+
+
 ## 9 novembre 2026 (nuit) — audit des notifications du CRM (lecture seule, aucun code)
 
 - **Seul canal vers Jules : le push de l'app QG du CRM** (marche, indépendant de Vercel et d'UChat). WhatsApp coupé

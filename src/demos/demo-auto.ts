@@ -27,8 +27,8 @@ import { nextParcours, type DemoOrderSnapshot, type ParcoursState } from "./parc
 import { createDemoToken, readDemoToken } from "./demo-token";
 
 /** Délai par défaut entre l'ouverture du dashboard et l'étape 3/3 (variable PFLOW_DEMO_ETAPE3_SECONDES). */
-export const DEMO_ETAPE3_DEFAULT_SECONDS = 90;
-export const DEMO_ETAPE3_MIN_SECONDS = 15;
+export const DEMO_ETAPE3_DEFAULT_SECONDS = 20;
+export const DEMO_ETAPE3_MIN_SECONDS = 10;
 export const DEMO_ETAPE3_MAX_SECONDS = 900;
 /** Confirmations de commande de démo au plus, par contact et par heure. */
 export const DEMO_CONFIRMATIONS_PER_HOUR = 3;
@@ -259,7 +259,10 @@ export function dashboardUrlWithOrder(order: DemoOrderSnapshot | undefined): str
 }
 
 /** Programme l'étape 3/3 et renvoie l'adresse du dashboard. Ne bloque jamais le prospect (jeton faux : dashboard simple). */
-export async function handleDemoDashboard(deps: DemoAutoDeps, token: string): Promise<{ redirect: string; programmee: boolean; raison?: string }> {
+export async function handleDemoDashboard(
+  deps: DemoAutoDeps,
+  token: string,
+): Promise<{ redirect: string; programmee: boolean; raison?: string; contactId?: string; due?: string }> {
   const now = deps.now ? deps.now() : new Date();
   const found = await resolveToken(deps, token, now);
   if ("error" in found) return { redirect: DEMO_PERMANENTE.dashboardUrl, programmee: false, raison: found.error };
@@ -271,7 +274,24 @@ export async function handleDemoDashboard(deps: DemoAutoDeps, token: string): Pr
   if (parcours.etape3Due) return { redirect, programmee: false, raison: "déjà programmée" };
   const due = new Date(now.getTime() + deps.etape3Seconds * 1000).toISOString();
   await deps.store.saveContact({ ...contact, demo: { ...contact.demo!, parcours: { ...parcours, etape3Due: due } } });
-  return { redirect, programmee: true };
+  return { redirect, programmee: true, contactId: contact.id, due };
+}
+
+/** Attente maximale dans la route du dashboard (la fonction a 300 s au plus). */
+export const MAX_INLINE_WAIT_MS = 240_000;
+
+/**
+ * Envoi de l'étape 3/3 à l'heure dite, depuis la route du dashboard (après la réponse, `after` de Next.js : la
+ * fonction reste active le temps de l'attente). La tâche à la minute reste le filet de sécurité ; la clé unique
+ * « demo-etape3:<contact>:<échéance> » empêche tout double envoi entre les deux.
+ */
+export async function sendEtape3WhenDue(deps: DemoAutoDeps, contactId: string, due: string, sleep: (ms: number) => Promise<void>): Promise<DemoDueReport> {
+  const now = deps.now ? deps.now() : new Date();
+  const wait = Date.parse(due) - now.getTime();
+  // Échéance lointaine (réglage de plusieurs minutes) : la tâche à la minute s'en charge.
+  if (wait > MAX_INLINE_WAIT_MS) return { envoyees: 0, ignorees: [{ contact: contactId.slice(0, 8), raison: "échéance lointaine : tâche à la minute" }] };
+  if (wait > 0) await sleep(wait + 250);
+  return runDemoDue(deps, { contactId });
 }
 
 // ---------------------------------------------------------------------------
@@ -283,12 +303,14 @@ export interface DemoDueReport {
   ignorees: { contact: string; raison: string }[];
 }
 
-export async function runDemoDue(deps: DemoAutoDeps): Promise<DemoDueReport> {
+export async function runDemoDue(deps: DemoAutoDeps, only?: { contactId: string }): Promise<DemoDueReport> {
   const now = deps.now ? deps.now() : new Date();
   const report: DemoDueReport = { envoyees: 0, ignorees: [] };
   const canaux = (await deps.store.listCanaux()).filter((c) => c.role === "pflow" && c.plateforme === "whatsapp" && c.etat !== "coupe");
   for (const canal of canaux) {
-    for (const contact of await deps.store.listContacts(canal.id)) {
+    // Un seul contact (envoi à ~20 s depuis la route du dashboard) : relu juste avant, état à jour.
+    const contacts = only ? [await deps.store.getContact(only.contactId)].filter((c): c is NonNullable<typeof c> => Boolean(c && c.canalId === canal.id)) : await deps.store.listContacts(canal.id);
+    for (const contact of contacts) {
       const parcours = contact.demo?.parcours;
       if (!parcours?.etape3Due || Date.parse(parcours.etape3Due) > now.getTime()) continue;
       const short = contact.id.slice(0, 8);
