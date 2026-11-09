@@ -1010,7 +1010,7 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
 - **Seul canal vers Jules : le push de l'app QG du CRM** (marche, indépendant de Vercel et d'UChat). WhatsApp coupé
   depuis le 26 octobre (code + pause jusqu'en 2100 en base). Ni e-mail, ni SMS.
 - 🔴 **Commande non acceptée** : détectée (10 min, 12 fois en 30 jours, dont Cookies An Nou 6 h 19 le 8 nov. et Mexico
-  plus d'1 jour le 1er nov.) mais **Jules n'est plus prévenu** : la règle n'est pas dans la liste du push.
+  4 h 51 le 1er nov., commande programmée) mais **Jules n'est plus prévenu** : la règle n'est pas dans la liste du push.
   Correctif d'1 ligne proposé (réglage `qg_settings.alertes_push`), **non appliqué**.
 - **Resto sans commande depuis X jours** : n'existe pas en jours (silence en heures, décrochage à la semaine,
   affichage seulement).
@@ -1050,6 +1050,40 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
   Bots refuse un événement pour un canal en test.
 - **Runbook de migration** (`docs/etape-c/migration-3-clients.md`) : canaux déjà créés, il ne reste par resto que
   5 étapes (abonner l'app, pause UChat pour le numéro de Jules, tester, désactiver UChat, passer en actif).
+
+
+## 9 novembre 2026 (après-midi) — urgences du CRM, puis Embedded Signup (chantier C)
+
+- **Push du QG** : `COMMANDE_EN_ATTENTE`, `PAIEMENT_ECHECS`, `LITIGE`, `SILENCE` ajoutées à `qg_settings.alertes_push`
+  (appliqué sur accord de Jules).
+- **Commandes non vues** (PR CRM n° 85, non fusionnée) : le resto n'est notifié qu'une fois, à l'arrivée ; une commande
+  programmée ne notifie rien à son heure ; Mexico n'a qu'un ordinateur abonné. Correctif : rappels par notification
+  (qg150, après qg77) et écran de la tablette toujours allumé. Détail : `docs/commandes-non-vues.md` du CRM.
+- **Push du QG à 1 appareil** : 3 abonnements expirés côté Apple/Google le 5 nov. vers 15 h, 1 le 6 nov. ; supprimés
+  d'office, impossible de dire lesquels. Réabonnement : order.pflow.fr/qg sur chaque appareil, cloche « Activer ».
+- **qg84** : corrigé sur la branche Livraison (a7237b5) ; ne jamais jouer la version de `main` (PR CRM n° 86).
+- **Embedded Signup v4 avec coexistence** (PR PFlow Bots) : lien unique (7 jours) depuis la page État, page publique
+  « Connecter votre WhatsApp », jeton du client chiffré (AES-256-GCM), app abonnée, contacts et historique
+  synchronisés, canal créé en test, 10 modèles de livraison créés sur le compte du client, envoi avec le jeton du
+  client. SQL à valider (2 tables `bot_`), 3 variables Vercel. Démarches Meta dans l'ordre et mode « mes propres
+  comptes » pour les vidéos : `docs/etape-c/embedded-signup.md`.
+- À vérifier : depuis le 1er octobre 2026, les messages de service seraient facturés par Meta (le contrat livraison
+  compte sur 1 000 messages gratuits par mois).
+- **Modèles de la livraison sur le compte commun** : créés par l'API impossible depuis la session (le jeton général
+  n'est que dans Vercel). Ajouté à la PR Embedded Signup : page État → « Modèles WhatsApp de la livraison », statut des
+  10 chez Meta et bouton « Créer les manquants et les soumettre » (jeton général, compte 1808772226929443 par défaut).
+  Textes vérifiés identiques au guide du CRM. Création à la main possible en attendant (guide du CRM).
+- **Diagnostic des comptes (9 nov., soir)** : le jeton de pflow-bots-serveur ne sait pas lister les entreprises (pas de
+  `business_management`) et le compte 1808772226929443 répond « Authorization Error ». PR séparée : IDs de comptes
+  saisis à la main et interrogés directement, SQL des canaux proposé. `business_management` n'est pas nécessaire.
+- **Modèles de la livraison compte par compte** (PR Embedded Signup) : pas de compte commun ; page État → statut et
+  création par compte (compte de messagerie d'abord, puis WABA).
+- **Vidéo de l'examen avec Cedyan Energy** (PR Embedded Signup) : lien pour un « client test » hors CRM, canal en test
+  avec seulement le numéro de Jules, bouton « Débrancher ». Déroulé des vidéos : `docs/etape-c/embedded-signup.md`.
+- **Appliqué (accord de Jules)** : les 3 canaux en test (Cookies `e082c43f…`, Mexico `001e1405…`, ag pizza
+  `a83759cb…`, IDs reportés dans le runbook) ; la migration `20261111000000_bot_connexions_whatsapp` (RLS activée sur
+  les 2 tables ; règle « admins du bot » sur les connexions ; aucune règle et aucun droit anon/authenticated sur les
+  jetons : serveur seulement).
 
 
 ## 9 novembre 2026 (nuit) — refonte sombre de PFlow Bots (PR séparée, sans fusion)

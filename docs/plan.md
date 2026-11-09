@@ -30,6 +30,16 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - Avant de créer un script : vérifier `main` de Pflow-Crm, `repo/sql/NUMEROTATION.md` et les branches ouvertes ;
   ajouter la ligne du script dans ce fichier, dans la même PR (PR n° 78 de Pflow-Crm pour le fichier).
 
+### Charte graphique de PFlow Bots (décision de Jules, 9 novembre 2026)
+- **La charte PFlow est la référence pour toute nouvelle page de PFlow Bots** (PR n° 20, validée par Jules) :
+  - fonds en **aplat** nuit `#0A1236`, bleu `#2AABFF`, rose `#FF4FB5` ; aucun dégradé, halo ni flou ;
+  - titres en **Anton majuscules** (un seul segment en rose), texte en **Plus Jakarta Sans** ;
+  - **cartes blanches** à texte nuit sur le fond nuit, ombres plates `rgba(0,0,0,.28)` ;
+  - boutons en **pill rose** à texte nuit ; badges en aplat (reflet, rose, bleu) ;
+  - petit texte d'accent sur blanc : **`#C8157F`** (rose foncé) et **`#0067B8`** (bleu foncé), jamais le rose vif.
+- Une nouvelle page n'utilise que les jetons et composants existants (`src/app/globals.css`, `src/components/ui.tsx`) :
+  aucune couleur, police ou ombre écrite en dur. Détail : `docs/etape-c/direction-artistique.md`.
+
 ### Sortie d'UChat (décision de Jules, 8 novembre 2026)
 - Bascule numéro par numéro : **pause du bot UChat** pour le contact de test pendant les essais, puis
   **désactivation du bot UChat** du numéro à la bascule. Le partenaire **Smart Link** (prestataire d'UChat,
@@ -66,6 +76,8 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 
 - ✅ **Direction artistique** (PR du 9 novembre) : thème centralisé (`src/app/globals.css`), écrans iPhone, icône et
   écran de lancement « PFlow Bots ». Détail : `docs/etape-c/direction-artistique.md`.
+- ✅ **Charte PFlow sur toutes les pages** (PR n° 20) : aplats, Anton et Plus Jakarta Sans, cartes blanches, pills
+  roses. Référence pour toute nouvelle page (voir « Charte graphique de PFlow Bots » plus haut).
 
 ### Étape B
 - **Options payantes** (ex. relance panier abandonné) : lues dans le CRM (modules du resto). **Les
@@ -135,16 +147,20 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   PFlow Bots lit la table `alertes` du CRM (lecture seule) et pousse les alertes critiques ; le QG garde le personnel.
   ≈ 1 jour, après Embedded Signup. **Urgent avant** : ajouter `COMMANDE_EN_ATTENTE` (et paiements, silence) au push du
   QG (1 ligne SQL, à jouer par Jules).
+- **Embedded Signup v4 avec coexistence** (PR du 9 novembre, chantier C) : construit et testé (faux Meta). À faire par
+  Jules : SQL `20261111000000_bot_connexions_whatsapp`, variables `BOT_JETONS_CLE`, `META_APP_ID`, `META_ES_CONFIG_ID`,
+  démarches Meta dans l'ordre (vérification d'entreprise, configuration v4, Tech Provider, App Review avec 2 vidéos).
+  Détail : `docs/etape-c/embedded-signup.md`.
 - **Livraison : route `POST /api/webhooks/pflow-livraison`** (contrat `docs/livraison/INTERFACE-PFLOW-BOTS.md` du
-  CRM, version 1 du 9 novembre 2026, décision finale de Jules). Les messages de suivi partent **toujours du numéro du
+  CRM, version du commit ad59937, décision finale de Jules). Les messages de suivi partent **toujours du numéro du
   resto**, **jamais** du numéro PFlow (aucun secours) : texte libre avec bouton « Suivre ma livraison » si la fenêtre
   de 24 h est ouverte, modèle sinon ; sinon `pas_de_canal` / `modele_absent` / `erreur_meta`, et PFlow Order réessaie
   puis alerte Jules. À construire : même signature que `/api/webhooks/pflow-order` ; envoi de **modèles** (absent du
   client Graph aujourd'hui) ; idempotence gardée 24 h **avant** l'appel à Meta (nouvelle table `bot_`, SQL à montrer) ;
   code de livraison jamais dans les journaux ; réponse en moins de 8 s. ≈ 1 jour. Prérequis : canaux **actifs** des
   restos (bascule 19-21 et Embedded Signup) et les **10 modèles** `pflow_livraison_*` approuvés sur le compte WhatsApp
-  de chaque resto (création par l'API de Meta, intégrée à Embedded Signup). À signaler au CRM : le §5 (points 2 et 4)
-  parle encore d'un envoi « par le numéro PFlow », en contradiction avec la décision finale.
+  de chaque resto (création par l'API de Meta, intégrée à Embedded Signup). Le §5 a été corrigé (commit ad59937). Pour un resto connecté par l'Embedded Signup, le modèle se
+  cherche sur le compte WhatsApp du resto (le sien), pas sur celui de Jules.
 - **Supervision du CRM et arrêt d'UChat** : les sondes interrogent encore UChat (fausses pannes après l'arrêt). À
   adapter avec la bascule (PR CRM).
 - ~~**Notifications push pour le CRM**~~ : le CRM en a déjà (app QG). Ancienne note : (noté le 9 novembre 2026, chantier séparé) : même principe que la boîte de

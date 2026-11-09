@@ -59,11 +59,13 @@ function SupabaseGate({ children }: { children: ReactNode }) {
   }, []);
 
   const onLogin = pathname === LOGIN_PATH;
+  // « Connecter votre WhatsApp » : page publique du gérant (le lien unique est sa seule clé).
+  const publicPage = pathname.startsWith("/connecter/");
   useEffect(() => {
-    if (state.status === "signed_out" && !onLogin) router.replace(`${LOGIN_PATH}?suite=${encodeURIComponent(pathname + window.location.search)}`);
-  }, [state.status, onLogin, pathname, router]);
+    if (state.status === "signed_out" && !onLogin && !publicPage) router.replace(`${LOGIN_PATH}?suite=${encodeURIComponent(pathname + window.location.search)}`);
+  }, [state.status, onLogin, publicPage, pathname, router]);
 
-  if (onLogin) return <>{children}</>;
+  if (onLogin || publicPage) return <>{children}</>;
   if (state.status === "loading" || state.status === "signed_out") return <Loading />;
   if (state.status === "error") {
     return (

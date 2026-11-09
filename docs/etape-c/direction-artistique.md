@@ -48,6 +48,24 @@ réinstallé** l'app (Partager → Sur l'écran d'accueil). Les notifications pu
 
 ## Charte PFlow (9 novembre 2026, nuit) : la référence
 
+> **Décision de Jules (PR n° 20 validée)** : cette charte est la référence pour **toute nouvelle page** de PFlow Bots.
+> Aplats (nuit, bleu, rose), Anton en majuscules et Plus Jakarta Sans, cartes blanches à texte nuit, pills roses à
+> texte nuit, ombres plates ; pour le petit texte d'accent sur blanc, les teintes foncées **`#C8157F`** (rose) et
+> **`#0067B8`** (bleu), validées par Jules.
+
+### Règles pour une nouvelle page
+
+- Cadre : `AppShell` (en-tête P bulle + pill PFLOW BOTS) ; sur iPhone, `MobileHeader` et la barre d'onglets.
+- Titre de page : `<h1 className="text-5xl">` en Anton, **un seul segment** en `text-rose`.
+- Contenu en `Card` (carte blanche) ; blocs mis en avant en `aplat-bleu` ou `aplat-rose` ; bloc sombre dans une carte
+  en `aplat-nuit`.
+- Actions : `Button` (pill rose, texte nuit) ; secondaire : `variant="secondary"` (contour 2 px). Statuts : `Badge`.
+  Messages : `Notice`. Champs : `Input`, `Select`, `Textarea` (toujours blancs, texte nuit).
+- Couleurs de texte : `text-ink`, `text-muted`, `text-rose`, `text-bleu`, `text-ok`, `text-alerte` (elles s'adaptent
+  à la surface ; dans une carte blanche, le rose et le bleu deviennent `#C8157F` et `#0067B8`).
+- Interdit : couleur, police ou ombre écrite en dur ; dégradé, halo, flou (`backdrop-blur`), ombre floue ; italique ;
+  vert, corail, ambre ; texte blanc sur rose.
+
 La **charte de Jules** (charte de contenu PFlow, la même que pour Instagram) passe avant tout ce qui avait été déduit
 du site. Elle remplace la « refonte sombre » (halos, Fredoka, cartes en verre), qui n'est plus utilisée.
 

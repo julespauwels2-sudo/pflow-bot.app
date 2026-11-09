@@ -15,6 +15,11 @@ export interface GraphConfig {
   version: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
+  /**
+   * Jeton propre au numéro (client connecté par l'Embedded Signup : son jeton, gardé chiffré). null / undefined :
+   * le jeton général de PFlow (`token`).
+   */
+  tokenFor?: (accountId: string) => Promise<string | null | undefined>;
   /** Attente avant un nouvel essai (diagnostic) ; réglable pour les tests. */
   retryDelayMs?: number;
   /** Délai de lecture des apps abonnées (diagnostic) ; réglable pour les tests. */
@@ -89,13 +94,16 @@ export function createGraphClient(config: GraphConfig) {
   const doFetch = config.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
   const url = (accountId: string) => `${config.base.replace(/\/$/, "")}/${config.version}/${encodeURIComponent(accountId)}/messages`;
 
+  const tokenOf = async (accountId?: string) => (accountId && config.tokenFor ? ((await config.tokenFor(accountId).catch(() => null)) ?? config.token) : config.token);
+
   async function post(accountId: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const token = await tokenOf(accountId);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), config.timeoutMs ?? 10_000);
     try {
       const response = await doFetch(url(accountId), {
         method: "POST",
-        headers: { authorization: `Bearer ${config.token}`, "content-type": "application/json" },
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify(body),
         signal: controller.signal,
       });
@@ -131,9 +139,9 @@ export function createGraphClient(config: GraphConfig) {
       });
     },
     /** Message vocal : adresse temporaire demandée à Meta, puis téléchargement avec le token. */
-    async downloadMedia(media: MediaRef): Promise<{ data: Uint8Array; mimeType: string }> {
+    async downloadMedia(media: MediaRef, accountId?: string): Promise<{ data: Uint8Array; mimeType: string }> {
       if (!media.id) throw new MediaError("Média sans identifiant");
-      const auth = { authorization: `Bearer ${config.token}` };
+      const auth = { authorization: `Bearer ${await tokenOf(accountId)}` };
       const infoUrl = `${config.base.replace(/\/$/, "")}/${config.version}/${encodeURIComponent(media.id)}`;
       const info = await fetchMedia(doFetch, infoUrl, auth, "application/json");
       const json = JSON.parse(new TextDecoder().decode(info.data)) as { url?: string; mime_type?: string };
