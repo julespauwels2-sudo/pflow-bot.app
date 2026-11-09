@@ -1,6 +1,7 @@
 /** Stockage du canal en mémoire : tests et démo locale (jamais en production). */
 import type { Session } from "@/engine";
 import type { Canal, ChannelContact, ChannelStore, PushSubscriptionRecord, StoredMessage, Transfert } from "./types";
+import type { DemoKnowledge } from "@/demos/demo-knowledge";
 
 export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: () => Date; newId?: () => string } = {}): ChannelStore & {
   addCanal(canal: Canal): void;
@@ -15,6 +16,7 @@ export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: 
   const messages: StoredMessage[] = [];
   const transferts: Transfert[] = [];
   const pushSubscriptions = new Map<string, PushSubscriptionRecord>();
+  let demoKnowledge: DemoKnowledge | null = null;
   const events = new Map<string, { charge: unknown; error?: string; done: boolean; at: string; source: string; key: string }>();
   const clone = <T>(v: T): T => structuredClone(v);
 
@@ -146,6 +148,12 @@ export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: 
     },
     async deletePushSubscription(endpoint) {
       pushSubscriptions.delete(endpoint);
+    },
+    async getDemoKnowledge() {
+      return demoKnowledge ? clone(demoKnowledge) : null;
+    },
+    async saveDemoKnowledge(k) {
+      demoKnowledge = { ...clone(k), majLe: now() };
     },
   };
 }

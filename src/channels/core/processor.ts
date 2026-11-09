@@ -11,7 +11,8 @@ import type { ChannelSender, ChannelStore, InboundEvent, StatusEvent } from "./t
 import { sendOptions } from "./send-options";
 import { DEFAULT_VOICE_LIMITS, type Transcriber, type VoiceLimits } from "../voice/transcriber";
 import { audioDurationSeconds } from "../voice/duration";
-import { pflowBaseBot, PFLOW_BOT_ID, PFLOW_TEXTS } from "@/demos/pflow-bot";
+import { pflowBaseBot, PFLOW_BOT_ID, PFLOW_FLOWS, PFLOW_TEXTS } from "@/demos/pflow-bot";
+import { answerDemoQuestion, DEFAULT_DEMO_KNOWLEDGE, forcedStatus, HANDOFF_REPLIES, type DemoAnswer, type DemoCompletion } from "@/demos/demo-knowledge";
 import { nextContactDemo, routePflowMessage, type DemoDirectoryEntry } from "@/demos/router";
 import { canAlertQuestion, guide, nextParcours } from "@/demos/parcours";
 import { DEFAULT_BOTS_URL, demoLinks } from "@/demos/demo-auto";
@@ -43,6 +44,8 @@ export interface ProcessorDeps {
   maxTypingMs?: number;
   /** Secret partagé avec PFlow Order : jeton de pré-remplissage dans le lien « Commander ». */
   pflowBotsSecret?: string;
+  /** Numéro PFlow Démo : réponses de l'IA à partir de la base de connaissances (absent : pas de clé d'IA). */
+  demoAnswer?: DemoCompletion;
   /** Alertes au gérant : notification push (src/channels/core/alerts.ts). */
   alerts?: AlertConfig;
   /** Adresse publique de PFlow Bots (lien du dashboard de la démo permanente). Défaut : DEFAULT_BOTS_URL. */
@@ -203,7 +206,29 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   // Liens de la démo permanente avec le jeton de ce contact (confirmation et étape 3 automatiques).
   if (guided) bot.client.vars = demoLinks(contact, canal.id, deps.pflowBotsSecret, deps.demoBotsUrl ?? DEFAULT_BOTS_URL, now);
   const guidance = guided ? guide(event.message, bot.flows, contact.demo?.parcours, now) : null;
-  const engineMessage = guidance ? guidance.message : event.message;
+  let engineMessage = guidance ? guidance.message : event.message;
+  // Politesse, ou question confiée à l'IA (base de connaissances) : le texte de la réponse, et l'alerte à Jules
+  // seulement quand l'IA ne sait pas (ou inscription, prix, livraison, demande de Jules).
+  let demoAlert: { motif: string } | null = null;
+  if (guidance && (guidance.courtesy || guidance.question)) {
+    let reponse: string | undefined = guidance.courtesy;
+    if (guidance.question && !isPaused(contact.state.pause, now)) {
+      const answer = await demoQuestionAnswer(deps, guidance.question, report);
+      if (answer?.statut === "repondu") {
+        reponse = answer.reponse;
+        if (guidance.step === undefined) engineMessage = { kind: "start_flow", flowId: PFLOW_FLOWS.reponseAvantDemo };
+      } else if (answer) {
+        reponse = HANDOFF_REPLIES[answer.statut].texte;
+        demoAlert = { motif: HANDOFF_REPLIES[answer.statut].motif };
+        if (guidance.step === undefined) engineMessage = { kind: "start_flow", flowId: `${PFLOW_FLOWS.question}0` };
+      } else if (guidance.step !== undefined) {
+        // Sans IA (pas de clé) : comme avant, « Bonne question ! » et Jules est prévenu.
+        reponse = PFLOW_TEXTS.question;
+        demoAlert = { motif: "Question pendant la démo (le bot continue)" };
+      }
+    }
+    if (reponse) bot.client.vars = { ...bot.client.vars, reponse_demo: reponse };
+  }
 
   const result: EngineResult = await runEngine(
     {
@@ -258,7 +283,7 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
 
   // Question en plein parcours : Jules est prévenu (sans pause du bot), une alerte au plus toutes les 30 min. Rien si le
   // bot n'a pas répondu (contact en pause : Jules a déjà la main).
-  const question = guidance?.question && result.outgoing.length > 0 && canAlertQuestion(contact.demo?.parcours, now) ? guidance.question : null;
+  const question = demoAlert && guidance?.question && result.outgoing.length > 0 && canAlertQuestion(contact.demo?.parcours, now) ? guidance.question : null;
   if (guided) {
     const parcours = nextParcours(contact.demo?.parcours, result.events, now);
     if (parcours) {
@@ -294,7 +319,7 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   if (question) {
     const alert = await sendAlert(alertDeps, {
       canal,
-      motif: "Question pendant la démo (le bot continue)",
+      motif: demoAlert?.motif ?? "Question pendant la démo (le bot continue)",
       contactName: event.profileName,
       contactId: event.waId,
       extrait: question,
@@ -317,6 +342,28 @@ export const VOICE_TEXTS = {
 };
 
 const minutesLabel = (seconds: number) => (seconds % 60 === 0 ? `${seconds / 60} minute${seconds / 60 > 1 ? "s" : ""}` : `${seconds} secondes`);
+
+/** Le contact est-il en pause (Jules a la main) ? Pas d'appel à l'IA dans ce cas : le bot ne répondra pas. */
+function isPaused(pause: { until: string | null } | null | undefined, now: Date): boolean {
+  return Boolean(pause && (pause.until === null || Date.parse(pause.until) > now.getTime()));
+}
+
+/**
+ * Réponse à une question sur le numéro PFlow Démo (src/demos/demo-knowledge.ts). Livraison, inscription,
+ * négociation, demande de Jules : repérées même sans IA. Sans clé d'IA, pour une autre question : null (comme avant).
+ */
+async function demoQuestionAnswer(deps: ProcessorDeps, question: string, report: ProcessReport): Promise<DemoAnswer | null> {
+  const forced = forcedStatus(question);
+  if (forced) return { statut: forced, reponse: "" };
+  if (!deps.demoAnswer) return null;
+  const kb = (await deps.store.getDemoKnowledge().catch(() => null)) ?? DEFAULT_DEMO_KNOWLEDGE;
+  try {
+    return await answerDemoQuestion(deps.demoAnswer, kb, question);
+  } catch (error) {
+    report.errors.push(`IA de la démo : ${message(error)}`);
+    return { statut: "inconnu", reponse: "" };
+  }
+}
 
 /**
  * Message vocal : téléchargé (en mémoire seulement, jamais stocké), transcrit, puis traité comme un texte (parcours,
