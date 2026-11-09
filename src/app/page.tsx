@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DesktopOnly } from "@/components/mobile";
 
 type StepState = "fait" | "en_cours" | "a_venir";
 
@@ -19,6 +20,7 @@ const STATE_LABELS: Record<StepState, { label: string; className: string }> = {
 
 export default function Home() {
   return (
+    <DesktopOnly>
     <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
       <header className="flex items-center gap-3">
         <div className="grid size-11 place-items-center rounded-2xl bg-navy text-pink shadow-card">
@@ -70,5 +72,6 @@ export default function Home() {
         ))}
       </section>
     </main>
+    </DesktopOnly>
   );
 }

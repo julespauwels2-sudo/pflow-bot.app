@@ -4,11 +4,20 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FlowEditor, type EditorOwner } from "@/components/editor/flow-editor";
 import { Loading, Notice } from "@/components/ui";
+import { DesktopOnly } from "@/components/mobile";
 import { useLoad } from "@/data/browser";
 import { botFlowList, resolveBot } from "@/data/resolve";
 import { findTrigger } from "@/engine";
 
 export default function FlowPage() {
+  return (
+    <DesktopOnly>
+      <FlowPageContent />
+    </DesktopOnly>
+  );
+}
+
+function FlowPageContent() {
   const { id } = useParams<{ id: string }>();
   const { state } = useLoad(
     async (repos) => {

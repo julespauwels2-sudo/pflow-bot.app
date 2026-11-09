@@ -15,7 +15,8 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "PFlow Bots", statusBarStyle: "default" },
 };
 
-export const viewport: Viewport = { themeColor: "#101B4D" };
+// viewportFit « cover » : les zones sûres de l'iPhone (barre d'accueil) sont gérées par la page (env(safe-area-inset-*)).
+export const viewport: Viewport = { themeColor: "#101B4D", viewportFit: "cover" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (

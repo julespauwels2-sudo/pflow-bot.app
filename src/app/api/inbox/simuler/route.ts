@@ -15,6 +15,8 @@ const schema = z.object({
   plateforme: z.enum(["whatsapp", "instagram"]).default("whatsapp"),
   waId: z.string().regex(/^\d{6,20}$/).optional(),
   nom: z.string().max(60).default("Client test"),
+  /** Canal visé (par défaut : le premier de la plateforme), par exemple le numéro PFlow « canal-pflow ». */
+  canal: z.string().max(60).optional(),
 });
 
 export async function POST(request: Request) {
@@ -26,7 +28,7 @@ export async function POST(request: Request) {
   const { texte, plateforme, nom } = parsed.data;
   const deps = access.runtime.deps(plateforme);
   if (!deps) return NextResponse.json({ error: `${plateforme} non configuré (variables manquantes)` }, { status: 400 });
-  const canal = (await access.runtime.store.listCanaux()).find((c) => c.plateforme === plateforme);
+  const canal = (await access.runtime.store.listCanaux()).find((c) => c.plateforme === plateforme && (!parsed.data.canal || c.id === parsed.data.canal));
   if (!canal) return NextResponse.json({ error: "Aucun canal" }, { status: 400 });
   const waId = parsed.data.waId ?? (plateforme === "instagram" ? "6000000000001" : "590690000001");
   const report = await processEvents(
