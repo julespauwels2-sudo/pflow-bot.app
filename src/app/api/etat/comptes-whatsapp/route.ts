@@ -5,12 +5,14 @@
  */
 import { NextResponse } from "next/server";
 import { getChannelsRuntime, readWhatsAppConfig } from "@/channels/core/runtime";
-import { canalInsertSql, diagnoseWhatsAppAccounts, guessRestaurant } from "@/channels/whatsapp/diagnostic";
+import { canalInsertSql, diagnoseWhatsAppAccounts, guessRestaurant, parseSaisis, restoParNom } from "@/channels/whatsapp/diagnostic";
 import { checkBotAdmin } from "@/lib/server-auth";
 import { tooManyRequests } from "@/lib/request-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+/** Lecture chez Meta de plusieurs comptes (apps abonnées : jusqu'à 2 × 25 s par compte, en parallèle). */
+export const maxDuration = 120;
 
 /** Numéro de Jules, premier numéro de test de chaque nouveau canal. */
 const TEST_NUMERO = "590690938108";
@@ -23,12 +25,15 @@ export async function POST(request: Request) {
   const config = readWhatsAppConfig();
   if (!config.ready) return NextResponse.json({ error: `WhatsApp non configuré (manque : ${config.missing.join(", ")}).` }, { status: 503 });
   try {
+    // Comptes saisis à la main (IDs relevés dans Business Manager), facultatif.
+    const body = (await request.json().catch(() => ({}))) as { comptes?: unknown };
+    const saisis = typeof body.comptes === "string" ? parseSaisis(body.comptes.slice(0, 2000)) : [];
     const rt = await getChannelsRuntime();
     const canaux = (await rt.store.listCanaux()).filter((c) => c.plateforme === "whatsapp");
     const accountIds = [...new Set(canaux.flatMap((c) => [c.messagingAccountId, c.wabaId]).filter((v): v is string => Boolean(v)))];
     const result = await diagnoseWhatsAppAccounts(
       { token: config.token, base: config.graphBase, version: config.graphVersion },
-      { accountIds, canaux: canaux.map((c) => ({ id: c.id, etat: c.etat, compteId: c.accountId })) },
+      { accountIds, canaux: canaux.map((c) => ({ id: c.id, etat: c.etat, compteId: c.accountId })), saisis: saisis.map((s) => s.id) },
     );
     // Restos du CRM (nom), pour proposer le bon restaurant_id ; le mode est celui du bot du resto.
     const workspace = await rt.workspace().catch(() => null);
@@ -37,7 +42,8 @@ export async function POST(request: Request) {
       compte.numeros
         .filter((n) => !n.canal)
         .map((numero) => {
-          const resto = guessRestaurant(numero, restos);
+          const nomSaisi = saisis.find((s) => s.id === compte.id)?.resto;
+          const resto = (nomSaisi ? restoParNom(nomSaisi, restos) : null) ?? guessRestaurant(numero, restos);
           const mode = restos.find((r) => r.id === resto?.id)?.mode ?? "mots_cles_uniquement";
           return { numero: numero.affichage ?? numero.id, resto: resto?.nom ?? null, sql: canalInsertSql({ restaurant: resto, compte, numero, mode, testNumero: TEST_NUMERO }) };
         }),

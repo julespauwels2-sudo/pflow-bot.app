@@ -143,33 +143,33 @@ préviens-le **avant le 12**.
 
 ## 4. Préparé, SANS rien appliquer
 
-### 4.1 Les canaux en « test » (SQL à valider, les `<…>` à remplir avec la partie 1)
+### 4.1 Les canaux en « test » : créés (SQL du diagnostic, validé par Jules le 9 novembre)
 
-- **Test** : le bot ne répond qu'à ton numéro (590690938108). Les vrais clients restent sur UChat, et PFlow Order
-  continue d'envoyer les commandes à UChat.
-- **Pas de `tel_alerte`** : les alertes partent en notification push.
-- **Mode** : le même que le bot de chaque resto.
+Les comptes de messagerie, relevés dans Business Manager, ont été lus par le diagnostic (PR n° 18), qui a généré le
+SQL. Jules l'a validé, puis il a été appliqué. Chaque canal est en **test** avec seulement 590690938108 en liste de test.
 
-```sql
-insert into public.bot_canaux
-  (restaurant_id, role, plateforme, compte_id, waba_id, messaging_account_id, numero_affiche,
-   mode_declenchement, coexistence, etat, test_numeros)
-values
-  ('f610eae4-84f4-4a81-bccf-9963a65e0bf7', 'resto', 'whatsapp', '<PHONE_ID_COOKIES>', '<WABA_COOKIES>', '<MSG_COOKIES>',
-   '<+590 … (Cookies An Nou)>', 'toujours', <true|false>, 'test', array['590690938108']),
-  ('21aa4b81-8464-4b56-97a1-bdc782d0bc22', 'resto', 'whatsapp', '<PHONE_ID_MEXICO>', '<WABA_MEXICO>', '<MSG_MEXICO>',
-   '<+590 … (Mexico Sainte-Rose)>', 'mots_cles_uniquement', <true|false>, 'test', array['590690938108']),
-  ('9e3dfdce-afdd-448d-b57a-74656ce7fa89', 'resto', 'whatsapp', '<PHONE_ID_AG>', '<WABA_AG>', '<MSG_AG>',
-   '<+590 690 90 43 90 (ag pizza)>', 'mots_cles_uniquement', <true|false>, 'test', array['590690938108'])
-returning id, restaurant_id, numero_affiche, etat;
-```
+| Resto | Compte de messagerie | Numéro (phone_number_id) | Mode | Canal (id) |
+|---|---|---|---|---|
+| Cookies An Nou | 2577158539379673 | +590 690 58-9366 (1265359206670157) | toujours | `e082c43f-7fdf-4e35-b992-c1b108499c7c` |
+| Mexico Sainte-Rose | 1678321033943134 | +590 690 70-7873 (1336937752846131) | mots_cles_uniquement | `001e1405-ad06-40a0-bde3-2ad2559a8971` |
+| ag pizza | 1120744623676139 | +590 690 90-4390 (1425470167313189) | mots_cles_uniquement | `a83759cb-d2ea-431d-92c9-b73d40bc42f1` |
 
-Contrôles faits sur la table :
-- un même numéro ne peut pas avoir deux canaux (`unique (plateforme, compte_id)`) ;
-- un canal resto exige un `restaurant_id` ;
-- l'état et le mode sont contrôlés.
+Appliqué le 9 novembre 2026 (accord de Jules), coexistence = oui, état **test**, liste de test = 590690938108. Le
+canal du numéro de test Meta (+1 555 186 2679), relié à Cookies An Nou, reste en test : il ne gêne pas.
 
-**Retour arrière** : `delete from public.bot_canaux where compte_id in ('<PHONE_ID_COOKIES>','<PHONE_ID_MEXICO>','<PHONE_ID_AG>') and etat = 'test';`
+**Ce que ces canaux en test ne changent pas** (vérifié dans le code le 9 novembre) :
+- **Messages des clients** : ils arrivent à UChat comme avant. PFlow Bots n'est pas encore abonné à ces comptes
+  (étape « Abonner » du runbook), donc il ne reçoit rien. Même abonné, un canal en test ne répond qu'à 590690938108
+  et ignore les autres numéros (`src/channels/core/processor.ts`, contrôle « canal en test, numéro hors liste »).
+- **Commandes PFlow Order** : le CRM n'appelle PFlow Bots que si le canal du resto est **actif**
+  (`repo/api/_bot.js`, `canalPflowBotsActif` → fonction `pflow_bots_canal_actif`, qg87 : `etat = 'actif'`). Sinon,
+  UChat gère la commande exactement comme avant. PFlow Bots refuse aussi un événement pour un canal en test
+  (`src/channels/pflow-order/order-events.ts` : « canal en test : la vraie commande reste à UChat »). C'est une double
+  barrière.
+- **Livraison** : même règle (canal actif exigé par `pflow_bots_canal_actif`).
+
+**Retour arrière** (si besoin) : `delete from public.bot_canaux where messaging_account_id in ('2577158539379673',
+'1678321033943134', '1120744623676139') and etat = 'test';`
 
 ### 4.2 Les bots liés au modèle maître
 
@@ -236,58 +236,43 @@ Retour arrière en 2 minutes, à tout moment :
 Ordre : Cookies (mode « toujours », le plus exposé) d'abord, puis Mexico et ag pizza (numéros perso des gérants,
 mots-clés uniquement).
 
-### Prérequis communs (le 19 au matin, ≈ 30 min)
+### Prérequis communs (le 19 au matin, ≈ 15 min)
 
-- [ ] Partie 1 faite, et **ta carte** sur les 3 comptes de messagerie.
-- [ ] SQL 4.1 complété avec les IDs et validé, puis appliqué (3 canaux en **test**).
-- [ ] App PFlow Bots : champ du webhook **`smb_message_echoes`** abonné (sinon le bot ne se tait pas quand le
-      gérant répond depuis l'appli).
-- [ ] Fiches remplies (4.3).
+Déjà fait : les 3 canaux en test (4.1), les comptes attribués à `pflow-bots-serveur` en contrôle total.
+
+- [ ] **Ta carte** sur les 3 comptes de messagerie (sinon les réponses du bot hors fenêtre ne partent pas).
+- [ ] App PFlow Bots : champ du webhook **`smb_message_echoes`** abonné (le bot se tait quand le gérant répond depuis
+      l'appli).
+- [ ] Fiches remplies (4.3) ; ag pizza revenu au modèle (partie 5).
 - [ ] Notifications push actives sur ton iPhone (page État, notification de test reçue).
-- [ ] Clés VAPID dans Vercel ; `PFLOW_ORDER_PONT_CLE` présente (page État, « Clés détectées »).
+- [ ] Page État → Diagnostic avec les 3 IDs : chaque compte répond, et la ligne « apps abonnées » montre **UChat**
+      (c'est ce qui répond aujourd'hui).
 
-### Cookies An Nou : 19 novembre (≈ 1 h)
+### Pour chaque resto : 5 étapes (Cookies le 19, Mexico et ag pizza le 20)
 
-- [ ] (5 min) Paramètres de l'entreprise, puis `pflow-bots-serveur`, puis Attribuer : compte WhatsApp **et**
-      compte de messagerie de Cookies, en contrôle total.
-- [ ] (2 min) Page État, Canaux, Cookies (vrai numéro), **« Abonner PFlow Bots »** ; puis **« Tester l'accès du
-      token »** : toutes les lignes OK, PFlow Bots dans « Apps abonnées ».
-- [ ] (2 min) UChat : **mettre en pause le bot pour ton contact seulement** (pas pour les clients).
-- [ ] (15 min) Depuis ton numéro :
-  - [ ] « Bonjour » : accueil Cookies ;
-  - [ ] une question (« vous livrez où ? ») : l'IA répond ;
-  - [ ] « je veux commander » : lien `order.pflow.fr/c/cookies-an-nou` ;
-  - [ ] « je veux parler à quelqu'un » : transfert + **notification push** sur ton iPhone.
-- [ ] (5 min) Page État, **Événement de commande de test**, canal Cookies (vrai numéro) : « Commande
-      enregistrée » arrive sur ton téléphone **depuis le numéro de Cookies**.
-- [ ] (5 min) Si coexistence : depuis l'appli WhatsApp Business de Cookies (ou demander au gérant), écrire à ton
-      numéro, puis écrire « Bonjour » au bot : **pas de réponse** (pause de 12 h). Rendre au bot depuis la boîte de
-      réception.
-- [ ] (1 min) UChat : **désactiver le bot** de ce numéro. **Ne pas** « De-register », ne rien supprimer.
-- [ ] (1 min) Page État, Cookies, **« Passer en actif »**.
-- [ ] (15 min) Contrôle :
-  - [ ] faire écrire un proche, qui reçoit une réponse ;
-  - [ ] à la prochaine vraie commande, « Commande enregistrée » arrive sur WhatsApp ;
-  - [ ] dans le CRM, le journal du bot affiche `pflow_bots: pris`.
+1. [ ] **Abonner l'app** : page État → Canaux → le canal du resto → **« Abonner PFlow Bots »** ; puis le diagnostic :
+   « apps abonnées » = **UChat et PFlow Bots**. (Les deux reçoivent les messages ; PFlow Bots ne répond qu'à toi.)
+2. [ ] **Mettre le bot UChat en pause pour ton numéro seulement** (pas pour les clients), sinon UChat et PFlow Bots
+   te répondent tous les deux.
+3. [ ] **Tester** depuis ton numéro (590690938108) :
+   - Cookies (mode « toujours ») : « Bonjour » → accueil ; une question (« vous livrez où ? ») → l'IA répond ;
+     « je veux commander » → lien `order.pflow.fr/c/cookies-an-nou` ; « je veux parler à quelqu'un » → transfert et
+     **notification push** sur ton iPhone ;
+   - Mexico et ag pizza (mots-clés uniquement, numéros perso des gérants) : « Bonjour » et « menu » répondent ;
+     « ok merci » **ne répond pas** ;
+   - page État → **Événement de commande de test** (canal du resto) : « Commande enregistrée » arrive sur ton
+     téléphone **depuis le numéro du resto** ;
+   - si le gérant est là : il écrit depuis son appli, puis toi « Bonjour » → **pas de réponse** (pause de 12 h) ;
+     rendre au bot depuis la boîte de réception.
+4. [ ] **Désactiver le bot UChat** de ce numéro. **Ne pas** « De-register », ne rien supprimer.
+5. [ ] **Passer en actif** : page État → le canal → **« Passer en actif »**. Contrôle : un proche écrit et reçoit une
+   réponse ; à la prochaine vraie commande, « Commande enregistrée » arrive sur WhatsApp ; dans le CRM, le journal du
+   bot affiche `pflow_bots: pris`.
 
-**Retour arrière** : « Repasser en test », puis réactiver le bot UChat.
+**Retour arrière, à tout moment (2 min)** : page État → le canal → **« Repasser en test »** (PFlow Order renvoie
+aussitôt les commandes à UChat), puis **réactiver le bot UChat** du numéro.
 
-### Mexico (Sainte-Rose) : 20 novembre (≈ 45 min)
-
-Mêmes étapes que Cookies, avec ses IDs. Le bot est en **mots-clés uniquement** :
-- tester **« Bonjour »** (mot-clé de l'Accueil) et **« menu »** ;
-- vérifier qu'un message sans mot-clé (« ok merci ») **n'a pas de réponse** : c'est le numéro perso du gérant.
-
-- [ ] Attribuer les éléments, abonner, tester l'accès.
-- [ ] Pause UChat pour ton contact, puis les tests (accueil, commande, transfert + push, événement de commande
-      de test).
-- [ ] Test de la pause de 12 h (le gérant écrit depuis son appli, si possible avec lui).
-- [ ] Désactiver le bot UChat (rien supprimer), puis **« Passer en actif »**, puis le contrôle.
-
-### ag_pizzaa : 20 novembre (≈ 45 min)
-
-- [ ] **D'abord** : « Revenir au modèle » sur son Accueil (partie 5), puis le test au simulateur.
-- [ ] Puis mêmes étapes que Mexico (mots-clés uniquement, numéro perso du gérant).
+Ordre : **Cookies** le 19 (mode « toujours », le plus exposé), puis **Mexico** et **ag pizza** le 20.
 
 ### 21 novembre : clôture d'UChat (≈ 20 min)
 

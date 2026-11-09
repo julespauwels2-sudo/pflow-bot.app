@@ -429,11 +429,16 @@ interface AccountsResult {
 /** Diagnostic des comptes WhatsApp accessibles au token du serveur : lecture seule chez Meta. */
 function WhatsAppAccountsCard() {
   const [result, setResult] = useState<{ status: "idle" } | { status: "loading" } | { status: "error"; error: string } | { status: "ready"; data: AccountsResult }>({ status: "idle" });
+  const [saisis, setSaisis] = useState("");
   async function run() {
     setResult({ status: "loading" });
     try {
       const token = await accessToken();
-      const response = await fetch("/api/etat/comptes-whatsapp", { method: "POST", headers: token ? { authorization: `Bearer ${token}` } : {} });
+      const response = await fetch("/api/etat/comptes-whatsapp", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ comptes: saisis }),
+      });
       const body = (await response.json().catch(() => ({}))) as AccountsResult & { error?: string };
       if (!response.ok) throw new Error(body.error ?? `Erreur ${response.status}`);
       setResult({ status: "ready", data: body });
@@ -443,6 +448,20 @@ function WhatsAppAccountsCard() {
   }
   return (
     <Card title="Diagnostic des comptes WhatsApp" className="lg:col-span-2">
+      <label className="mb-3 block text-sm">
+        <span className="font-semibold">Comptes à interroger directement (facultatif)</span>
+        <textarea
+          className="mt-1 block min-h-20 w-full rounded-[var(--radius-field)] border border-line bg-white px-3 py-2 font-mono text-sm focus:border-pink focus:ring-4 focus:ring-pink/15 focus:outline-none"
+          placeholder={"1120744623676139 ag pizza\n1678321033943134 Mexico\n2577158539379673 cookies an nou"}
+          value={saisis}
+          onChange={(e) => setSaisis(e.target.value)}
+          data-testid="comptes-saisis"
+        />
+        <span className="text-xs text-muted">
+          Un compte par ligne : l&apos;ID relevé dans Business Manager, suivi du nom du resto (pour proposer le bon SQL). Utile quand le token ne
+          sait pas lister les comptes de l&apos;entreprise.
+        </span>
+      </label>
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="secondary" onClick={run} disabled={result.status === "loading"}>
           {result.status === "loading" ? "Lecture chez Meta…" : "Lancer le diagnostic"}

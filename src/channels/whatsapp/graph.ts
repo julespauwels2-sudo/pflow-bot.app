@@ -20,6 +20,10 @@ export interface GraphConfig {
    * le jeton général de PFlow (`token`).
    */
   tokenFor?: (accountId: string) => Promise<string | null | undefined>;
+  /** Attente avant un nouvel essai (diagnostic) ; réglable pour les tests. */
+  retryDelayMs?: number;
+  /** Délai de lecture des apps abonnées (diagnostic) ; réglable pour les tests. */
+  appsTimeoutMs?: number;
 }
 
 export class GraphError extends Error {
