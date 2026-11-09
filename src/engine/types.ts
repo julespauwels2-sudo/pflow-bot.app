@@ -342,8 +342,11 @@ export type IncomingMessage =
   | { kind: "list_reply"; id: string; title: string }
   /** Message envoyé par le gérant lui-même depuis l'appli WhatsApp Business. */
   | { kind: "echo"; text?: string }
-  /** Image, audio, localisation… non gérés en phase 1. */
-  | { kind: "unsupported"; mediaType: string }
+  /**
+   * Image, audio, localisation… non gérés en phase 1. `reply` : réponse précise à envoyer (ex. vocal trop long,
+   * non compris), à la place de la réponse générique.
+   */
+  | { kind: "unsupported"; mediaType: string; reply?: string }
   /** Événement envoyé par PFlow Order (pas un message du contact). */
   | { kind: "event"; event: OrderEvent; data: Record<string, string> }
   /** Simulateur : lance directement un flux (ex. un sous-flux sans mot-clé), comme si le contact écrivait. */

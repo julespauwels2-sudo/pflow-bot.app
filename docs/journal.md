@@ -919,3 +919,15 @@ Retour de test de Jules : le parcours guidé marche ; il faut qu'il avance sans 
 - **Aucune contrainte SQL à changer** : `alerte_voie` n'est plus écrite (historique), la voie se déduit de
   `alerte_push`.
 - Plan, « Plus tard » : notifications push pour le CRM (chantier séparé).
+
+
+## 9 novembre 2026 (suite) — messages vocaux : Groq, limites, réponses claires (PR séparée)
+
+- **Comparatif** (tarifs du 9 novembre 2026) : Groq 0,04 $ / h, contre ≈ 0,003 $ / min pour OpenAI et Mistral.
+  **Groq retenu** : le moins cher (≈ 0,07 $ / mois pour 300 vocaux de 20 s) et le plus rapide. Aucun service ne
+  connaît le créole guadeloupéen : à tester sur de vrais vocaux. Détail : `docs/etape-c/vocaux.md`.
+- **Une seule variable** : `TRANSCRIPTION_API_KEY` (Groq par défaut).
+- **Limites** : 2 min au plus, 10 vocaux transcrits par contact sur 24 h. Au-delà, ou en cas d'échec, le bot
+  demande d'écrire (« Je n'ai pas bien compris votre vocal, pouvez-vous l'écrire ? »).
+- **Boîte de réception** : « 🎤 Message vocal (0:23) » et la transcription.
+- **Aucun fichier audio stocké.**

@@ -8,7 +8,8 @@ import type { LoadedBot } from "./bot-loader";
 import { parseWebhook } from "../whatsapp/parse";
 import type { ChannelSender, ChannelStore, InboundEvent, StatusEvent } from "./types";
 import { sendOptions } from "./send-options";
-import type { Transcriber } from "../voice/transcriber";
+import { DEFAULT_VOICE_LIMITS, type Transcriber, type VoiceLimits } from "../voice/transcriber";
+import { audioDurationSeconds } from "../voice/duration";
 import { pflowBaseBot, PFLOW_BOT_ID, PFLOW_TEXTS } from "@/demos/pflow-bot";
 import { nextContactDemo, routePflowMessage, type DemoDirectoryEntry } from "@/demos/router";
 import { canAlertQuestion, guide, nextParcours } from "@/demos/parcours";
@@ -46,6 +47,8 @@ export interface ProcessorDeps {
   loadDemos?(): Promise<DemoDirectoryEntry[]>;
   /** Transcription des messages vocaux (absente : le bot demande d'écrire, comme avant). */
   transcriber?: Transcriber | null;
+  /** Limites des vocaux : durée maximale, plafond par contact et par jour (défaut : 2 min, 10 par 24 h). */
+  voiceLimits?: VoiceLimits;
   /** Pont PFlow Order (suivi, annulation : étape C5). Absent : le bloc Commande répond un texte de repli. */
   orderBridge?: OrderBridge;
 }
@@ -119,7 +122,7 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   }
 
   const contact = await store.getOrCreateContact(canal.id, event.waId, event.profileName);
-  event = await transcribeVoice(event, deps, report);
+  event = await transcribeVoice(event, contact.id, deps, report);
   const echo = event.message.kind === "echo";
   await store.addMessage({
     canalId: canal.id,
@@ -294,23 +297,54 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   await store.finishEvent(event.plateforme, event.wamid);
 }
 
+/** Réponses du bot quand un vocal n'est pas transcrit (service configuré). */
+export const VOICE_TEXTS = {
+  echec: "Je n'ai pas bien compris votre vocal, pouvez-vous l'écrire ?",
+  tropLong: (minutes: string) => `Votre vocal est un peu long (plus de ${minutes}) : pouvez-vous l'écrire, ou envoyer un vocal plus court ?`,
+  plafond: "J'ai bien reçu votre vocal, mais je ne peux plus en écouter aujourd'hui : pouvez-vous m'écrire votre message ?",
+};
+
+const minutesLabel = (seconds: number) => (seconds % 60 === 0 ? `${seconds / 60} minute${seconds / 60 > 1 ? "s" : ""}` : `${seconds} secondes`);
+
 /**
- * Message vocal : téléchargé puis transcrit ; le moteur reçoit alors le texte comme si le client l'avait
- * écrit. En cas d'échec (service absent, audio inaudible, trop long), le message reste « non lu » et le
- * bot répond comme avant (« je ne peux lire que les messages écrits »).
+ * Message vocal : téléchargé (en mémoire seulement, jamais stocké), transcrit, puis traité comme un texte (parcours,
+ * mots-clés, IA). Limites : durée maximale, plafond de vocaux transcrits par contact sur 24 h.
+ * Sans service configuré : comportement d'avant (« je ne peux lire que les messages écrits » si une question attend).
+ * Service configuré mais vocal non transcrit (trop long, plafond, échec) : une réponse claire demande d'écrire.
  */
-async function transcribeVoice(event: InboundEvent, deps: ProcessorDeps, report: ProcessReport): Promise<InboundEvent> {
+async function transcribeVoice(event: InboundEvent, contactId: string, deps: ProcessorDeps, report: ProcessReport): Promise<InboundEvent> {
   if (!event.media || event.message.kind !== "unsupported" || event.message.mediaType !== "audio") return event;
   const base = (event.contenu && typeof event.contenu === "object" ? event.contenu : {}) as Record<string, unknown>;
   if (!deps.transcriber || !deps.graph.downloadMedia) return event;
+  const limits = deps.voiceLimits ?? DEFAULT_VOICE_LIMITS;
+  const now = deps.now ? deps.now() : new Date();
+  const refuse = (statut: string, reply: string, extra: Record<string, unknown> = {}): InboundEvent => ({
+    ...event,
+    message: { kind: "unsupported", mediaType: "audio", reply },
+    contenu: { ...base, statut, ...extra },
+  });
+
+  // Plafond : vocaux déjà transcrits pour ce contact sur les dernières 24 h (lus dans les messages, sans compteur en base).
+  const since = now.getTime() - 24 * 3600_000;
+  const recent = await deps.store.listMessages(contactId, 200).catch(() => []);
+  const transcribed = recent.filter((m) => m.sens === "entrant" && m.type === "audio" && Date.parse(m.at) >= since && typeof (m.contenu as { transcription?: unknown })?.transcription === "string").length;
+  if (transcribed >= limits.maxPerDay) return refuse("plafond", VOICE_TEXTS.plafond, { erreur: `Plafond de ${limits.maxPerDay} vocaux par 24 h atteint` });
+
   try {
     const audio = await deps.graph.downloadMedia(event.media);
+    const seconds = audioDurationSeconds(audio.data, audio.mimeType);
+    // Durée inconnue (format autre qu'Ogg Opus) : estimée par la taille, à 32 Ko/s au plus (très large).
+    const tooLong = seconds !== null ? seconds > limits.maxSeconds + 0.5 : audio.data.byteLength > limits.maxSeconds * 32_000;
+    const duree = seconds !== null ? { duree: Math.round(seconds) } : {};
+    if (tooLong) return refuse("trop_long", VOICE_TEXTS.tropLong(minutesLabel(limits.maxSeconds)), { ...duree, erreur: `Vocal trop long (plus de ${minutesLabel(limits.maxSeconds)})` });
     const text = (await deps.transcriber.transcribe(audio.data, audio.mimeType)).trim();
-    if (!text) return { ...event, contenu: { ...base, erreur: "Vocal inaudible" } };
-    return { ...event, message: { kind: "text", text }, contenu: { ...base, texte: `🎤 ${text}`, transcription: text } };
+    if (!text) return refuse("echec", VOICE_TEXTS.echec, { ...duree, erreur: "Vocal inaudible" });
+    return { ...event, message: { kind: "text", text }, contenu: { ...base, texte: `🎤 ${text}`, transcription: text, statut: "transcrit", ...duree } };
   } catch (error) {
+    // Fichier trop lourd (plus de 10 Mo) : refusé au téléchargement, c'est un vocal trop long.
+    if (/trop long/i.test(message(error))) return refuse("trop_long", VOICE_TEXTS.tropLong(minutesLabel(limits.maxSeconds)), { erreur: message(error) });
     report.errors.push(`Transcription ${event.wamid} : ${message(error)}`);
-    return { ...event, contenu: { ...base, erreur: message(error) } };
+    return refuse("echec", VOICE_TEXTS.echec, { erreur: message(error) });
   }
 }
 
