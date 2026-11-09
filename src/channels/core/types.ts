@@ -120,10 +120,28 @@ export interface Transfert {
   alerteVoie?: AlertVoie;
   /** Erreurs des tentatives (message libre, modèle, e-mail), si une a échoué. */
   alerteErreur?: string;
+  /** Notification push de l'alerte (en parallèle de WhatsApp). */
+  alertePush?: AlertPush;
   at: string;
   vuLe?: string;
   resoluLe?: string;
 }
+
+/** Un abonnement Web Push (navigateur ou application installée). Les clés sont celles du navigateur, pas des secrets. */
+export interface PushSubscriptionRecord {
+  userId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  appareil?: string;
+  creeLe?: string;
+  dernierEnvoiLe?: string;
+  dernierEchecLe?: string;
+  dernierEchec?: string;
+}
+
+/** Notification push d'une alerte : partie vers au moins un appareil, en échec, aucun appareil, ou clés VAPID absentes. */
+export type AlertPush = "envoyee" | "echec" | "aucun_abonnement" | "non_configure";
 
 /** Message libre (fenêtre de 24 h ouverte), modèle approuvé, e-mail de secours, ou rien n'est parti. */
 export type AlertVoie = "texte" | "modele" | "email" | "aucune";
@@ -170,6 +188,10 @@ export interface ChannelStore {
   listMessages(contactId: string, limit?: number): Promise<StoredMessage[]>;
   listTransferts(canalId: string): Promise<Transfert[]>;
   resolveTransferts(contactId: string): Promise<void>;
+  /** Notifications push (Web Push) : abonnements des administrateurs, un par appareil (bot_push_abonnements). */
+  savePushSubscription(subscription: PushSubscriptionRecord): Promise<void>;
+  listPushSubscriptions(userId?: string): Promise<PushSubscriptionRecord[]>;
+  deletePushSubscription(endpoint: string): Promise<void>;
 }
 
 /** Un message reçu par un webhook, prêt pour le moteur. */

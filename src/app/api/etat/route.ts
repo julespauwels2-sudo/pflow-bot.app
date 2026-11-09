@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   let comptes: { id: string; plateforme: string; etat: string; numero: string; role: string; resto: string; testNumeros: number }[] = [];
   let erreurCanaux: string | undefined;
   /** Les dernières alertes au gérant (transferts) : par où elles sont parties, et les échecs. */
-  let alertes: { at: string; canal: string; source: string; prevenu: boolean; voie?: string; erreur?: string }[] = [];
+  let alertes: { at: string; canal: string; source: string; prevenu: boolean; voie?: string; push?: string; erreur?: string }[] = [];
   if (canaux.some((c) => c.configure)) {
     try {
       const rt = await getChannelsRuntime();
@@ -47,6 +47,7 @@ export async function GET(request: Request) {
           source: t.source,
           prevenu: t.gerantPrevenu,
           ...(t.alerteVoie ? { voie: t.alerteVoie } : {}),
+          ...(t.alertePush ? { push: t.alertePush } : {}),
           ...(t.alerteErreur ? { erreur: maskId(t.alerteErreur) } : {}),
         }));
     } catch (error) {

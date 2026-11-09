@@ -845,3 +845,22 @@ Détail dans `docs/etape-c/demo-permanente.md` (partie 0 ter).
   aucune migration).
 - 392 tests. **PFlow Bots n° 3 : fusionnée** ; la n° 4 en dépend, plus rien ne bloque.
 - Ordre de fusion : CRM n° 80 → CRM n° 81 → PFlow Bots n° 4.
+
+
+## 9 novembre 2026 — notifications push de la boîte de réception (PR séparée, sur la n° 6)
+
+- **App installable** (`src/app/manifest.ts`, icônes, `public/sw.js`) : écran d'accueil de l'iPhone, ouverture directe
+  sur `/inbox`.
+- **Web Push standard** (bibliothèque `web-push` 3.6.7, clés VAPID dans Vercel ; aucun service payant).
+  - Bouton « Activer les notifications » : boîte de réception et page État.
+  - Abonnements dans `bot_push_abonnements` (SQL montré, **non appliqué**).
+  - Notification : motif, contact, extrait. Toucher ouvre la conversation.
+- **Ordre des alertes** : WhatsApp et push **en parallèle**. E-mail **seulement si les deux échouent**.
+- **Page État** : appareils abonnés, voie push de chaque alerte, « Envoyer une notification de test ».
+- iPhone : iOS 16.4+, app ajoutée à l'écran d'accueil, autorisation après un toucher. Étapes exactes dans
+  `docs/etape-c/notifications-push.md`.
+- 420 tests, dont un qui **déchiffre** la vraie notification chiffrée comme le ferait l'iPhone.
+- Au passage :
+  - menu lisible sur téléphone ;
+  - après connexion, retour à la page demandée avec ses paramètres (`?contact=`) ;
+  - `safeNext` refuse aussi `/\…` (redirection vers un autre site).

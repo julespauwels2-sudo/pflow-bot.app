@@ -13,7 +13,7 @@ import { pflowBaseBot, PFLOW_BOT_ID, PFLOW_TEXTS } from "@/demos/pflow-bot";
 import { nextContactDemo, routePflowMessage, type DemoDirectoryEntry } from "@/demos/router";
 import { canAlertQuestion, guide, nextParcours } from "@/demos/parcours";
 import { DEFAULT_BOTS_URL, demoLinks } from "@/demos/demo-auto";
-import { sendAlert, type AlertConfig } from "./alerts";
+import { alertDelivered, sendAlert, type AlertConfig, type AlertResult } from "./alerts";
 
 /** Plafond d'un « en train d'écrire » côté serveur (le webhook ne doit pas attendre trop longtemps). */
 export const MAX_TYPING_MS = 3000;
@@ -270,22 +270,24 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
       contactName: event.profileName,
       contactId: event.waId,
       extrait: e.message,
+      conversationId: contact.id,
     });
-    await store.addTransfert({
-      canalId: canal.id, contactId: contact.id, source: e.source, dernierMessage: e.message, gerantPrevenu: alert.voie !== "aucune",
-      alerteVoie: alert.voie, ...(alert.erreurs.length ? { alerteErreur: alert.erreurs.join(" | ") } : {}),
-    });
-    if (alert.voie === "aucune") report.errors.push(`Alerte non envoyée (${canal.id}) : ${alert.erreurs.join(" | ")}`);
+    await store.addTransfert({ canalId: canal.id, contactId: contact.id, source: e.source, dernierMessage: e.message, ...alertFields(alert) });
+    if (!alertDelivered(alert)) report.errors.push(`Alerte non envoyée (${canal.id}) : ${alert.erreurs.join(" | ")}`);
   }
 
   if (question) {
-    const alert = await sendAlert(alertDeps, { canal, motif: "Question pendant la démo (le bot continue)", contactName: event.profileName, contactId: event.waId, extrait: question });
-    // Source « bloc » : les sources possibles sont fixées en base (bot_transferts_source_check), sans migration.
-    await store.addTransfert({
-      canalId: canal.id, contactId: contact.id, source: "bloc", dernierMessage: question.slice(0, 1000), gerantPrevenu: alert.voie !== "aucune",
-      alerteVoie: alert.voie, ...(alert.erreurs.length ? { alerteErreur: alert.erreurs.join(" | ") } : {}),
+    const alert = await sendAlert(alertDeps, {
+      canal,
+      motif: "Question pendant la démo (le bot continue)",
+      contactName: event.profileName,
+      contactId: event.waId,
+      extrait: question,
+      conversationId: contact.id,
     });
-    if (alert.voie === "aucune") report.errors.push(`Alerte non envoyée (${canal.id}) : ${alert.erreurs.join(" | ")}`);
+    // Source « bloc » : les sources possibles sont fixées en base (bot_transferts_source_check), sans migration.
+    await store.addTransfert({ canalId: canal.id, contactId: contact.id, source: "bloc", dernierMessage: question.slice(0, 1000), ...alertFields(alert) });
+    if (!alertDelivered(alert)) report.errors.push(`Alerte non envoyée (${canal.id}) : ${alert.erreurs.join(" | ")}`);
   }
 
   report.handled.push({ wamid: event.wamid, outgoing: sent });
@@ -323,6 +325,16 @@ function orderLinkQuery(bot: LoadedBot, event: InboundEvent, secret: string | un
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Ce que le transfert garde de l'alerte (page État). */
+function alertFields(alert: AlertResult) {
+  return {
+    gerantPrevenu: alertDelivered(alert),
+    alerteVoie: alert.voie,
+    alertePush: alert.push,
+    ...(alert.erreurs.length ? { alerteErreur: alert.erreurs.join(" | ") } : {}),
+  };
 }
 
 /** Motif lisible d'un transfert, pour l'alerte. */

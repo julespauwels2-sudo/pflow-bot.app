@@ -32,6 +32,9 @@ const KEYS: { name: string; role: string }[] = [
   { name: "WHATSAPP_ALERTE_MODELE", role: "Alertes : modèle approuvé par Meta (fenêtre de 24 h fermée)" },
   { name: "RESEND_API_KEY", role: "Alertes : e-mail de secours (Resend)" },
   { name: "ALERTE_EMAIL", role: "Alertes : adresse de l'e-mail de secours" },
+  { name: "VAPID_PUBLIC_KEY", role: "Notifications push : clé publique VAPID" },
+  { name: "VAPID_PRIVATE_KEY", role: "Notifications push : clé privée VAPID (secrète)" },
+  { name: "VAPID_SUBJECT", role: "Notifications push : contact (mailto:…), facultatif" },
   { name: "BASIC_AUTH_PASSWORD", role: "Mot de passe provisoire du site" },
 ];
 

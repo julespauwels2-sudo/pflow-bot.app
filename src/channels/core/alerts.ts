@@ -7,12 +7,14 @@
  * 1. message libre, seulement si la fenêtre de 24 h du destinataire est ouverte (il a écrit au canal récemment) ;
  * 2. sinon (ou s'il échoue) : MODÈLE approuvé par Meta, catégorie « utilitaire » (WHATSAPP_ALERTE_MODELE,
  *    WHATSAPP_ALERTE_LANGUE ; voir docs/etape-c/alertes-jules.md) ;
- * 3. si WhatsApp échoue (ou n'est pas configuré) : E-MAIL de secours (Resend : RESEND_API_KEY, ALERTE_EMAIL,
- *    ALERTE_EMAIL_FROM).
- * Le résultat (voie et erreurs) est gardé avec le transfert et affiché sur la page État.
+ * EN PARALLÈLE : NOTIFICATION PUSH sur les appareils abonnés (iPhone, ordinateur ; src/channels/core/push.ts).
+ * 3. E-MAIL de secours (Resend : RESEND_API_KEY, ALERTE_EMAIL, ALERTE_EMAIL_FROM), SEULEMENT si WhatsApp ET push ont
+ *    échoué tous les deux (ou ne sont pas configurés).
+ * Le résultat (voie WhatsApp / e-mail, voie push, erreurs) est gardé avec le transfert et affiché sur la page État.
  */
-import type { AlertVoie, Canal, ChannelSender, ChannelStore } from "./types";
+import type { AlertPush, AlertVoie, Canal, ChannelSender, ChannelStore } from "./types";
 import { sendOptions } from "./send-options";
+import { alertPushPayload, pushConfigFromEnv, sendPushToAll, type PushConfig } from "./push";
 
 /** Marge sur la fenêtre de 24 h de Meta (horloges, délais d'envoi). */
 const WINDOW_MS = 24 * 3600_000 - 10 * 60_000;
@@ -25,6 +27,8 @@ export interface AlertConfig {
    * n'envoie QU'À l'adresse du compte Resend (ici jules.pauwels2@gmail.com = ALERTE_EMAIL) ; aucun domaine supposé.
    */
   email?: { apiKey: string; to: string; from: string };
+  /** Notifications push (clés VAPID). Absent : « non_configure ». */
+  push?: PushConfig;
   fetch?: typeof fetch;
 }
 
@@ -32,9 +36,11 @@ export function alertConfigFromEnv(env: (name: string) => string): AlertConfig {
   const name = env("WHATSAPP_ALERTE_MODELE");
   const apiKey = env("RESEND_API_KEY");
   const to = env("ALERTE_EMAIL");
+  const push = pushConfigFromEnv(env);
   return {
     ...(name ? { template: { name, language: env("WHATSAPP_ALERTE_LANGUE") || "fr" } } : {}),
     ...(apiKey && to ? { email: { apiKey, to, from: env("ALERTE_EMAIL_FROM") || "PFlow Bots <onboarding@resend.dev>" } } : {}),
+    ...(push ? { push } : {}),
   };
 }
 
@@ -47,12 +53,20 @@ export interface AlertInput {
   contactId: string;
   /** Dernier message du client (extrait). */
   extrait?: string;
+  /** Identifiant de la conversation dans la boîte de réception (le toucher de la notification l'ouvre). */
+  conversationId?: string;
 }
 
 export interface AlertResult {
+  /** WhatsApp (texte, modèle) ou e-mail ; « aucune » si aucun des deux n'est parti. */
   voie: AlertVoie;
+  /** Notification push, envoyée en parallèle de WhatsApp. */
+  push: AlertPush;
   erreurs: string[];
 }
+
+/** Quelqu'un a-t-il été prévenu (WhatsApp, e-mail ou push) ? */
+export const alertDelivered = (result: AlertResult) => result.voie !== "aucune" || result.push === "envoyee";
 
 /** Un paramètre de modèle : une ligne (Meta refuse retours à la ligne, tabulations et plus de 4 espaces), borné. */
 export function templateParam(value: string | undefined, max: number): string {
@@ -103,43 +117,67 @@ async function sendEmail(config: NonNullable<AlertConfig["email"]>, input: Alert
 
 const short = (error: unknown) => (error instanceof Error ? error.message : String(error)).slice(0, 300);
 
-/** Envoie l'alerte par la première voie qui marche. Ne lève jamais d'erreur. */
-export async function sendAlert(deps: { store: ChannelStore; graph: ChannelSender; config?: AlertConfig; now: Date }, input: AlertInput): Promise<AlertResult> {
+/** WhatsApp : message libre si la fenêtre de 24 h est ouverte, sinon modèle approuvé. */
+async function sendWhatsApp(deps: { store: ChannelStore; graph: ChannelSender; config: AlertConfig; now: Date }, input: AlertInput, erreurs: string[]): Promise<AlertVoie | null> {
   const { canal } = input;
-  const config = deps.config ?? {};
-  const erreurs: string[] = [];
   const to = canal.telAlerte;
-  if (to) {
-    if (await windowOpen(deps.store, canal, to, deps.now)) {
-      try {
-        await deps.graph.send(canal.accountId, to, { kind: "text", text: alertText(input) }, sendOptions(canal));
-        return { voie: "texte", erreurs };
-      } catch (error) {
-        erreurs.push(`message libre : ${short(error)}`);
-      }
+  if (!to) {
+    erreurs.push("WhatsApp : pas de numéro d'alerte (tel_alerte) sur ce canal");
+    return null;
+  }
+  if (await windowOpen(deps.store, canal, to, deps.now)) {
+    try {
+      await deps.graph.send(canal.accountId, to, { kind: "text", text: alertText(input) }, sendOptions(canal));
+      return "texte";
+    } catch (error) {
+      erreurs.push(`message libre : ${short(error)}`);
     }
-    if (config.template && deps.graph.sendTemplate) {
-      try {
-        await deps.graph.sendTemplate(canal.accountId, to, { ...config.template, bodyParams: alertTemplateParams(input) }, sendOptions(canal));
-        return { voie: "modele", erreurs };
-      } catch (error) {
-        erreurs.push(`modèle : ${short(error)}`);
-      }
-    } else {
-      erreurs.push(config.template ? "modèle : envoi de modèles indisponible sur cette plateforme" : "modèle : WHATSAPP_ALERTE_MODELE non défini (fenêtre de 24 h fermée)");
+  }
+  const { template } = deps.config;
+  if (template && deps.graph.sendTemplate) {
+    try {
+      await deps.graph.sendTemplate(canal.accountId, to, { ...template, bodyParams: alertTemplateParams(input) }, sendOptions(canal));
+      return "modele";
+    } catch (error) {
+      erreurs.push(`modèle : ${short(error)}`);
     }
   } else {
-    erreurs.push("WhatsApp : pas de numéro d'alerte (tel_alerte) sur ce canal");
+    erreurs.push(template ? "modèle : envoi de modèles indisponible sur cette plateforme" : "modèle : WHATSAPP_ALERTE_MODELE non défini (fenêtre de 24 h fermée)");
   }
+  return null;
+}
+
+/**
+ * Envoie l'alerte : WhatsApp et push EN PARALLÈLE, puis l'e-mail seulement si les deux ont échoué.
+ * Ne lève jamais d'erreur.
+ */
+export async function sendAlert(deps: { store: ChannelStore; graph: ChannelSender; config?: AlertConfig; now: Date }, input: AlertInput): Promise<AlertResult> {
+  const config = deps.config ?? {};
+  const erreursWhatsApp: string[] = [];
+  const [whatsapp, push] = await Promise.all([
+    sendWhatsApp({ ...deps, config }, input, erreursWhatsApp).catch((error: unknown) => {
+      erreursWhatsApp.push(`WhatsApp : ${short(error)}`);
+      return null;
+    }),
+    sendPushToAll({ store: deps.store, config: config.push, now: deps.now }, alertPushPayload(input)),
+  ]);
+  const erreurs = [...erreursWhatsApp];
+  // « Pas configuré » / « aucun appareil » n'est une erreur que si personne d'autre n'a été prévenu.
+  const pushErrors = () => erreurs.push(...push.erreurs);
+  if (push.statut === "echec" || (push.statut === "envoyee" && push.erreurs.length)) pushErrors();
+  if (whatsapp) return { voie: whatsapp, push: push.statut, erreurs };
+  if (push.statut === "envoyee") return { voie: "aucune", push: push.statut, erreurs };
+  if (push.statut !== "echec") pushErrors();
+
   if (config.email) {
     try {
       await sendEmail(config.email, input, config.fetch ?? fetch);
-      return { voie: "email", erreurs };
+      return { voie: "email", push: push.statut, erreurs };
     } catch (error) {
       erreurs.push(`e-mail : ${short(error)}`);
     }
   } else {
     erreurs.push("e-mail : RESEND_API_KEY ou ALERTE_EMAIL non défini");
   }
-  return { voie: "aucune", erreurs };
+  return { voie: "aucune", push: push.statut, erreurs };
 }

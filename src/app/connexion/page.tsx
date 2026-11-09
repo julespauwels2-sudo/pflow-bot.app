@@ -16,7 +16,7 @@ export default function LoginPage() {
 
 /** Seules les pages internes sont acceptées comme destination après connexion. */
 function safeNext(value: string | null): string {
-  return value && value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/connexion") ? value : "/clients";
+  return value && value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/\\") && !value.startsWith("/connexion") ? value : "/clients";
 }
 
 function LoginForm() {

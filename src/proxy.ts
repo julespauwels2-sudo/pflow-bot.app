@@ -21,6 +21,7 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Tout est protégé, sauf les fichiers statiques, les webhooks de Meta (protégés par la signature
-  // X-Hub-Signature-256) et la tâche planifiée de Vercel (protégée par CRON_SECRET).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/webhooks/|api/cron/|api/demo/).*)"],
+  // X-Hub-Signature-256) et la tâche planifiée de Vercel (protégée par CRON_SECRET). Les fichiers de l'app
+  // installable (manifest, service worker, icônes) sont publics : aucune donnée dedans.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/webhooks/|api/cron/|api/demo/|manifest.webmanifest|sw.js|icons/|apple-icon).*)"],
 };

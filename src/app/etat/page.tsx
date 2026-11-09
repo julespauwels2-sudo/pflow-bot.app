@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { PushControls } from "@/components/pwa";
 import { Badge, Button, Card, Loading, Notice } from "@/components/ui";
 import { errorText, useLoad } from "@/data/browser";
 import type { AiCallLog } from "@/data/types";
@@ -13,7 +14,7 @@ interface SystemStatus {
   services: { stockage: "supabase" | "memory"; ia: { active: boolean; modele: string }; transcription: { active: boolean; service?: string }; deploiement: string };
   comptes: { id: string; plateforme: string; etat: string; numero: string; role: string; resto: string; testNumeros: number }[];
   evenements: { source: string; cle: string; at: string; erreur?: string }[];
-  alertes?: { at: string; canal: string; source: string; prevenu: boolean; voie?: string; erreur?: string }[];
+  alertes?: { at: string; canal: string; source: string; prevenu: boolean; voie?: string; push?: string; erreur?: string }[];
   erreurCanaux?: string;
 }
 
@@ -152,6 +153,14 @@ function ServerCards({ data }: { data: SystemStatus }) {
       {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && <WhatsAppAccessCard />}
       {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && data.comptes.some((c) => c.plateforme === "whatsapp" && c.etat === "test") && <OrderEventTestCard canaux={data.comptes.filter((c) => c.plateforme === "whatsapp" && c.etat === "test" && c.role === "resto" && c.testNumeros > 0)} />}
 
+      <Card title="Notifications push (iPhone, ordinateur)" className="lg:col-span-2">
+        <p className="mb-2 text-xs text-muted">
+          Chaque alerte part aussi en notification sur les appareils abonnés ; toucher la notification ouvre la conversation. Sur iPhone : iOS 16.4 ou
+          plus, depuis l&apos;app ajoutée à l&apos;écran d&apos;accueil.
+        </p>
+        <PushControls />
+      </Card>
+
       {data.alertes && <AlertesCard alertes={data.alertes} />}
 
       <Card title="Clés détectées" className="lg:col-span-2">
@@ -188,6 +197,12 @@ function ServerCards({ data }: { data: SystemStatus }) {
 }
 
 const VOIES: Record<string, string> = { texte: "WhatsApp (message libre)", modele: "WhatsApp (modèle)", email: "e-mail de secours", aucune: "NON ENVOYÉE" };
+const PUSH: Record<string, { label: string; tone: "success" | "warning" | "neutral" }> = {
+  envoyee: { label: "push envoyée", tone: "success" },
+  echec: { label: "push en échec", tone: "warning" },
+  aucun_abonnement: { label: "push : aucun appareil", tone: "neutral" },
+  non_configure: { label: "push non configurée", tone: "neutral" },
+};
 
 /** Alertes au gérant (« un client attend une réponse ») : par où elles sont parties, et les échecs. */
 function AlertesCard({ alertes }: { alertes: NonNullable<SystemStatus["alertes"]> }) {
@@ -195,7 +210,8 @@ function AlertesCard({ alertes }: { alertes: NonNullable<SystemStatus["alertes"]
   return (
     <Card title="Alertes au gérant (un client attend une réponse)" className="lg:col-span-2">
       <p className="mb-2 text-xs text-muted">
-        Message libre si le destinataire a écrit au numéro dans les 24 h, sinon modèle approuvé par Meta, sinon e-mail de secours.
+        WhatsApp (message libre si le destinataire a écrit au numéro dans les 24 h, sinon modèle approuvé par Meta) et notification push en
+        parallèle ; e-mail de secours seulement si les deux ont échoué.
       </p>
       {echecs.length > 0 && (
         <div className="mb-2" data-testid="alertes-echecs">
@@ -210,7 +226,9 @@ function AlertesCard({ alertes }: { alertes: NonNullable<SystemStatus["alertes"]
             <li key={a.at + a.canal} className="flex flex-wrap items-baseline gap-2 py-1">
               <span className="text-muted">{time(a.at)}</span>
               <span>{a.canal}</span>
-              {a.prevenu ? <Badge tone="success">{a.voie ? VOIES[a.voie] : "envoyée"}</Badge> : <Badge>{VOIES.aucune}</Badge>}
+              {a.voie && a.voie !== "aucune" ? <Badge tone="success">{VOIES[a.voie] ?? a.voie}</Badge> : a.prevenu ? null : <Badge>{VOIES.aucune}</Badge>}
+              {!a.voie && a.prevenu && <Badge tone="success">envoyée</Badge>}
+              {a.push && PUSH[a.push] && <Badge tone={PUSH[a.push].tone}>{PUSH[a.push].label}</Badge>}
               {a.erreur && <span className="text-xs text-coral">{a.erreur}</span>}
             </li>
           ))}

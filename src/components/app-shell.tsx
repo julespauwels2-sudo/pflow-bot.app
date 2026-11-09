@@ -10,7 +10,7 @@ export function Logo() {
           <path d="M18 22a8 8 0 0 1 8-8h14a8 8 0 0 1 8 8v12a8 8 0 0 1-8 8H30l-9 7v-7.5A8 8 0 0 1 18 34Z" fill="currentColor" />
         </svg>
       </span>
-      <span className="font-title text-lg font-semibold">
+      <span className="font-title text-lg font-semibold whitespace-nowrap">
         PFlow <span className="text-pink">Bots</span>
       </span>
     </Link>
@@ -21,9 +21,10 @@ export function AppShell({ children, breadcrumb }: { children: ReactNode; breadc
   return (
     <div className="min-h-screen">
       <header className="border-b border-rule bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
           <Logo />
-          <nav className="flex items-center gap-1 text-sm font-semibold">
+          {/* Sur téléphone (app installée) : le menu défile au lieu de déborder. */}
+          <nav className="flex max-w-full items-center gap-1 overflow-x-auto text-sm font-semibold whitespace-nowrap">
             <Link href="/modele" className="rounded-full px-3 py-1.5 hover:bg-navy/5">
               Modèle maître
             </Link>

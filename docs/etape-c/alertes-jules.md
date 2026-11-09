@@ -18,7 +18,9 @@ Dans l'ordre (`src/channels/core/alerts.ts`) :
 1. **Message libre**, seulement si la fenêtre de 24 h du destinataire est ouverte. On le sait parce qu'il a écrit au
    canal récemment, avec une marge de 10 min.
 2. Sinon, ou en cas d'échec : **modèle approuvé** par Meta, de catégorie « Utilitaire » (partie 3).
-3. Si WhatsApp échoue : **e-mail de secours** à `ALERTE_EMAIL` (partie 4).
+3. Si WhatsApp échoue : **e-mail de secours** à `ALERTE_EMAIL` (partie 4). *Avec la PR des notifications push :
+   WhatsApp et push partent en parallèle, et l'e-mail ne part que si les deux échouent
+   (`docs/etape-c/notifications-push.md`).*
 4. La voie utilisée et les erreurs sont gardées **avec le transfert**. Elles sont affichées sur la **page État**,
    encadré « Alertes au gérant » : dernières alertes, voie, erreurs, et un bandeau rouge s'il y a des alertes non
    reçues.

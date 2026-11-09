@@ -73,7 +73,7 @@ describe("alertes au gérant", () => {
     await store.saveContact({ ...jules, state: { ...jules.state, lastInboundAt: "2026-11-09T09:00:00Z" } });
     const from = sent.length;
     const res = await sendAlert({ store, graph: createGraphClient({ token: "t", base, version: "v24.0" }), config: {}, now }, input);
-    expect(res).toEqual({ voie: "texte", erreurs: [] });
+    expect(res).toEqual({ voie: "texte", push: "non_configure", erreurs: [] });
     const msg = sent.slice(from)[0] as { to: string; text: { body: string } };
     expect(msg.to).toBe(ALERTE);
     expect(msg.text.body).toBe(alertText(input));
@@ -85,7 +85,7 @@ describe("alertes au gérant", () => {
     const config: AlertConfig = { template: { name: "alerte_conversation", language: "fr" } };
     const from = sent.length;
     const res = await sendAlert({ store, graph: createGraphClient({ token: "t", base, version: "v24.0" }), config, now: new Date() }, input);
-    expect(res).toEqual({ voie: "modele", erreurs: [] });
+    expect(res).toEqual({ voie: "modele", push: "non_configure", erreurs: [] });
     const msg = sent.slice(from)[0] as { to: string; type: string; template: { name: string; language: { code: string }; components: { type: string; parameters: { type: string; text: string }[] }[] } };
     expect(msg).toMatchObject({ to: ALERTE, type: "template", template: { name: "alerte_conversation", language: { code: "fr" } } });
     expect(msg.template.components[0].parameters.map((p) => p.text)).toEqual(["Marc (+590690111111)", "+590 691 26 68 53 (PFlow Démo)", "Je veux le mien", "Bonjour, c'est combien ?"]);
@@ -116,15 +116,20 @@ describe("alertes au gérant", () => {
     const bad = fakeEmail(401);
     res = await sendAlert({ store, graph: failing, config: { template: { name: "x", language: "fr" }, email: { apiKey: "k", to: "j@example.com", from: "f" }, fetch: bad.doFetch }, now: new Date() }, input);
     expect(res.voie).toBe("aucune");
-    expect(res.erreurs).toHaveLength(3);
-    expect(res.erreurs[2]).toContain("e-mail refusé (401)");
+    expect(res.erreurs).toHaveLength(4);
+    expect(res.erreurs[2]).toContain("push : clés VAPID non définies");
+    expect(res.erreurs[3]).toContain("e-mail refusé (401)");
   });
 
   it("rien de configuré, fenêtre fermée : « aucune », avec la raison (variables à définir)", async () => {
     const store = createMemoryChannelStore([canal]);
     const res = await sendAlert({ store, graph: createGraphClient({ token: "t", base, version: "v24.0" }), config: {}, now: new Date() }, input);
     expect(res.voie).toBe("aucune");
-    expect(res.erreurs).toEqual(["modèle : WHATSAPP_ALERTE_MODELE non défini (fenêtre de 24 h fermée)", "e-mail : RESEND_API_KEY ou ALERTE_EMAIL non défini"]);
+    expect(res.erreurs).toEqual([
+      "modèle : WHATSAPP_ALERTE_MODELE non défini (fenêtre de 24 h fermée)",
+      "push : clés VAPID non définies (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY)",
+      "e-mail : RESEND_API_KEY ou ALERTE_EMAIL non défini",
+    ]);
   });
 
   it("paramètres du modèle : une ligne, bornés, jamais vides ; configuration lue dans l'environnement", () => {

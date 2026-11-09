@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { OPEN_CONVERSATION_EVENT, PushControls } from "@/components/pwa";
 import { Badge, Button, Card, Loading, Notice, Textarea } from "@/components/ui";
 import type { InboxCanal, InboxConversation } from "@/channels/core/inbox";
 import type { StoredMessage } from "@/channels/core/types";
@@ -54,6 +55,28 @@ export default function InboxPage() {
     }
   }, []);
 
+  // Notification touchée : /inbox?contact=… ouvre la conversation (ou l'événement envoyé par le service worker
+  // quand la page est déjà ouverte).
+  const scrollToThread = useRef(false);
+  useEffect(() => {
+    // Sur téléphone, la conversation est sous la liste : on y descend une fois chargée.
+    if (!thread || !scrollToThread.current) return;
+    scrollToThread.current = false;
+    document.querySelector("[data-testid=inbox-thread]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [thread]);
+  useEffect(() => {
+    const open = (contactId: string | null) => {
+      if (!contactId) return;
+      scrollToThread.current = true;
+      setSelected(contactId);
+      void loadThread(contactId);
+    };
+    open(new URLSearchParams(window.location.search).get("contact"));
+    const onOpen = (event: Event) => open((event as CustomEvent<string>).detail);
+    window.addEventListener(OPEN_CONVERSATION_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_CONVERSATION_EVENT, onOpen);
+  }, [loadThread]);
+
   useEffect(() => {
     let cancelled = false;
     const tick = async () => {
@@ -97,6 +120,7 @@ export default function InboxPage() {
             {notice.text}
           </Notice>
         )}
+        {state.status === "ready" && <PushControls compact />}
         {state.status === "loading" && <Loading />}
         {state.status === "error" && <Notice tone="error">{state.error}</Notice>}
         {state.status === "off" && (
