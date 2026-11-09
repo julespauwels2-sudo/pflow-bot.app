@@ -314,9 +314,11 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(msgs[0].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.step1 }, action: { parameters: { display_text: "Je commande", url: DEMO_PERMANENTE.commandeUrl } } });
     expect(await step()).toBe(1);
 
-    // Filet de sécurité : autre chose (ou un retour plus tard, « Bonjour ») → rappel de l'étape 1 avec son bouton.
-    for (const autre of ["euh je comprends pas", "Bonjour"]) {
+    // Filet de sécurité : autre chose → rappel de l'étape 1 avec son bouton ; un retour plus tard (« Bonjour ») : un
+    // bonjour en retour, puis le même rappel.
+    for (const [autre, politesse] of [["euh je comprends pas", null], ["Bonjour", "Bonjour 👋"]] as const) {
       msgs = await say(autre);
+      if (politesse) expect(msgs.shift()?.text?.body).toBe(politesse);
       expect(msgs[0].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.remind1 }, action: { parameters: { url: DEMO_PERMANENTE.commandeUrl } } });
       expect(msgs[1].interactive?.body.text).toBe(PFLOW_TEXTS.remindDone);
       expect(titles(msgs[1])).toEqual(["✅ C'est fait", "💬 Parler à Jules"]);
@@ -331,6 +333,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
 
     // Rappel de l'étape 2, puis « ✅ C'est fait » (bouton du rappel) → étape 3/3.
     msgs = await say("ok merci");
+    expect(msgs.shift()?.text?.body).toBe("Avec plaisir 😊");
     expect(msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.remind2);
     msgs = await press(msgs[1], 0);
     expect(msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.step3);
@@ -419,8 +422,9 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(g(DEMO_PERMANENTE.retourDashboard, 2)).toBe(PFLOW_FLOWS.etape3);
     expect(g("ok", 1)).toBe(PFLOW_FLOWS.etape2);
     expect(g("ok", 2)).toBe(PFLOW_FLOWS.etape3);
-    expect(g("ok", 3)).toBe(PFLOW_FLOWS.rappel3);
-    expect(g("bonjour", 1)).toBe(PFLOW_FLOWS.rappel1);
+    expect(g("ok", 3)).toBe(`${PFLOW_FLOWS.question}3`); // politesse « Super 👍 », puis le rappel de l'étape 3
+    expect(g("bonjour", 1)).toBe(`${PFLOW_FLOWS.question}1`); // « Bonjour 👋 », puis le rappel de l'étape 1
+    expect(g("hmm", 1)).toBe(PFLOW_FLOWS.rappel1);
     expect(g("hein", 2)).toBe(PFLOW_FLOWS.rappel2);
     expect(g("hein ?", 2)).toBe(`${PFLOW_FLOWS.question}2`); // un « ? » : question pour Jules
     expect(g("Obtenir ma démo", 1)).toBe(PFLOW_FLOWS.mien);
@@ -614,14 +618,16 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
       // 2. Autre question (plus de 4 mots, sans « ? ») 10 min après : réponse et rappel, mais PAS de 2e alerte.
       t.clock.now = new Date("2026-11-08T15:10:00Z");
       r = await t.say("et pour la livraison vous faites comment");
-      expect(r.msgs[0].text?.body).toBe(PFLOW_TEXTS.question);
+      expect(r.msgs[0].text?.body).toContain("La livraison est en préparation"); // aucun détail, même sans IA
       expect(r.msgs[1].interactive?.body.text).toBe(PFLOW_TEXTS.remind2);
       expect(r.alerts).toHaveLength(0);
       expect(await t.store.listTransferts("pflow")).toHaveLength(1);
 
-      // 3. Un message court sans « ? » : simple rappel, pas de « Bonne question ».
+      // 3. Une politesse : réponse courte, rappel, pas de « Bonne question ».
       r = await t.say("ah ok");
-      expect(r.msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.remind2);
+      expect(r.msgs[0].text?.body).toBe("Super 👍");
+      expect(r.msgs[1].interactive?.body.text).toBe(PFLOW_TEXTS.remind2);
+      expect(r.alerts).toHaveLength(0);
       expect(JSON.stringify(r.msgs)).not.toContain(PFLOW_TEXTS.question);
 
       // 4. Plus de 30 min après la première alerte : nouvelle alerte.
@@ -643,6 +649,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
       expect(guide({ kind: "text", text: "C'est payant ?" }, flows, { etape: 2, at }, now)).toEqual({
         message: { kind: "start_flow", flowId: "pflow-question-2" },
         question: "C'est payant ?",
+        step: 2,
       });
       // Les mots-clés du parcours passent avant (« comment ça marche ? » n'est pas une question pour Jules).
       expect(guide({ kind: "text", text: "Comment ça marche ?" }, flows, { etape: 2, at }, now).question).toBeUndefined();

@@ -2,6 +2,7 @@
  * Canaux (WhatsApp, Instagram) : types partagés par les webhooks, l'envoi et la boîte de réception.
  * La logique ne dépend pas de Next.js : elle peut être déplacée (ex. Supabase Edge Functions).
  */
+import type { DemoKnowledge } from "@/demos/demo-knowledge";
 import type { ContactDemo } from "@/demos/router";
 import type { ContactState, IncomingMessage, OutgoingMessage, Session, TriggerMode } from "@/engine";
 
@@ -180,6 +181,9 @@ export interface ChannelStore {
   savePushSubscription(subscription: PushSubscriptionRecord): Promise<void>;
   listPushSubscriptions(userId?: string): Promise<PushSubscriptionRecord[]>;
   deletePushSubscription(endpoint: string): Promise<void>;
+  /** Base de connaissances du bot PFlow Démo (null : pas encore enregistrée, la base par défaut s'applique). */
+  getDemoKnowledge(): Promise<DemoKnowledge | null>;
+  saveDemoKnowledge(knowledge: DemoKnowledge): Promise<void>;
 }
 
 /** Un message reçu par un webhook, prêt pour le moteur. */

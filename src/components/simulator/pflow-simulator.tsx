@@ -9,7 +9,7 @@ import type { WorkspaceData } from "@/data/types";
 import { demoDirectory, isDemoActive } from "@/demos/lifecycle";
 import { pflowBaseBot, PFLOW_BOT_ID, PFLOW_TEXTS } from "@/demos/pflow-bot";
 import { nextContactDemo, routePflowMessage, type ContactDemo } from "@/demos/router";
-import { guideMessage, nextParcours } from "@/demos/parcours";
+import { guide, nextParcours } from "@/demos/parcours";
 import { accessToken } from "@/lib/supabase";
 import { formatShort } from "@/simulator/clock";
 import { advanceTime, newSimulation, pendingClientEntry, playTurn, withSystemLine, type Bot, type ChatEntry, type SimState } from "@/simulator/session";
@@ -85,7 +85,10 @@ export function PflowSimulator({ data }: { data: WorkspaceData }) {
       };
       // Bot PFlow de base : parcours guidé, comme sur WhatsApp (src/demos/parcours.ts).
       const guided = loaded.client.id === PFLOW_BOT_ID;
-      const played = guided ? guideMessage(message, loaded.flows, nextDemo?.parcours, at) : message;
+      const guidance = guided ? guide(message, loaded.flows, nextDemo?.parcours, at) : null;
+      const played = guidance ? guidance.message : message;
+      // Politesse : sa réponse courte ; question : « Bonne question ! » (le simulateur n'appelle pas l'IA de la démo).
+      if (guidance && (guidance.courtesy || guidance.question)) bot.client = { ...bot.client, vars: { ...bot.client.vars, reponse_demo: guidance.courtesy ?? PFLOW_TEXTS.question } };
       const { state: next, result } = await playTurn(reset ? { ...before, session: null } : before, bot, played, label, aiPort ? { ai: aiPort } : {}, message);
       if (guided) {
         const parcours = nextParcours(nextDemo?.parcours, result.events, at);

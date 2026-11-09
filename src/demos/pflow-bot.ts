@@ -84,6 +84,8 @@ export const DEFAULT_DEMO_VARS: Record<string, string> = {
   demo_lien_commande: DEMO_PERMANENTE.commandeUrl,
   demo_lien_dashboard: DEMO_PERMANENTE.dashboardUrl,
   nom_demo: DEMO_PERMANENTE.nomResto,
+  /** Texte de la réponse en plein parcours (politesse, réponse de l'IA, ou « Jules vous répond ») : posé par le serveur. */
+  reponse_demo: PFLOW_TEXTS.question,
 };
 
 /** Flux du bot PFlow de base : un bouton qui y mène fait quitter la démo en cours (voir router.ts). */
@@ -102,8 +104,10 @@ export const PFLOW_FLOWS = {
   rappel3: "pflow-rappel-3",
   jules: "pflow-jules",
   commandeDemo: "pflow-commande-demo",
-  /** Question en plein parcours, puis rappel de l'étape N (pflow-question-0 … -3). */
+  /** Réponse en plein parcours (politesse, IA, ou Jules), puis rappel de l'étape N (pflow-question-0 … -3). */
   question: "pflow-question-",
+  /** Réponse de l'IA avant le début de la démo, avec [Tester la démo] [💬 Parler à Jules]. */
+  reponseAvantDemo: "pflow-reponse-0",
 } as const;
 
 const replyTo = (flowId: string, title: string): ChoiceOption => ({ id: encodeReplyId({ flowId, nodeId: "t", handle: "next" }), title });
@@ -228,8 +232,9 @@ const talkToJules: Flow = {
 };
 
 /**
- * Question en plein parcours (src/demos/parcours.ts) : « Bonne question ! … », puis le rappel de l'étape. Jules est
- * prévenu par le serveur (alerte sans pause : le prospect peut continuer la démo).
+ * Réponse en plein parcours (src/demos/parcours.ts, src/demos/demo-knowledge.ts) : le texte {{reponse_demo}} posé par
+ * le serveur (politesse, réponse de l'IA tirée de la base, ou « Jules vous répond très vite »), puis le rappel de
+ * l'étape. Jules n'est prévenu que si l'IA n'a pas su répondre (ou inscription, prix, livraison, demande de Jules).
  */
 const STEP_REMINDERS = [PFLOW_FLOWS.accueil, PFLOW_FLOWS.rappel1, PFLOW_FLOWS.rappel2, PFLOW_FLOWS.rappel3];
 const questionFlows: Flow[] = STEP_REMINDERS.map((reminderId, etape) => ({
@@ -237,7 +242,7 @@ const questionFlows: Flow[] = STEP_REMINDERS.map((reminderId, etape) => ({
   name: `PFlow — question en plein parcours (étape ${etape})`,
   nodes: [
     trigger([]),
-    message("m", [{ text: PFLOW_TEXTS.question }]),
+    message("m", [{ text: "{{reponse_demo}}" }]),
     { id: "d", type: "delay", position: at(340, 160), data: { mode: "intelligent" } },
     goto("g", reminderId, 320),
   ],
@@ -247,6 +252,26 @@ const questionFlows: Flow[] = STEP_REMINDERS.map((reminderId, etape) => ({
     { id: "e3", source: "d", target: "g" },
   ],
 }));
+
+/**
+ * Réponse de l'IA AVANT le début de la démo (pas d'étape en cours) : la réponse, puis [Tester la démo] et
+ * [💬 Parler à Jules] (sans répéter tout l'accueil).
+ */
+const answerBeforeDemo: Flow = {
+  id: PFLOW_FLOWS.reponseAvantDemo,
+  name: "PFlow — réponse avant la démo",
+  nodes: [
+    trigger([]),
+    message("m", [{ text: "{{reponse_demo}}", buttons: [reply("demo", "Tester la démo"), reply("jules", TALK_TO_JULES)] }]),
+    goto("g_demo", PFLOW_FLOWS.etape1, 0),
+    goto("g_jules", PFLOW_FLOWS.jules, 200),
+  ],
+  edges: [
+    { id: "e1", source: "t", target: "m" },
+    { id: "e2", source: "m", sourceHandle: "demo", target: "g_demo" },
+    { id: "e3", source: "m", sourceHandle: "jules", target: "g_jules" },
+  ],
+};
 
 /** Commande de démo validée sur la page Mint Bun : la confirmation, puis l'étape 2/3 (événement envoyé par le serveur). */
 const orderConfirmed: Flow = {
@@ -291,7 +316,7 @@ const wantMine: Flow = {
 export function pflowBaseBot(): LoadedBot {
   return {
     client: { id: PFLOW_BOT_ID, nomResto: "PFlow", orderSlug: "", timezone: DEFAULT_TIMEZONE, vars: { ...DEFAULT_DEMO_VARS } },
-    flows: structuredClone([welcome, step1, step2, step3, remind1, remind2, remind3, howItWorks, wantMine, talkToJules, ...questionFlows, orderConfirmed]),
+    flows: structuredClone([welcome, step1, step2, step3, remind1, remind2, remind3, howItWorks, wantMine, talkToJules, ...questionFlows, answerBeforeDemo, orderConfirmed]),
     infoSheet: { horaires: [] },
     aiDailyLimit: 0,
   };
