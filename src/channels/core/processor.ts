@@ -12,6 +12,7 @@ import type { Transcriber } from "../voice/transcriber";
 import { pflowBaseBot, PFLOW_BOT_ID, PFLOW_TEXTS } from "@/demos/pflow-bot";
 import { nextContactDemo, routePflowMessage, type DemoDirectoryEntry } from "@/demos/router";
 import { canAlertQuestion, guide, nextParcours } from "@/demos/parcours";
+import { DEFAULT_BOTS_URL, demoLinks } from "@/demos/demo-auto";
 
 /** Plafond d'un « en train d'écrire » côté serveur (le webhook ne doit pas attendre trop longtemps). */
 export const MAX_TYPING_MS = 3000;
@@ -36,6 +37,8 @@ export interface ProcessorDeps {
   maxTypingMs?: number;
   /** Secret partagé avec PFlow Order : jeton de pré-remplissage dans le lien « Commander ». */
   pflowBotsSecret?: string;
+  /** Adresse publique de PFlow Bots (lien du dashboard de la démo permanente). Défaut : DEFAULT_BOTS_URL. */
+  demoBotsUrl?: string;
   /** Numéro PFlow : démos (mot-clé, expiration) avec le nom du resto. */
   loadDemos?(): Promise<DemoDirectoryEntry[]>;
   /** Transcription des messages vocaux (absente : le bot demande d'écrire, comme avant). */
@@ -179,6 +182,8 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
 
   // Bot PFlow de base : parcours guidé (un mot-clé lance son étape, tout autre message rappelle l'étape en cours).
   const guided = canal.role === "pflow" && bot.client.id === PFLOW_BOT_ID;
+  // Liens de la démo permanente avec le jeton de ce contact (confirmation et étape 3 automatiques).
+  if (guided) bot.client.vars = demoLinks(contact, canal.id, deps.pflowBotsSecret, deps.demoBotsUrl ?? DEFAULT_BOTS_URL, now);
   const guidance = guided ? guide(event.message, bot.flows, contact.demo?.parcours, now) : null;
   const engineMessage = guidance ? guidance.message : event.message;
 

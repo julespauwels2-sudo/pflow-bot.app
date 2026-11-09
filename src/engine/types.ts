@@ -39,6 +39,11 @@ export interface ClientContext {
    * boutons : ces boutons, avec des ids compris par le bot PFlow de base.
    */
   demo?: { sansCarte: boolean; ficheVide: boolean; boutons: ChoiceOption[] };
+  /**
+   * Variables propres à ce contact ({{nom}} dans les textes et les liens). Numéro PFlow Démo : les liens de la
+   * démo permanente avec le jeton du contact ({{demo_lien_commande}}, {{demo_lien_dashboard}}).
+   */
+  vars?: Record<string, string>;
 }
 
 export interface ChannelConfig {

@@ -48,8 +48,14 @@ export const DEMO_PERMANENTE = {
 export const PFLOW_TEXTS = {
   /** Accueil : un seul message, un seul bouton. */
   welcome: `👋 Bienvenue chez PFlow ! Testez en 1 minute ce que vos clients vivraient en commandant chez vous sur WhatsApp. On fait comme si vous étiez client de ${DEMO_PERMANENTE.nomResto}, notre resto de démo 🍔\n\n_Vous avez un code de démo ? Écrivez-le ici._`,
-  step1: "*Étape 1/3* : passez commande comme un client 👇\nQuand c'est fait, touchez « Retour sur WhatsApp ».",
-  step2: "*Étape 2/3* : voici ce que le resto voit, en direct 👇\nVotre commande vient d'y arriver. Ensuite, touchez « Retour sur WhatsApp ».",
+  step1: "*Étape 1/3* : passez commande comme un client 👇\nVotre confirmation arrivera ici, comme pour un vrai client.",
+  step2: "*Étape 2/3* : voici ce que le resto voit, en direct 👇\nVotre commande vient d'y arriver.",
+  /**
+   * Confirmation automatique de la commande de démo (comme un vrai client PFlow Order), envoyée quand le prospect
+   * valide sa commande sur la page Mint Bun (POST /api/demo/commande), juste avant l'étape 2/3.
+   */
+  orderConfirmed:
+    "✅ *Commande enregistrée !*\nMerci 🙏 {{nom_demo}} a bien reçu votre commande.\n\n🧾 *Commande #{{commande_numero}}* — {{commande_mode}}\n{{commande_recap}}\n\n💰 *Total : {{commande_total}}*\n💳 Paiement sur place\n\n_Commande de démo : rien n'est préparé._",
   step3: "✨ *Étape 3/3* : et pour votre resto ? On adapte tout à votre carte et à votre façon de travailler.",
   howItWorks:
     "🛒 Une page de commande à votre nom, avec paiement en ligne ou sur place.\n🤖 Un assistant WhatsApp qui répond à vos clients et les envoie vers la commande.\n📊 Un tableau de bord pour suivre les commandes en direct.",
@@ -68,6 +74,18 @@ export const PFLOW_TEXTS = {
     `⏳ La démo de *${nom}* est terminée. Merci de l'avoir essayée ! Pour la prolonger ou passer à la vraie version, écrivez « Je veux le mien » : Jules vous recontacte 🙂`,
 };
 
+/**
+ * Liens des étapes : variables du contact ({{demo_lien_commande}}, {{demo_lien_dashboard}}), avec son jeton quand
+ * PFLOW_BOTS_SECRET est défini (src/demos/demo-auto.ts) ; sinon (simulateur, tests) les liens simples ci-dessous.
+ */
+const LIEN_COMMANDE = "{{demo_lien_commande}}";
+const LIEN_DASHBOARD = "{{demo_lien_dashboard}}";
+export const DEFAULT_DEMO_VARS: Record<string, string> = {
+  demo_lien_commande: DEMO_PERMANENTE.commandeUrl,
+  demo_lien_dashboard: DEMO_PERMANENTE.dashboardUrl,
+  nom_demo: DEMO_PERMANENTE.nomResto,
+};
+
 /** Flux du bot PFlow de base : un bouton qui y mène fait quitter la démo en cours (voir router.ts). */
 export const PFLOW_FLOW_PREFIX = "pflow-";
 
@@ -83,6 +101,7 @@ export const PFLOW_FLOWS = {
   mien: "pflow-mien",
   rappel3: "pflow-rappel-3",
   jules: "pflow-jules",
+  commandeDemo: "pflow-commande-demo",
   /** Question en plein parcours, puis rappel de l'étape N (pflow-question-0 … -3). */
   question: "pflow-question-",
 } as const;
@@ -129,14 +148,14 @@ const welcome: Flow = {
 const step1: Flow = {
   id: PFLOW_FLOWS.etape1,
   name: "PFlow — étape 1/3 : commander (Mint Bun)",
-  nodes: [trigger(TRY_DEMO_KEYWORDS), message("m", [{ text: PFLOW_TEXTS.step1, buttons: [link("cmd", "Je commande", DEMO_PERMANENTE.commandeUrl)] }])],
+  nodes: [trigger(TRY_DEMO_KEYWORDS), message("m", [{ text: PFLOW_TEXTS.step1, buttons: [link("cmd", "Je commande", LIEN_COMMANDE)] }])],
   edges: [{ id: "e1", source: "t", target: "m" }],
 };
 
 const step2: Flow = {
   id: PFLOW_FLOWS.etape2,
   name: "PFlow — étape 2/3 : le dashboard",
-  nodes: [trigger(STEP2_KEYWORDS), message("m", [{ text: PFLOW_TEXTS.step2, buttons: [link("dash", "Voir le dashboard", DEMO_PERMANENTE.dashboardUrl)] }])],
+  nodes: [trigger(STEP2_KEYWORDS), message("m", [{ text: PFLOW_TEXTS.step2, buttons: [link("dash", "Voir le dashboard", LIEN_DASHBOARD)] }])],
   edges: [{ id: "e1", source: "t", target: "m" }],
 };
 
@@ -176,8 +195,8 @@ const reminder = (id: string, name: string, text: string, button: Button, next: 
     { id: "e5", source: "f", sourceHandle: "jules", target: "g_jules" },
   ],
 });
-const remind1 = reminder(PFLOW_FLOWS.rappel1, "PFlow — rappel étape 1/3", PFLOW_TEXTS.remind1, link("cmd", "Je commande", DEMO_PERMANENTE.commandeUrl), PFLOW_FLOWS.etape2);
-const remind2 = reminder(PFLOW_FLOWS.rappel2, "PFlow — rappel étape 2/3", PFLOW_TEXTS.remind2, link("dash", "Voir le dashboard", DEMO_PERMANENTE.dashboardUrl), PFLOW_FLOWS.etape3);
+const remind1 = reminder(PFLOW_FLOWS.rappel1, "PFlow — rappel étape 1/3", PFLOW_TEXTS.remind1, link("cmd", "Je commande", LIEN_COMMANDE), PFLOW_FLOWS.etape2);
+const remind2 = reminder(PFLOW_FLOWS.rappel2, "PFlow — rappel étape 2/3", PFLOW_TEXTS.remind2, link("dash", "Voir le dashboard", LIEN_DASHBOARD), PFLOW_FLOWS.etape3);
 
 /** Rappel de l'étape 3/3 : le même message, avec en plus [💬 Parler à Jules]. */
 const remind3: Flow = {
@@ -229,6 +248,23 @@ const questionFlows: Flow[] = STEP_REMINDERS.map((reminderId, etape) => ({
   ],
 }));
 
+/** Commande de démo validée sur la page Mint Bun : la confirmation, puis l'étape 2/3 (événement envoyé par le serveur). */
+const orderConfirmed: Flow = {
+  id: PFLOW_FLOWS.commandeDemo,
+  name: "PFlow — commande de démo confirmée",
+  nodes: [
+    { id: "t", type: "trigger", position: at(0, 0), data: { keywords: [], event: "commande_validee" } },
+    message("m", [{ text: PFLOW_TEXTS.orderConfirmed }]),
+    { id: "d", type: "delay", position: at(340, 160), data: { mode: "intelligent" } },
+    goto("g", PFLOW_FLOWS.etape2, 320),
+  ],
+  edges: [
+    { id: "e1", source: "t", target: "m" },
+    { id: "e2", source: "m", target: "d" },
+    { id: "e3", source: "d", target: "g" },
+  ],
+};
+
 const howItWorks: Flow = {
   id: PFLOW_FLOWS.commentCaMarche,
   name: "PFlow — comment ça marche ?",
@@ -254,8 +290,8 @@ const wantMine: Flow = {
 /** Le bot PFlow de base, prêt pour le moteur (sans IA : aucun coût). */
 export function pflowBaseBot(): LoadedBot {
   return {
-    client: { id: PFLOW_BOT_ID, nomResto: "PFlow", orderSlug: "", timezone: DEFAULT_TIMEZONE },
-    flows: structuredClone([welcome, step1, step2, step3, remind1, remind2, remind3, howItWorks, wantMine, talkToJules, ...questionFlows]),
+    client: { id: PFLOW_BOT_ID, nomResto: "PFlow", orderSlug: "", timezone: DEFAULT_TIMEZONE, vars: { ...DEFAULT_DEMO_VARS } },
+    flows: structuredClone([welcome, step1, step2, step3, remind1, remind2, remind3, howItWorks, wantMine, talkToJules, ...questionFlows, orderConfirmed]),
     infoSheet: { horaires: [] },
     aiDailyLimit: 0,
   };
