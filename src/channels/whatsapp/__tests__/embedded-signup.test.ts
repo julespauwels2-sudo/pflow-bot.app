@@ -338,6 +338,10 @@ describe("page État : modèles compte par compte, client test hors CRM, débran
     await rt.store.ensureCanal(canal("5550002222", "1808772226929443"));
     const tous = await (await route.POST(new Request("http://localhost/x", { method: "POST", body: JSON.stringify({ tous: true }) }))).json();
     expect(tous.comptes.find((c: { libelle: string }) => c.libelle.includes("5550002222")).error).toContain("Authorization Error");
+    // Le numéro PFlow (démos) est aussi listé : son compte a les modèles de la livraison (vidéo de l'examen Meta).
+    await rt.store.ensureCanal({ ...canal("5550003333", "9990001111"), role: "pflow" as const });
+    const avecPflow = await (await route.GET(new Request("http://localhost/x"))).json();
+    expect(avecPflow.comptes.find((c: { libelle: string }) => c.libelle.includes("5550003333")).libelle).toContain("PFlow Démo");
   });
 
   it("client test hors CRM (Cedyan) : lien, connexion, canal en test relié à aucun resto, seul Jules en test ; puis débranchement", async () => {

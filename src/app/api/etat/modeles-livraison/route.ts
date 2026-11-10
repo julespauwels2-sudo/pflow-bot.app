@@ -42,7 +42,8 @@ interface CompteResultat extends Partial<ModelesResultat> {
 }
 
 async function traiter(p: Extract<Pret, { rt: ChannelsRuntime }>, canal: Canal, creer: boolean, noms: Map<string, string>): Promise<CompteResultat> {
-  const libelle = `${canal.numeroAffiche ?? canal.accountId}${noms.get(canal.restaurantId) ? ` · ${noms.get(canal.restaurantId)}` : ""}`;
+  const nom = canal.role === "pflow" ? "PFlow Démo (compte de PFlow)" : noms.get(canal.restaurantId);
+  const libelle = `${canal.numeroAffiche ?? canal.accountId}${nom ? ` · ${nom}` : ""}`;
   let token = p.token;
   let jeton: CompteResultat["jeton"] = "general";
   try {
@@ -69,7 +70,8 @@ async function traiter(p: Extract<Pret, { rt: ChannelsRuntime }>, canal: Canal, 
 }
 
 async function canauxResto(rt: ChannelsRuntime) {
-  return (await rt.store.listCanaux()).filter((c) => c.plateforme === "whatsapp" && (c.role ?? "resto") === "resto" && c.etat !== "coupe");
+  // Les restos, et le numéro PFlow (démos) : son compte (celui de PFlow) a aussi les modèles de la livraison.
+  return (await rt.store.listCanaux()).filter((c) => c.plateforme === "whatsapp" && ["resto", "pflow"].includes(c.role ?? "resto") && c.etat !== "coupe");
 }
 
 async function nomsRestos(rt: ChannelsRuntime) {
