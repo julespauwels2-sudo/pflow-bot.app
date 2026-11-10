@@ -263,6 +263,9 @@ function Body({ node, selected }: { node: FlowNode; selected: boolean }) {
       return (
         <div className="space-y-1.5">
           {node.data.intro?.trim() && <Bubble text={node.data.intro} />}
+          {node.data.choixCarte && (
+            <p className="rounded-lg bg-pink/10 px-2 py-1 text-[11px] font-semibold text-ink">☰ Choix de la carte + 🎲 Surprenez-moi, puis 🛒 Commander / 🔄 Autre chose</p>
+          )}
           {node.data.input?.trim() && (
             <p className="rounded-lg bg-pink/10 px-2 py-1 text-[11px] text-ink">
               <span className="font-semibold">Entrée :</span> {node.data.input.trim().slice(0, 90)}
