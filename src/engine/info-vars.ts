@@ -103,6 +103,11 @@ export function formatRound(r: DeliveryRound): string {
 }
 
 export const NO_ROUND_TEXT = "Aucune tournée de livraison n'est prévue pour le moment.";
+/**
+ * Resto sans livraison mais avec retrait : réponse au bouton « Livraison » d'Infos pratiques (sinon le client
+ * clique sur « 🛵 Livraison » et ne reçoit rien). L'adresse est ajoutée quand la fiche la donne.
+ */
+export const RETRAIT_SEULEMENT_TEXT = "Pas de livraison pour le moment : les commandes sont à retirer sur place.";
 
 /** Fiche d'infos sans les tournées passées : c'est elle que reçoit l'IA. */
 export function withUpcomingRounds(sheet: InfoSheet, now: Date, timezone: string): InfoSheet {
@@ -234,6 +239,7 @@ export function infoSheetVariables(sheet: InfoSheet, now: Date, timezone: string
     infosLivraison = !sheet.livraison ? "" : planning ? prochaines : zones;
   }
   const adresse = sheet.adresse?.trim() ?? "";
+  if (!sheet.livraison && sheet.retrait) infosLivraison = adresse ? `${RETRAIT_SEULEMENT_TEXT}\n📍 ${adresse}` : RETRAIT_SEULEMENT_TEXT;
   const pointsDeVente = sheet.pointsDeVente?.trim() ?? "";
   const paiement = formatPayment(sheet);
 
