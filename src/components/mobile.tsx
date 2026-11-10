@@ -11,6 +11,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useAuth } from "./auth-gate";
 import { Logo } from "./logo";
 
 /** Même seuil que le préfixe « md: » de Tailwind. */
@@ -125,6 +126,7 @@ export function MobileHeader({ title, action, children }: { title: string; actio
 
 /** Barre d'onglets en bas de l'écran (téléphone seulement), au-dessus de la barre d'accueil de l'iPhone. */
 export function MobileTabBar() {
+  const { role } = useAuth();
   const pathname = usePathname();
   return (
     <nav
@@ -133,7 +135,7 @@ export function MobileTabBar() {
       className="fixed inset-x-0 bottom-0 z-30 border-t-2 border-ink/15 bg-fond pb-[env(safe-area-inset-bottom)] md:hidden"
     >
       <ul className="flex px-2">
-        {TABS.map((tab) => {
+        {TABS.filter((tab) => role === "admin" || tab.href === "/inbox").map((tab) => {
           const active = pathname === tab.href;
           return (
             <li key={tab.href} className="flex-1">

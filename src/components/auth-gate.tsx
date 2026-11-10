@@ -7,14 +7,23 @@
 import type { Session } from "@supabase/supabase-js";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { getSupabase, isBotAdmin, isSupabaseConfigured } from "@/lib/supabase";
+import { getSupabase, isBotAdmin, isBotExaminateur, isSupabaseConfigured } from "@/lib/supabase";
 import { Button, Loading } from "./ui";
 
 export const LOGIN_PATH = "/connexion";
 
-type AuthState = { status: "loading" } | { status: "signed_out" } | { status: "not_admin"; email: string } | { status: "ok"; email: string } | { status: "error"; message: string };
+export type Role = "admin" | "examinateur";
+type AuthState =
+  | { status: "loading" }
+  | { status: "signed_out" }
+  | { status: "not_admin"; email: string }
+  | { status: "ok"; email: string; role: Role }
+  | { status: "error"; message: string };
 
-const AuthContext = createContext<{ email: string | null; signOut: () => Promise<void> }>({ email: null, signOut: async () => {} });
+/** Pages ouvertes à un examinateur (examen Meta) : la boîte de réception, limitée au numéro PFlow (démos). */
+export const PAGES_EXAMINATEUR = ["/inbox"];
+
+const AuthContext = createContext<{ email: string | null; role: Role; signOut: () => Promise<void> }>({ email: null, role: "admin", signOut: async () => {} });
 export const useAuth = () => useContext(AuthContext);
 
 async function signOut() {
@@ -41,9 +50,10 @@ function SupabaseGate({ children }: { children: ReactNode }) {
       if (!session) return !cancelled && setState({ status: "signed_out" });
       try {
         const admin = await isBotAdmin(sb, session.user.id);
+        const examinateur = !admin && (await isBotExaminateur(sb, session.user.id));
         if (cancelled) return;
         const email = session.user.email ?? "";
-        setState(admin ? { status: "ok", email } : { status: "not_admin", email });
+        setState(admin ? { status: "ok", email, role: "admin" } : examinateur ? { status: "ok", email, role: "examinateur" } : { status: "not_admin", email });
       } catch (error) {
         if (!cancelled) setState({ status: "error", message: error instanceof Error ? error.message : String(error) });
       }
@@ -65,6 +75,11 @@ function SupabaseGate({ children }: { children: ReactNode }) {
     if (state.status === "signed_out" && !onLogin && !publicPage) router.replace(`${LOGIN_PATH}?suite=${encodeURIComponent(pathname + window.location.search)}`);
   }, [state.status, onLogin, publicPage, pathname, router]);
 
+  const pageExaminateur = PAGES_EXAMINATEUR.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  useEffect(() => {
+    if (state.status === "ok" && state.role === "examinateur" && !pageExaminateur && !onLogin && !publicPage) router.replace("/inbox");
+  }, [state, pageExaminateur, onLogin, publicPage, router]);
+
   if (onLogin || publicPage) return <>{children}</>;
   if (state.status === "loading" || state.status === "signed_out") return <Loading />;
   if (state.status === "error") {
@@ -85,7 +100,8 @@ function SupabaseGate({ children }: { children: ReactNode }) {
       </Blocked>
     );
   }
-  return <AuthContext.Provider value={{ email: state.email, signOut }}>{children}</AuthContext.Provider>;
+  if (state.role === "examinateur" && !pageExaminateur) return <Loading />;
+  return <AuthContext.Provider value={{ email: state.email, role: state.role, signOut }}>{children}</AuthContext.Provider>;
 }
 
 function Blocked({ title, children }: { title: string; children: ReactNode }) {

@@ -11,6 +11,7 @@ import { Badge, Button, Card, Loading, Notice, Textarea } from "@/components/ui"
 import type { InboxCanal, InboxConversation } from "@/channels/core/inbox";
 import type { StoredMessage } from "@/channels/core/types";
 import { accessToken } from "@/lib/supabase";
+import { useAuth } from "@/components/auth-gate";
 
 type InboxState =
   | { status: "loading" }
@@ -36,6 +37,7 @@ const who = (canal: InboxCanal, conv: InboxConversation) => conv.nom || (canal.p
 const time = (iso: string) => new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
 export default function InboxPage() {
+  const { role } = useAuth();
   const [state, setState] = useState<InboxState>({ status: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [thread, setThread] = useState<Thread | null>(null);
@@ -165,7 +167,7 @@ export default function InboxPage() {
               notice={current ? null : notice}
               onCloseNotice={() => setNotice(null)}
               onOpen={openConversation}
-              extra={state.mode === "memory" ? <SimulateForm plateformes={[...new Set(state.canaux.map((c) => c.plateforme))]} onSent={refresh} onError={(text) => setNotice({ tone: "error", text })} /> : null}
+              extra={state.mode === "memory" && role === "admin" ? <SimulateForm plateformes={[...new Set(state.canaux.map((c) => c.plateforme))]} onSent={refresh} onError={(text) => setNotice({ tone: "error", text })} /> : null}
             />
             {current && (
               <MobileConversation
@@ -199,7 +201,7 @@ export default function InboxPage() {
             {notice.text}
           </Notice>
         )}
-        {state.status === "ready" && <PushControls compact />}
+        {state.status === "ready" && role === "admin" && <PushControls compact />}
         {state.status === "loading" && <Loading />}
         {state.status === "error" && <Notice tone="error">{state.error}</Notice>}
         {state.status === "off" && (
@@ -210,7 +212,7 @@ export default function InboxPage() {
         )}
         {state.status === "ready" && (
           <>
-            {state.mode === "memory" && <SimulateForm plateformes={[...new Set(state.canaux.map((c) => c.plateforme))]} onSent={refresh} onError={(text) => setNotice({ tone: "error", text })} />}
+            {state.mode === "memory" && role === "admin" && <SimulateForm plateformes={[...new Set(state.canaux.map((c) => c.plateforme))]} onSent={refresh} onError={(text) => setNotice({ tone: "error", text })} />}
             <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
               <Card title="Conversations">
                 {state.canaux.length === 0 && <p className="text-sm text-muted">Aucun compte WhatsApp ou Instagram relié.</p>}
