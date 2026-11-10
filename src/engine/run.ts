@@ -1,4 +1,14 @@
 import { cleanAiText } from "./ai-text";
+import {
+  CONSEIL_AUTRE_HANDLE,
+  CONSEIL_HANDLE_PREFIX,
+  CONSEIL_TEXTS,
+  choixDuHandle,
+  conseilChoixDuJour,
+  consigneConseil,
+  optionsConseil,
+  type ConseilChoix,
+} from "./conseil";
 import { evaluateConditions } from "./conditions";
 import { infoSheetVariables, withUpcomingRounds } from "./info-vars";
 import { fixedDelayMs, smartDelayMs, textOf } from "./delay";
@@ -127,6 +137,8 @@ class EngineRun {
   private steps = 0;
   /** Bloc IA atteint avec un texte d'entrée : l'IA est appelée à la fin du traitement. */
   private pendingAiInput: { flowId: string; nodeId: string; text: string } | null = null;
+  /** Clic sur un choix de « Me conseiller » : l'IA est appelée à la fin du traitement. */
+  private pendingConseil: { flowId: string; nodeId: string; handle: string } | null = null;
   /** Bloc Commande atteint : le pont PFlow Order est appelé à la fin du traitement, puis le flux reprend. */
   private pendingOrderAction: { flowId: string; nodeId: string } | null = null;
 
@@ -161,6 +173,13 @@ class EngineRun {
       await this.callAi(pending.text, { aiNode: node });
     }
     this.pendingAiInput = null;
+    // « Me conseiller » : choix cliqué (bouton ou ligne de liste).
+    if (this.pendingConseil) {
+      const pending = this.pendingConseil;
+      this.pendingConseil = null;
+      const node = this.currentWaitingNode();
+      if (node?.type === "ai" && this.session?.flowId === pending.flowId && node.id === pending.nodeId) await this.runConseil(node, pending.handle);
+    }
     // Blocs Commande (suivi, annulation) : appel du pont, réponse envoyée, puis suite du flux.
     for (let i = 0; this.pendingOrderAction && i < MAX_CHAINED_AI_INPUTS; i++) {
       const pending = this.pendingOrderAction;
@@ -382,6 +401,10 @@ class EngineRun {
       this.session = this.newSession(flow.id, node.id);
       this.events.push({ type: "flow_started", flowId: flow.id, via: "bouton" });
     }
+    if (node.type === "ai" && ref.handle.startsWith(CONSEIL_HANDLE_PREFIX)) {
+      this.pendingConseil = { flowId: flow.id, nodeId: node.id, handle: ref.handle };
+      return true;
+    }
     this.followHandle(node, ref.handle);
     return true;
   }
@@ -425,10 +448,65 @@ class EngineRun {
       }
 
       case "ai": {
+        // « Me conseiller » : un choix tapé au lieu d'être cliqué (titre ou numéro).
+        if (node.data.choixCarte) {
+          const option = matchOption(optionsConseil(this.choixDuJour()).options, text);
+          if (option) {
+            await this.runConseil(node, option.id);
+            return;
+          }
+        }
         if (this.tryKeyword(text)) return;
         await this.callAi(text, { aiNode: node });
         return;
       }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // « ⭐ Me conseiller » avec des boutons (choix tirés de la carte)
+  // -------------------------------------------------------------------------
+
+  private choixDuJour(): ConseilChoix[] {
+    return conseilChoixDuJour(this.input.infoSheet, this.input.now, this.input.client.timezone);
+  }
+
+  /** Les choix du jour : boutons de réponse (3 au plus) ou liste interactive (10 lignes au plus). */
+  private sendConseilChoix(node: FlowNodeOf<"ai">, text: string): void {
+    const flowId = this.session!.flowId;
+    const { format, options } = optionsConseil(this.choixDuJour());
+    const withIds = options.map((o) => ({ id: encodeReplyId({ flowId, nodeId: node.id, handle: o.id }), title: o.title }));
+    if (format === "boutons") this.send({ kind: "buttons", text, buttons: withIds });
+    else this.send({ kind: "list", text, buttonLabel: CONSEIL_TEXTS.listeBouton, items: withIds });
+  }
+
+  private async runConseil(node: FlowNodeOf<"ai">, handle: string): Promise<void> {
+    this.refreshExpiry();
+    if (handle === CONSEIL_AUTRE_HANDLE) {
+      this.sendConseilChoix(node, CONSEIL_TEXTS.intro);
+      return;
+    }
+    const choix = choixDuHandle(this.choixDuJour(), handle);
+    if (!choix) {
+      // Choix qui n'existe plus (carte changée, autre jour) : on repropose les choix du moment.
+      this.sendConseilChoix(node, CONSEIL_TEXTS.intro);
+      return;
+    }
+    this.events.push({ type: "conseil_choisi", titre: choix.titre });
+    await this.callAi(`Le client a choisi : ${choix.titre}`, { aiNode: node, conseil: choix });
+  }
+
+  /** Après la recommandation : « 🛒 Commander » (lien), puis « 🔄 Autre chose ». */
+  private sendConseilSuite(node: FlowNodeOf<"ai">): void {
+    const url = this.orderButtonUrl();
+    if (url) this.send({ kind: "link", text: CONSEIL_TEXTS.commanderTexte, url, buttonLabel: CONSEIL_TEXTS.commander });
+    const flowId = this.session?.flowId;
+    if (flowId) {
+      this.send({
+        kind: "buttons",
+        text: CONSEIL_TEXTS.autreTexte,
+        buttons: [{ id: encodeReplyId({ flowId, nodeId: node.id, handle: CONSEIL_AUTRE_HANDLE }), title: CONSEIL_TEXTS.autre }],
+      });
     }
   }
 
@@ -466,11 +544,16 @@ class EngineRun {
     });
   }
 
-  private async callAi(text: string, opts: { repromptNode?: WaitingNode; aiNode?: FlowNodeOf<"ai"> }): Promise<void> {
+  private async callAi(text: string, opts: { repromptNode?: WaitingNode; aiNode?: FlowNodeOf<"ai">; conseil?: ConseilChoix }): Promise<void> {
     const { ai } = this.deps;
     const { client, channel, now, infoSheet, agent } = this.input;
-    const { repromptNode, aiNode } = opts;
+    const { repromptNode, aiNode, conseil } = opts;
 
+    if (!ai && conseil && aiNode) {
+      // Sans IA : la carte (page de commande) et les autres choix, plutôt qu'un transfert.
+      this.sendConseilSuite(aiNode);
+      return;
+    }
     if (!ai) {
       this.events.push({ type: "ai_unavailable" });
       if (repromptNode) {
@@ -493,7 +576,8 @@ class EngineRun {
     }
     this.contact.aiUsage.calls += 1;
 
-    const functions = this.availableFunctions(aiNode);
+    // « Me conseiller » : l'IA recommande seulement (aucune fonction) ; les boutons suivent sa réponse.
+    const functions = conseil ? [] : this.availableFunctions(aiNode);
     const history: AiTurn[] = aiNode ? (this.session?.aiHistory ?? []) : [];
     let result;
     try {
@@ -514,7 +598,11 @@ class EngineRun {
         // champs du CRM ne sont que ses valeurs par défaut, ex. « livraison : non », jamais à présenter comme vrais).
         infoSheet: client.demo?.ficheVide ? { horaires: [] } : withUpcomingRounds(infoSheet, now, client.timezone),
         functions: functions.map((f) => ({ name: f.name, description: f.description })),
-        instructions: aiNode?.data.instructions?.trim() ? this.render(aiNode.data.instructions) : undefined,
+        instructions: conseil
+          ? consigneConseil(conseil, now, client.timezone)
+          : aiNode?.data.instructions?.trim()
+            ? this.render(aiNode.data.instructions)
+            : undefined,
       });
     } catch (error) {
       this.events.push({ type: "error", message: `IA : ${errorMessage(error)}` });
@@ -569,6 +657,14 @@ class EngineRun {
       case "repondre": {
         if (!answer) {
           this.handoff("ia", undefined, text);
+          return;
+        }
+        if (conseil && aiNode && this.session) {
+          this.send({ kind: "text", text: answer });
+          this.sendConseilSuite(aiNode);
+          const turns: AiTurn[] = [...history, { role: "client", text }, { role: "assistant", text: answer }];
+          this.session.aiHistory = turns.slice(-AI_HISTORY_MAX_TURNS);
+          this.refreshExpiry();
           return;
         }
         // Démo sans carte : la réponse porte les boutons « Je veux le mien » et « Tester la démo ».
@@ -691,9 +787,13 @@ class EngineRun {
           return;
 
         case "ai":
-          if (node.data.intro?.trim()) this.send({ kind: "text", text: this.render(node.data.intro) });
           session.aiHistory = [];
           this.refreshExpiry();
+          if (node.data.choixCarte) {
+            this.sendConseilChoix(node, node.data.intro?.trim() ? this.render(node.data.intro) : CONSEIL_TEXTS.intro);
+            return;
+          }
+          if (node.data.intro?.trim()) this.send({ kind: "text", text: this.render(node.data.intro) });
           if (node.data.input?.trim()) this.pendingAiInput = { flowId: flow.id, nodeId: node.id, text: this.render(node.data.input) };
           return;
 

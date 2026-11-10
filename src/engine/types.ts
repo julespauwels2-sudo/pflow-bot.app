@@ -142,6 +142,13 @@ export interface InfoSheet {
   resumeCarte?: string;
   /** Questions fréquentes, en texte libre (pour l'IA). */
   faq?: string;
+  /**
+   * « ⭐ Me conseiller » : familles de la carte, lues dans le CRM (une par catégorie de produits, avec les jours où
+   * elle est servie). Remplacées par conseilChoix quand la fiche en donne.
+   */
+  familles?: { titre: string; precision?: string; jours?: IsoWeekday[] }[];
+  /** « ⭐ Me conseiller » personnalisé (fiche du bot) : un choix par ligne, « Titre | précision pour l'IA | jours ». */
+  conseilChoix?: string;
   reglesSpeciales?: string;
 }
 
@@ -251,6 +258,12 @@ export interface NodeDataMap {
     input?: string;
     /** Consigne propre à ce bloc, ajoutée à celle de l'agent. */
     instructions?: string;
+    /**
+     * « Me conseiller » avec des boutons : en arrivant sur le bloc, le bot propose les choix tirés de la carte (ou de
+     * la fiche), plus « Surprenez-moi » ; au clic, l'IA recommande 2 ou 3 produits, puis « Commander » et
+     * « Autre chose ». Un message tapé reste traité par l'IA, comme avant.
+     */
+    choixCarte?: boolean;
     /** Noms des fonctions autorisées dans ce bloc. Absent = toutes les fonctions de l'agent. */
     functions?: string[];
     /** Délai d'inactivité (minutes) avant que l'IA ne lâche la conversation. Absent = réglage de l'agent. */
@@ -503,6 +516,8 @@ export interface EngineDeps {
 }
 
 export type EngineEvent =
+  /** « Me conseiller » : le client a choisi une famille (ou « Surprenez-moi »). */
+  | { type: "conseil_choisi"; titre: string }
   | {
       type: "ignored";
       reason: "pause" | "aucun_declencheur" | "media_non_gere" | "echo" | "fenetre_fermee" | "aucun_flux_evenement" | "retour_commande";

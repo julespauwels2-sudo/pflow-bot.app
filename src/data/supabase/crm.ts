@@ -277,7 +277,29 @@ export function crmMenuText(restaurantId: string, data: Pick<CrmData, "produits"
 }
 
 /** Champs de la fiche d'infos qui viennent du CRM (affichés en lecture seule). */
-export type CrmSheetField = "horaires" | "adresse" | "livraison" | "retrait" | "zonesLivraison" | "resumeCarte" | "paiementEnLigne";
+export type CrmSheetField = "horaires" | "adresse" | "livraison" | "retrait" | "zonesLivraison" | "resumeCarte" | "paiementEnLigne" | "familles";
+
+/** Catégories qui ne sont pas des choix de « Me conseiller » (on ne conseille pas une boisson). */
+const PAS_UN_CONSEIL = /boisson|drink|soda|jus|biere|bière|vin|alcool|cocktail|softs?$/i;
+
+/**
+ * Familles de la carte pour « ⭐ Me conseiller » : une par catégorie (ordre de la carte), seulement les produits
+ * disponibles, sans les boissons. Si tous les produits d'une famille ne sont servis que certains jours, la famille ne
+ * l'est que ces jours-là (CRM : 0 = dimanche … 6 = samedi ; bot : 1 = lundi … 7 = dimanche).
+ */
+export function crmFamilles(restaurantId: string, produits: CrmProduit[]): NonNullable<InfoSheet["familles"]> {
+  const byCategory = new Map<string, CrmProduit[]>();
+  for (const p of [...produits].filter((x) => x.restaurant_id === restaurantId && x.disponible).sort((a, b) => a.ordre - b.ordre)) {
+    const cat = p.categorie?.trim() || "Autres";
+    if (PAS_UN_CONSEIL.test(cat)) continue;
+    byCategory.set(cat, [...(byCategory.get(cat) ?? []), p]);
+  }
+  return [...byCategory].map(([titre, list]) => {
+    const restreints = list.every((p) => p.jours_dispo?.length);
+    const jours = restreints ? [...new Set(list.flatMap((p) => p.jours_dispo ?? []).map((d) => (d === 0 ? 7 : d)))].sort() : [];
+    return { titre, ...(jours.length ? { jours: jours as IsoWeekday[] } : {}) };
+  });
+}
 
 export function crmInfoSheet(restaurant: CrmRestaurant, data: CrmData): { sheet: Partial<InfoSheet>; locked: CrmSheetField[] } {
   const sheet: Partial<InfoSheet> = {};
@@ -308,6 +330,11 @@ export function crmInfoSheet(restaurant: CrmRestaurant, data: CrmData): { sheet:
   if (paiement) {
     sheet.paiementEnLigne = paiement;
     locked.push("paiementEnLigne");
+  }
+  const familles = crmFamilles(restaurant.id, data.produits);
+  if (familles.length) {
+    sheet.familles = familles;
+    locked.push("familles");
   }
   const menu = crmMenuText(restaurant.id, data);
   if (menu) {
