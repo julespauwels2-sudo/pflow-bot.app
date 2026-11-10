@@ -69,7 +69,7 @@ modèles de chaque compte ».
 - Elle affiche « Lecture chez Meta impossible (compte de messagerie 4170… : … ; WABA 1808… : …) » : envoie-moi le
   texte. Piste la plus probable : le jeton de pflow-bots-serveur n'a pas la tâche « Gérer les modèles » sur ce compte
   (Business Manager → Utilisateurs système → pflow-bots-serveur → Actifs → compte WhatsApp → cocher « Gérer les
-  modèles de messages »), puis régénérer le jeton n'est PAS nécessaire (les droits s'appliquent au jeton existant).
+  modèles de messages »). En principe, pas besoin de régénérer le jeton : l'accès aux comptes est vérifié à chaque appel.
 
 ## Vidéo 2 : `whatsapp_business_messaging`
 
