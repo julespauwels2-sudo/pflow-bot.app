@@ -19,6 +19,7 @@ import { Button, Card, Field, Input, Notice, Textarea } from "./ui";
 import { LocalClock, useCurrentMinute } from "./local-clock";
 
 const DAYS: IsoWeekday[] = [1, 2, 3, 4, 5, 6, 7];
+const JOURS_COURTS = ["", "lun", "mar", "mer", "jeu", "ven", "sam", "dim"];
 
 function plagesOf(sheet: InfoSheet, jour: IsoWeekday): TimeRange[] {
   return sheet.horaires.filter((d) => d.jour === jour).flatMap((d) => d.plages);
@@ -219,6 +220,14 @@ export function InfoSheetForm({
           </Field>
           <Field label="Règles spéciales" hint="Lues par l'IA en priorité (ex. exceptions, produits du week-end).">
             <Textarea placeholder="L'agneau n'est dispo que le week-end…" {...text("reglesSpeciales")} />
+          </Field>
+          <Field
+            label="Choix de « ⭐ Me conseiller »"
+            hint={`Un bouton par ligne : « Titre | précision pour l'IA | jours ». Jours facultatifs (ex. « ven sam dim »). Vide : ${
+              sheet.familles?.length ? `familles de la carte (${sheet.familles.map((f) => f.titre + (f.jours?.length ? ` [${f.jours.map((j) => JOURS_COURTS[j]).join(" ")}]` : "")).join(", ")})` : "familles de la carte (aucune pour l'instant)"
+            }. « 🎲 Surprenez-moi » est toujours ajouté.`}
+          >
+            <Textarea rows={4} placeholder={"🥩 Bœuf | plats au bœuf\n🐑 Agneau | bowl, burrito, quesadillas à l'agneau | ven sam dim"} {...text("conseilChoix")} />
           </Field>
         </div>
 

@@ -85,6 +85,7 @@ export const flowNodeSchema = z.discriminatedUnion("type", [
       instructions: z.string().optional(),
       functions: z.array(z.string()).optional(),
       inactivityMinutes: z.number().int().min(1).max(1440).optional(),
+      choixCarte: z.boolean().optional(),
     }),
   }),
   z.object({ ...nodeBase, type: z.literal("handoff"), data: z.object({ text: z.string().optional() }) }),
@@ -145,6 +146,8 @@ export const infoSheetSchema = z.object({
   resumeCarte: z.string().optional(),
   faq: z.string().optional(),
   reglesSpeciales: z.string().optional(),
+  familles: z.array(z.object({ titre: z.string(), precision: z.string().optional(), jours: z.array(weekday).optional() })).optional(),
+  conseilChoix: z.string().optional(),
 });
 
 export const slugSchema = z

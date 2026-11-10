@@ -133,7 +133,7 @@ describe("lecture du CRM", () => {
     expect(sheet.resumeCarte).toContain("Allergènes : Gluten, Œufs, Fruits à coque");
     expect(sheet.resumeCarte).toContain("Allergènes : non renseignés");
     expect(sheet.resumeCarte).not.toContain("Rupture");
-    expect(await repos.infoSheets.lockedFields(R1)).toEqual(["horaires", "adresse", "livraison", "retrait", "zonesLivraison", "paiementEnLigne", "resumeCarte"]);
+    expect(await repos.infoSheets.lockedFields(R1)).toEqual(["horaires", "adresse", "livraison", "retrait", "zonesLivraison", "paiementEnLigne", "familles", "resumeCarte"]);
     // Démo sans horaires ni carte : ces champs restent modifiables côté bot.
     expect(await repos.infoSheets.lockedFields(R2)).toEqual(["livraison", "retrait", "paiementEnLigne"]);
   });

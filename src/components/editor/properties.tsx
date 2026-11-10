@@ -619,6 +619,22 @@ function Fields({ node, set }: { node: FlowNode; set: (patch: Record<string, unk
             Le bot reste sur ce bloc : l&apos;IA répond à chaque message avec la fiche d&apos;infos du client, jusqu&apos;à une fonction, un transfert,
             un mot-clé ou le délai d&apos;inactivité.
           </p>
+          <label className="flex items-start gap-2 rounded-xl bg-ink/5 p-2.5 text-xs">
+            <input
+              type="checkbox"
+              className="mt-0.5 accent-pink"
+              checked={Boolean(node.data.choixCarte)}
+              onChange={(e) => set({ choixCarte: e.target.checked || undefined }, "choixCarte")}
+            />
+            <span>
+              <span className="block font-semibold">Proposer des choix de la carte (boutons)</span>
+              <span className="text-[11px] text-muted">
+                Le bot envoie d&apos;abord les familles de la carte (ou la liste « Choix de « Me conseiller » » de la fiche) et « 🎲 Surprenez-moi » ;
+                au clic, l&apos;IA recommande 2 ou 3 produits avec les prix, puis « 🛒 Commander » et « 🔄 Autre chose ». Marche aussi en mode
+                mots-clés uniquement.
+              </span>
+            </span>
+          </label>
           <Row label="Message d'introduction" hint="Envoyé en arrivant sur ce bloc (facultatif).">
             {vf("intro", node.data.intro, { multiline: true })}
           </Row>

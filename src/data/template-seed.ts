@@ -201,7 +201,8 @@ const recommandation: FlowGraph = {
       type: "ai",
       position: at(340, 60),
       data: {
-        intro: "⭐ Je vous aide à choisir ! Dites-moi ce qui vous fait envie aujourd'hui 😋",
+        intro: "⭐ Je vous aide à choisir ! Qu'est-ce qui vous ferait plaisir ?",
+        choixCarte: true,
         instructions:
           "Recommande 2 ou 3 produits de la carte qui correspondent à l'envie du client, en réponse courte et appétissante. Utilise proposer_commande avec ta recommandation dans « texte ». Si rien dans la carte ne correspond, dis-le et propose ce qui s'en rapproche le plus.",
       },
