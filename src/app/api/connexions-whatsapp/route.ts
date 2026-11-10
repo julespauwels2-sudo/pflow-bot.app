@@ -6,13 +6,16 @@
  * - POST { clientTest: { nom } } : un lien pour un client test HORS CRM (vidéo de l'examen Meta) : identifiant propre,
  *   relié à aucun resto ; son canal reste en test (seul le numéro de Jules reçoit des réponses).
  * - POST { action: "debrancher", id } : débranche un numéro connecté (app désabonnée, canal coupé, jeton effacé).
+ * - POST { action: "renouveler", id } : renouvelle tout de suite le jeton Meta du client (60 jours de plus), pour
+ *   vérifier le renouvellement sans attendre la tâche quotidienne.
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { embeddedSignupMissing, getChannelsRuntime, readWhatsAppConfig, type ChannelsRuntime } from "@/channels/core/runtime";
+import { embeddedSignupMissing, getChannelsRuntime, metaAppConfig, readWhatsAppConfig, type ChannelsRuntime } from "@/channels/core/runtime";
 import { etatEffectif, hashJeton, nouveauJetonLien } from "@/channels/core/connexions";
 import { debrancherConnexion } from "@/channels/whatsapp/embedded-signup";
-import { dechiffrerJeton } from "@/lib/jetons-chiffres";
+import { etatJeton, renouvelerJetons } from "@/channels/whatsapp/jetons-renouvellement";
+import { chiffrerJeton, dechiffrerJeton } from "@/lib/jetons-chiffres";
 import { tooManyRequests } from "@/lib/request-limit";
 import { checkBotAdmin } from "@/lib/server-auth";
 
@@ -23,7 +26,7 @@ const LIEN_JOURS = 7;
 const schema = z.union([
   z.object({ restaurantId: z.string().min(1).max(64) }),
   z.object({ clientTest: z.object({ nom: z.string().trim().min(2).max(60) }) }),
-  z.object({ action: z.literal("debrancher"), id: z.string().min(1).max(64) }),
+  z.object({ action: z.enum(["debrancher", "renouveler"]), id: z.string().min(1).max(64) }),
 ]);
 
 type Acces = { error: NextResponse; rt?: undefined; userId?: undefined } | { error?: undefined; rt: ChannelsRuntime; userId: string | null };
@@ -47,6 +50,14 @@ export async function GET(request: Request) {
   const noms = new Map(data.clients.map((c) => [c.id, c.nomResto]));
   let connexions: unknown[] = [];
   let tableAbsente = false;
+  // Échéance des jetons Meta (60 jours, renouvelés chaque jour à moins de 20 jours) : par compte WhatsApp.
+  const now = new Date();
+  const jetons = new Map(
+    (await a.rt.connexions.listJetons().catch(() => [])).map((j) => [
+      j.wabaId,
+      { ...etatJeton(j, now), expireLe: j.expireLe, renouveleLe: j.renouveleLe ?? null, erreur: j.erreur ?? null },
+    ]),
+  );
   try {
     connexions = (await a.rt.connexions.list(50)).map((c) => ({
       id: c.id,
@@ -63,6 +74,7 @@ export async function GET(request: Request) {
       canalId: c.canalId ?? null,
       etapes: c.etapes,
       erreur: c.erreur ?? null,
+      jeton: c.etat === "terminee" && c.wabaId ? (jetons.get(c.wabaId) ?? null) : null,
     }));
   } catch {
     tableAbsente = true;
@@ -84,6 +96,14 @@ export async function POST(request: Request) {
   if ("action" in demande) {
     const c = (await a.rt.connexions.list(200)).find((x) => x.id === demande.id);
     if (!c) return NextResponse.json({ error: "Connexion introuvable" }, { status: 404 });
+    if (demande.action === "renouveler") {
+      const meta = metaAppConfig();
+      if (!meta || !c.wabaId || c.etat !== "terminee") return NextResponse.json({ error: "Rien à renouveler (connexion non terminée ou Embedded Signup non configuré)" }, { status: 409 });
+      const rapport = await renouvelerJetons({ meta, connexions: a.rt.connexions, chiffrer: (t) => chiffrerJeton(t), dechiffrer: (s) => dechiffrerJeton(s), forcer: [c.wabaId] });
+      if (!rapport.verifies) return NextResponse.json({ error: "Aucun jeton gardé pour ce compte" }, { status: 404 });
+      if (rapport.echecs.length) return NextResponse.json({ error: `Meta refuse le renouvellement : ${rapport.echecs[0].erreur}` }, { status: 502 });
+      return NextResponse.json({ ok: true, renouvele: true });
+    }
     if (c.etat !== "terminee") return NextResponse.json({ error: "Seule une connexion terminée se débranche" }, { status: 409 });
     const wa = readWhatsAppConfig();
     let token: string | null = null;

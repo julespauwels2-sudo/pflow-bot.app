@@ -20,6 +20,7 @@ interface SystemStatus {
   alertes?: { at: string; canal: string; source: string; prevenu: boolean; voie: string; push?: string; erreur?: string; ouverte: boolean }[];
   push?: { configure: boolean; appareils: number };
   horsListe?: { at: string; fin: string }[];
+  jetonsEnDanger?: { resto: string; joursRestants: number | null; erreur?: string }[];
   erreurCanaux?: string;
 }
 
@@ -245,6 +246,11 @@ function AlertesBanner({ data }: { data: SystemStatus }) {
   }
   if (canaux && data.push && !data.push.configure) lignes.push("Notifications push non configurées (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY dans Vercel) : aucune alerte ne peut partir.");
   else if (canaux && data.push && data.push.appareils === 0) lignes.push("Aucun appareil abonné aux notifications : aucune alerte ne peut vous joindre. Active-les ci-dessous (encadré « Notifications push »).");
+  for (const j of data.jetonsEnDanger ?? []) {
+    lignes.push(
+      `Jeton Meta de ${j.resto} ${j.joursRestants !== null && j.joursRestants >= 0 ? `expire dans ${j.joursRestants} jour${j.joursRestants > 1 ? "s" : ""}` : "expiré"} : le renouvellement automatique échoue${j.erreur ? ` (${j.erreur})` : ""}. Envoie-lui un lien de reconnexion (encadré « Connecter le WhatsApp d'un resto »).`,
+    );
+  }
   if (!lignes.length) return null;
   return (
     <div role="alert" data-testid="alertes-bandeau" className="mt-6 rounded-2xl aplat-rose p-4 text-ink shadow-card">

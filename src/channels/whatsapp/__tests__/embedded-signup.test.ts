@@ -38,7 +38,16 @@ beforeAll(async () => {
         res.end(JSON.stringify(v));
       };
       if (failOn && path.startsWith(failOn)) return json(400, { error: { message: "Refusé par Meta", code: 100 } });
-      if (path.startsWith("oauth/access_token")) return json(200, { access_token: CLIENT_TOKEN, token_type: "bearer" });
+      if (path.startsWith("oauth/access_token")) return json(200, { access_token: CLIENT_TOKEN, token_type: "bearer", expires_in: 5_184_000 });
+      if (path.startsWith("debug_token?"))
+        return json(200, {
+          data: {
+            is_valid: true,
+            expires_at: Math.floor(Date.now() / 1000) + 5_184_000,
+            scopes: ["whatsapp_business_management", "whatsapp_business_messaging"],
+            granular_scopes: [{ scope: "whatsapp_business_management", target_ids: ["9876543210"] }, { scope: "whatsapp_business_messaging", target_ids: ["9876543210"] }],
+          },
+        });
       if (path.startsWith("1234567890?fields=")) return json(200, { display_phone_number: "+590 690 12 34 56", verified_name: "Bokit An Nou", is_on_biz_app: true, platform_type: "CLOUD_API" });
       if (path === "9876543210/subscribed_apps") return json(200, { success: true });
       if (path.startsWith("1808772226929443/")) return json(400, { error: { message: "Authorization Error", code: 100, error_subcode: 2388339 } });
@@ -131,6 +140,7 @@ describe("fin du parcours (coexistence)", () => {
     expect(done.numeroAffiche).toBe("+590 690 12 34 56");
     expect(calls.map((x) => `${x.method} ${x.path.split("?")[0]}`)).toEqual([
       "GET oauth/access_token",
+      "GET debug_token",
       "GET 1234567890",
       "POST 9876543210/subscribed_apps",
       "POST 1234567890/smb_app_data",
@@ -140,7 +150,14 @@ describe("fin du parcours (coexistence)", () => {
     ]);
     // Le secret de l'app seulement pour l'échange du code ; ensuite le jeton du client, en en-tête.
     expect(calls[0].path).toContain("client_secret=secret-app");
-    expect(calls.slice(1).every((x) => x.auth === `Bearer ${CLIENT_TOKEN}`)).toBe(true);
+    // debug_token : avec le jeton de l'app (id|secret) ; tout le reste avec le jeton du client.
+    expect(calls[1].auth).toBe("Bearer 111|secret-app");
+    expect(calls.slice(2).every((x) => x.auth === `Bearer ${CLIENT_TOKEN}`)).toBe(true);
+    // Échéance (60 jours) et droits notés et gardés avec le jeton.
+    expect(done.etapes.find((e) => e.etape === "jeton_echeance")?.detail).toMatch(/^expire le \d{4}-\d{2}-\d{2}, renouvelé automatiquement$/);
+    expect(done.etapes.find((e) => e.etape === "jeton_droits")).toMatchObject({ ok: true, detail: "whatsapp_business_management, whatsapp_business_messaging" });
+    const [jeton] = await connexions.listJetons();
+    expect(Math.round((Date.parse(jeton.expireLe!) - Date.now()) / 86_400_000)).toBe(60);
     expect(calls.filter((x) => x.path.endsWith("smb_app_data")).map((x) => x.body?.sync_type)).toEqual(["smb_app_state_sync", "history"]);
     expect(calls.some((x) => x.path.endsWith("/register"))).toBe(false); // jamais en coexistence
 

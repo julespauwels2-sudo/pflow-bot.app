@@ -172,6 +172,56 @@ répond lui aussi « permission » (et pas seulement la liste des entreprises), 
 3. l'ancien jeton reste valide jusqu'à ce que tu le révoques (même écran) : le révoquer une fois le nouveau vérifié.
 Inconvénient : une autorisation de plus sur un jeton permanent (accès à tout le portefeuille).
 
+## 2 quinquies. Configuration Meta (10 novembre 2026) : jeton de 60 jours et tâches
+
+Configuration créée par Jules depuis le modèle Meta « inscription intégrée à WhatsApp avec un token d'expiration de
+60 jours ». Elle donne un jeton d'utilisateur système d'intégration métier ; l'expiration de 60 jours est imposée
+par le modèle. Produit : WhatsApp Cloud API seul. Comptes WhatsApp avec les tâches MANAGE, DEVELOP, MANAGE_TEMPLATES,
+VIEW_PHONE_ASSETS, MANAGE_PHONE_ASSETS, VIEW_TEMPLATES et MESSAGING. L'ID de configuration va dans
+`META_ES_CONFIG_ID` (Vercel, Production).
+
+### Le jeton expire-t-il vraiment au bout de 60 jours ?
+
+Oui, d'après Meta : un jeton d'utilisateur système qui expire « est valable 60 jours à partir de sa création ou de son
+dernier renouvellement » ; sans renouvellement, il est perdu et il faut en obtenir un nouveau (doc Meta « Install
+Apps, Generate, Refresh, and Revoke Tokens »). Ce que fait PFlow Bots :
+
+- **À la connexion** : l'échéance est lue (champ `expires_in` de Meta, sinon `debug_token`) et gardée avec le jeton
+  (`bot_jetons_whatsapp.expire_le`). Le déroulé de la connexion note « expire le … » et les droits réellement
+  accordés (`whatsapp_business_management`, `whatsapp_business_messaging`).
+- **Chaque jour à 6 h 43 (UTC)** (`/api/cron/jetons`, Vercel Cron) : un jeton à moins de 20 jours de son échéance est
+  renouvelé par l'API de Meta (`GET oauth/access_token`, `grant_type=fb_exchange_token`,
+  `set_token_expires_in_60_days=true`) : nouveau jeton de 60 jours, chiffré, l'ancien reste valable jusqu'à sa propre
+  échéance. Soit 19 essais avant l'échéance si Meta refuse.
+- **Si le renouvellement échoue** : l'erreur est gardée. À moins de 10 jours, le bandeau rouge de la page État et
+  l'encadré « Connecter le WhatsApp d'un resto » l'affichent, avec un bouton **« Lien de reconnexion »** : un nouveau
+  lien (7 jours) à envoyer au gérant. Il refait le parcours (5 minutes) et un nouveau jeton de 60 jours remplace
+  l'ancien, sans rien perdre (même compte, même canal).
+- **« Renouveler maintenant »** (page État) : renouvelle tout de suite le jeton d'un resto. À faire **une fois, dès le
+  premier resto connecté**, pour vérifier que Meta accepte le renouvellement des jetons d'intégration métier (la doc
+  de Meta le décrit pour les jetons d'utilisateur système, sans parler explicitement de ceux de l'Embedded Signup).
+  Si Meta refuse, il reste la reconnexion tous les 60 jours (l'alerte est là pour ça), ou une configuration sans
+  expiration si Meta en propose une plus tard.
+
+Migration : `supabase/migrations/20261112000000_bot_jetons_expiration.sql` (4 colonnes ajoutées à
+`bot_jetons_whatsapp`). Sans elle, la connexion marche toujours, mais l'échéance n'est pas gardée.
+
+### Les tâches suffisent-elles ?
+
+| Ce que fait PFlow Bots | Appel Meta | Droit et tâche |
+|---|---|---|
+| Lire le numéro du resto | `GET /{numéro}` | `whatsapp_business_management`, VIEW_PHONE_ASSETS |
+| Abonner l'app au compte (recevoir les messages) et la désabonner | `POST` / `DELETE /{compte}/subscribed_apps` | `whatsapp_business_management`, MANAGE |
+| Coexistence : contacts et historique de l'appli | `POST /{numéro}/smb_app_data` | `whatsapp_business_management`, MANAGE_PHONE_ASSETS |
+| Lister et créer les 10 modèles de la livraison | `GET` / `POST /{compte}/message_templates` | `whatsapp_business_management`, VIEW_TEMPLATES, MANAGE_TEMPLATES |
+| Envoyer les messages, marquer comme lu, télécharger les vocaux | `POST /{numéro}/messages`, `GET /{média}` | `whatsapp_business_messaging`, MESSAGING |
+| Recevoir les messages et les échos de l'appli | webhooks de l'app (champs `messages`, `smb_message_echoes`…) | abonnement ci-dessus ; champs réglés dans l'app Meta |
+
+Toutes les actions de PFlow Bots sont couvertes. Ce qui n'est pas demandé, et n'est pas nécessaire :
+`business_management` (voir 2 quater), l'enregistrement du numéro (`/register`, jamais en coexistence), la
+modification du profil WhatsApp du resto, et le partage d'une ligne de crédit (chaque resto paie Meta avec sa propre
+carte). Contrôle réel : à la première connexion, l'étape « jeton_droits » du déroulé doit être ✅ avec les deux droits.
+
 ## 3. Ce qu'il faut dire aux restos (coexistence)
 
 - Garder l'appli **WhatsApp Business** à jour et **l'ouvrir au moins une fois toutes les 2 semaines** (sinon Meta coupe
@@ -201,6 +251,9 @@ Inconvénient : une autorisation de plus sur un jeton permanent (accès à tout 
   refaire le lien.
 
 ## Sources
+
+- Meta, « Install Apps, Generate, Refresh, and Revoke Tokens » (jetons d'utilisateur système de 60 jours et leur renouvellement) : https://developers.facebook.com/docs/business-management-apis/system-users/install-apps-and-generate-tokens/
+- Meta, « Access Tokens » (jetons d'utilisateur système d'intégration métier, obtenus par l'Embedded Signup) : https://developers.facebook.com/documentation/business-messaging/whatsapp/access-tokens/
 
 - Meta, versions de l'Embedded Signup : https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/versions/
 - Meta, Embedded Signup v4 (blog, 14 mai 2026) : https://developers.facebook.com/blog/post/2026/05/14/embedded-signup-v4/
