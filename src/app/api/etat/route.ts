@@ -8,6 +8,7 @@ import { getChannelsRuntime } from "@/channels/core/runtime";
 import { checkBotAdmin } from "@/lib/server-auth";
 import { channelStatuses, keyStatuses, servicesStatus } from "@/lib/system-status";
 import { pushConfigFromEnv } from "@/channels/core/push";
+import { etatJeton } from "@/channels/whatsapp/jetons-renouvellement";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,6 +26,8 @@ export async function GET(request: Request) {
   /** Notifications push : clés présentes, appareils abonnés (tous comptes). */
   /** Messages ignorés parce que le canal est en test et l'expéditeur hors de la liste : 4 derniers chiffres seulement. */
   let horsListe: { at: string; fin: string }[] = [];
+  /** Jetons Meta des clients qui expirent dans moins de 10 jours (renouvellement en échec) ou expirés. */
+  let jetonsEnDanger: { resto: string; joursRestants: number | null; erreur?: string }[] = [];
   const push = { configure: Boolean(pushConfigFromEnv((name) => process.env[name]?.trim() || "")), appareils: 0 };
   if (canaux.some((c) => c.configure)) {
     try {
@@ -65,13 +68,18 @@ export async function GET(request: Request) {
           return fin ? [{ at: e.at, fin }] : [];
         })
         .slice(0, 20);
+      const now = new Date();
+      jetonsEnDanger = (await rt.connexions.listJetons().catch(() => []))
+        .map((j) => ({ j, e: etatJeton(j, now) }))
+        .filter(({ e }) => e.etat === "bientot" || e.etat === "expire")
+        .map(({ j, e }) => ({ resto: names.get(j.restaurantId) ?? "Resto", joursRestants: e.joursRestants, ...(j.erreur ? { erreur: maskId(j.erreur) } : {}) }));
     } catch (error) {
       erreurCanaux = error instanceof Error ? error.message : String(error);
     }
   }
 
   return NextResponse.json(
-    { cles: keyStatuses(), canaux, services: servicesStatus(), comptes, evenements, alertes, push, horsListe, ...(erreurCanaux ? { erreurCanaux } : {}) },
+    { cles: keyStatuses(), canaux, services: servicesStatus(), comptes, evenements, alertes, push, horsListe, jetonsEnDanger, ...(erreurCanaux ? { erreurCanaux } : {}) },
     { headers: { "cache-control": "no-store" } },
   );
 }

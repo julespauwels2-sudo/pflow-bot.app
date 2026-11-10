@@ -1103,3 +1103,13 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
   commande. Détail et contrastes : `docs/etape-c/direction-artistique.md`. Captures sur la preview :
   `docs/captures/charte/`. 452 tests OK.
 
+
+## 10 novembre 2026 — jeton Meta de 60 jours (Embedded Signup)
+
+- Configuration Meta créée par Jules (modèle « jeton d'expiration de 60 jours », tâches WhatsApp). Le jeton du client
+  expire bien au bout de 60 jours (doc Meta) : échéance lue et gardée à la connexion, renouvellement automatique chaque
+  jour à moins de 20 jours (`/api/cron/jetons`), alerte à moins de 10 jours avec un lien de reconnexion, bouton
+  « Renouveler maintenant » pour le vérifier dès le premier resto. Droits réellement accordés notés dans le déroulé.
+- Tâches de la configuration : suffisantes pour tout ce que fait PFlow Bots (tableau dans
+  `docs/etape-c/embedded-signup.md`, 2 quinquies). Migration `20261112000000_bot_jetons_expiration.sql` à valider.
+

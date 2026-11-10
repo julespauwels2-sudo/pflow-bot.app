@@ -37,12 +37,37 @@ export interface Connexion {
   termineLe?: string;
 }
 
+/** Jeton Meta d'un client (Embedded Signup) : chiffré, avec sa date d'expiration (null : inconnue ou jamais). */
+export interface JetonStocke {
+  wabaId: string;
+  restaurantId: string;
+  chiffre: string;
+  type?: string;
+  /** Fin de validité annoncée par Meta (60 jours pour la configuration de PFlow) ; null : n'expire pas ou inconnue. */
+  expireLe: string | null;
+  /** « jamais » : Meta indique que le jeton n'expire pas. */
+  nExpirePas?: boolean;
+  renouveleLe?: string;
+  /** Dernière erreur de renouvellement (vide si le dernier renouvellement a réussi). */
+  erreur?: string;
+  majLe?: string;
+}
+
+export interface JetonExpiration {
+  expireLe: string | null;
+  nExpirePas?: boolean;
+}
+
 export interface ConnexionStore {
   create(c: Omit<Connexion, "id" | "creeLe" | "majLe" | "etapes" | "etat">): Promise<Connexion>;
   byJetonHash(hash: string): Promise<Connexion | null>;
   update(c: Connexion): Promise<void>;
   list(limit?: number): Promise<Connexion[]>;
-  saveJeton(wabaId: string, restaurantId: string, chiffre: string, type?: string): Promise<void>;
+  saveJeton(wabaId: string, restaurantId: string, chiffre: string, type?: string, expiration?: JetonExpiration): Promise<void>;
+  /** Tous les jetons des clients (renouvellement, page État). */
+  listJetons(): Promise<JetonStocke[]>;
+  /** Après un renouvellement (nouveau jeton, nouvelle échéance) ou un échec (erreur gardée, jeton inchangé). */
+  majJeton(wabaId: string, maj: { chiffre?: string; expiration?: JetonExpiration; renouveleLe?: string; erreur?: string | null }): Promise<void>;
   /** Le jeton chiffré du compte WhatsApp (null : on utilise le jeton général de PFlow). */
   jetonChiffre(wabaId: string): Promise<string | null>;
   /** Débranchement : le jeton du client est effacé (plus aucun accès à son compte). */
@@ -65,7 +90,7 @@ export function etatEffectif(c: Connexion, now = new Date()): ConnexionEtat {
 
 export function createMemoryConnexionStore(): ConnexionStore {
   const rows = new Map<string, Connexion>();
-  const jetons = new Map<string, { restaurantId: string; chiffre: string; type?: string }>();
+  const jetons = new Map<string, JetonStocke>();
   return {
     async create(c) {
       const now = new Date().toISOString();
@@ -83,8 +108,23 @@ export function createMemoryConnexionStore(): ConnexionStore {
     async list(limit = 50) {
       return [...rows.values()].sort((a, b) => b.creeLe.localeCompare(a.creeLe)).slice(0, limit).map((c) => structuredClone(c));
     },
-    async saveJeton(wabaId, restaurantId, chiffre, type) {
-      jetons.set(wabaId, { restaurantId, chiffre, type });
+    async saveJeton(wabaId, restaurantId, chiffre, type, expiration) {
+      jetons.set(wabaId, { wabaId, restaurantId, chiffre, type, expireLe: expiration?.expireLe ?? null, nExpirePas: expiration?.nExpirePas, majLe: new Date().toISOString() });
+    },
+    async listJetons() {
+      return [...jetons.values()].map((j) => structuredClone(j));
+    },
+    async majJeton(wabaId, maj) {
+      const j = jetons.get(wabaId);
+      if (!j) return;
+      jetons.set(wabaId, {
+        ...j,
+        ...(maj.chiffre ? { chiffre: maj.chiffre } : {}),
+        ...(maj.expiration ? { expireLe: maj.expiration.expireLe, nExpirePas: maj.expiration.nExpirePas } : {}),
+        ...(maj.renouveleLe ? { renouveleLe: maj.renouveleLe } : {}),
+        ...(maj.erreur !== undefined ? { erreur: maj.erreur ?? undefined } : {}),
+        majLe: new Date().toISOString(),
+      });
     },
     async jetonChiffre(wabaId) {
       return jetons.get(wabaId)?.chiffre ?? null;
@@ -146,6 +186,37 @@ function connexionToRow(c: Connexion): Row {
 
 const eq = (column: string, value: string) => ({ in: { column, values: [value] } });
 
+const COLONNES_EXPIRATION = ["expire_le", "n_expire_pas", "renouvele_le", "erreur_renouvellement"];
+
+/**
+ * Enregistre le jeton avec ses colonnes d'expiration (migration 20261112000000). Si la migration n'est pas encore
+ * jouée (colonnes absentes), le jeton est quand même gardé, sans l'échéance : la connexion d'un client ne casse jamais.
+ */
+async function upsertJeton(db: Db, base: Row, expiration: Row): Promise<void> {
+  const sansExpiration = Object.fromEntries(Object.entries(base).filter(([k]) => !COLONNES_EXPIRATION.includes(k)));
+  try {
+    await db.upsert("bot_jetons_whatsapp", [{ ...sansExpiration, ...pick(base, COLONNES_EXPIRATION), ...expiration }], "waba_id");
+  } catch (error) {
+    if (!/expire_le|n_expire_pas|renouvele_le|erreur_renouvellement|column/i.test(error instanceof Error ? error.message : String(error))) throw error;
+    await db.upsert("bot_jetons_whatsapp", [sansExpiration], "waba_id");
+  }
+}
+const pick = (row: Row, keys: string[]) => Object.fromEntries(Object.entries(row).filter(([k]) => keys.includes(k)));
+
+function rowToJeton(r: Row): JetonStocke {
+  return {
+    wabaId: String(r.waba_id),
+    restaurantId: String(r.restaurant_id),
+    chiffre: String(r.jeton_chiffre),
+    type: opt(r.type_jeton),
+    expireLe: iso(r.expire_le) ?? null,
+    nExpirePas: r.n_expire_pas === true,
+    renouveleLe: iso(r.renouvele_le),
+    erreur: opt(r.erreur_renouvellement),
+    majLe: iso(r.maj_le),
+  };
+}
+
 export function createSupabaseConnexionStore(db: Db): ConnexionStore {
   return {
     async create(c) {
@@ -164,12 +235,27 @@ export function createSupabaseConnexionStore(db: Db): ConnexionStore {
     async list(limit = 50) {
       return (await db.select("bot_connexions_whatsapp", "*", { order: { column: "cree_le", ascending: false }, limit })).map(rowToConnexion);
     },
-    async saveJeton(wabaId, restaurantId, chiffre, type) {
-      await db.upsert(
-        "bot_jetons_whatsapp",
-        [{ waba_id: wabaId, restaurant_id: restaurantId, jeton_chiffre: chiffre, type_jeton: type ?? null, maj_le: new Date().toISOString() }],
-        "waba_id",
-      );
+    async saveJeton(wabaId, restaurantId, chiffre, type, expiration) {
+      const base = { waba_id: wabaId, restaurant_id: restaurantId, jeton_chiffre: chiffre, type_jeton: type ?? null, maj_le: new Date().toISOString() };
+      await upsertJeton(db, base, {
+        expire_le: expiration?.expireLe ?? null,
+        n_expire_pas: Boolean(expiration?.nExpirePas),
+        renouvele_le: null,
+        erreur_renouvellement: null,
+      });
+    },
+    async listJetons() {
+      return (await db.select("bot_jetons_whatsapp", "*")).map(rowToJeton);
+    },
+    async majJeton(wabaId, maj) {
+      const [row] = await db.select("bot_jetons_whatsapp", "*", eq("waba_id", wabaId));
+      if (!row) return;
+      const base = { ...row, ...(maj.chiffre ? { jeton_chiffre: maj.chiffre } : {}), maj_le: new Date().toISOString() };
+      await upsertJeton(db, base, {
+        ...(maj.expiration ? { expire_le: maj.expiration.expireLe, n_expire_pas: Boolean(maj.expiration.nExpirePas) } : {}),
+        ...(maj.renouveleLe ? { renouvele_le: maj.renouveleLe } : {}),
+        ...(maj.erreur !== undefined ? { erreur_renouvellement: maj.erreur } : {}),
+      });
     },
     async jetonChiffre(wabaId) {
       const [row] = await db.select("bot_jetons_whatsapp", "jeton_chiffre", eq("waba_id", wabaId));

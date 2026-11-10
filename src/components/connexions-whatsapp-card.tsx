@@ -23,6 +23,15 @@ interface Ligne {
   canalId: string | null;
   etapes: { etape: string; ok: boolean; detail?: string; le: string }[];
   erreur: string | null;
+  restaurantId: string;
+  /** Jeton Meta du client (60 jours, renouvelé automatiquement) ; null si pas connecté. */
+  jeton: {
+    etat: "ok" | "a_renouveler" | "bientot" | "expire" | "jamais" | "inconnu";
+    joursRestants: number | null;
+    expireLe: string | null;
+    renouveleLe: string | null;
+    erreur: string | null;
+  } | null;
 }
 interface Donnees {
   manque: string[];
@@ -40,6 +49,11 @@ const ETATS: Record<Ligne["etat"], { texte: string; ton: "neutral" | "success" |
   annulee: { texte: "Abandonné par le gérant", ton: "warning" },
   expiree: { texte: "Lien expiré", ton: "neutral" },
 };
+
+const jour = (iso: string) => new Date(iso).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+/** Le jeton du client demande une action : il expire bientôt (renouvellement en échec) ou il a expiré. */
+const jetonEnDanger = (j: Ligne["jeton"]) => Boolean(j && (j.etat === "bientot" || j.etat === "expire"));
 
 const date = (iso: string) => new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
@@ -98,11 +112,31 @@ export function ConnexionsWhatsAppCard() {
     }
   }
 
-  async function generer(test = false) {
+  async function renouveler(c: Ligne) {
     setBusy(true);
     setErreur(null);
     try {
-      setLien(await appel({ method: "POST", body: JSON.stringify(test ? { clientTest: { nom: nomTest } } : { restaurantId: resto }) }));
+      await appel({ method: "POST", body: JSON.stringify({ action: "renouveler", id: c.id }) });
+      charger();
+    } catch (e) {
+      setErreur(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function generer(test = false, pour?: Ligne) {
+    setBusy(true);
+    setErreur(null);
+    try {
+      const corps = pour
+        ? pour.clientTest
+          ? { clientTest: { nom: pour.nomResto } }
+          : { restaurantId: pour.restaurantId }
+        : test
+          ? { clientTest: { nom: nomTest } }
+          : { restaurantId: resto };
+      setLien(await appel({ method: "POST", body: JSON.stringify(corps) }));
       charger();
     } catch (e) {
       setErreur(errorText(e));
@@ -127,6 +161,12 @@ export function ConnexionsWhatsAppCard() {
         {data && data.manque.length > 0 && (
           <Notice tone="info">
             Pas encore prêt : variables Vercel manquantes <code>{data.manque.join(", ")}</code> (voir docs/etape-c/embedded-signup.md).
+          </Notice>
+        )}
+        {data && data.connexions.some((c) => jetonEnDanger(c.jeton)) && (
+          <Notice tone="error">
+            Jeton Meta d&apos;un resto bientôt expiré ou expiré (le renouvellement automatique échoue) : sans jeton, son bot ne répond plus.
+            Crée un lien de reconnexion ci-dessous et envoie-le au gérant (même parcours, 5 minutes).
           </Notice>
         )}
         {data?.tableAbsente && <Notice tone="info">Migration 20261111000000_bot_connexions_whatsapp à jouer (SQL à valider).</Notice>}
@@ -189,6 +229,35 @@ export function ConnexionsWhatsAppCard() {
                   </span>
                 </div>
                 {c.erreur && <p className="text-xs text-alerte">{c.erreur}</p>}
+                {c.jeton && (
+                  <p className="flex flex-wrap items-center gap-2 text-xs" data-testid="connexion-jeton">
+                    <span className="font-semibold">Jeton Meta :</span>
+                    {c.jeton.etat === "jamais" && <Badge tone="success">N&apos;expire pas</Badge>}
+                    {c.jeton.etat === "inconnu" && <Badge tone="neutral">Échéance pas encore lue</Badge>}
+                    {c.jeton.expireLe && c.jeton.etat !== "jamais" && (
+                      <>
+                        <Badge tone={jetonEnDanger(c.jeton) ? "warning" : c.jeton.etat === "a_renouveler" ? "info" : "success"}>
+                          {c.jeton.etat === "expire" ? "Expiré" : `J-${c.jeton.joursRestants}`}
+                        </Badge>
+                        <span className="text-muted">
+                          expire le {jour(c.jeton.expireLe)} · renouvelé automatiquement à moins de 20 jours
+                          {c.jeton.renouveleLe ? ` (dernier renouvellement le ${jour(c.jeton.renouveleLe)})` : ""}
+                        </span>
+                      </>
+                    )}
+                    {c.jeton.erreur && <span className="text-alerte">Renouvellement en échec : {c.jeton.erreur}</span>}
+                    {c.jeton.etat !== "jamais" && (
+                      <button type="button" className="font-semibold text-bleu underline" disabled={busy} onClick={() => void renouveler(c)} data-testid="connexion-renouveler">
+                        Renouveler maintenant
+                      </button>
+                    )}
+                    {jetonEnDanger(c.jeton) && (
+                      <Button variant="secondary" onClick={() => void generer(false, c)} disabled={busy} data-testid="connexion-reconnecter">
+                        Lien de reconnexion
+                      </Button>
+                    )}
+                  </p>
+                )}
                 {c.etat === "terminee" && (
                   <button type="button" className="text-xs font-semibold text-muted underline hover:text-alerte" disabled={busy} onClick={() => void debrancher(c)}>
                     Débrancher ce numéro

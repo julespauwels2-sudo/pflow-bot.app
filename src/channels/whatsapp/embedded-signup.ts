@@ -84,12 +84,68 @@ async function graph(meta: GraphTarget, method: "GET" | "POST" | "DELETE", path:
 }
 
 /** 1. Le code (valable quelques dizaines de secondes) contre le jeton du client. */
-export async function echangerCode(meta: MetaAppConfig, code: string): Promise<{ token: string; type?: string }> {
+export async function echangerCode(meta: MetaAppConfig, code: string): Promise<{ token: string; type?: string; expiresIn?: number }> {
   const q = new URLSearchParams({ client_id: meta.appId, client_secret: meta.appSecret, code });
   const json = await graph(meta, "GET", `oauth/access_token?${q.toString()}`, null);
   const token = typeof json.access_token === "string" ? json.access_token : "";
   if (!token) throw new MetaError("Meta n'a pas renvoyé de jeton");
-  return { token, type: typeof json.token_type === "string" ? json.token_type : undefined };
+  return { token, type: typeof json.token_type === "string" ? json.token_type : undefined, expiresIn: secondes(json.expires_in) };
+}
+
+const secondes = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined);
+
+/** Ce que Meta dit d'un jeton (debug_token, avec le jeton de l'app) : échéance et droits réellement accordés. */
+export interface JetonInspecte {
+  valide: boolean;
+  /** null : Meta indique que le jeton n'expire pas (expires_at = 0). */
+  expireLe: string | null;
+  scopes: string[];
+  /** Droits par compte : permission → identifiants des comptes WhatsApp (ou de l'entreprise) concernés. */
+  granular: { scope: string; targetIds: string[] }[];
+}
+
+export async function inspecterJeton(meta: MetaAppConfig, token: string): Promise<JetonInspecte> {
+  // debug_token exige le jeton à examiner en paramètre ; l'appel se fait avec le jeton de l'app (id|secret), en en-tête.
+  const json = await graph(meta, "GET", `debug_token?${new URLSearchParams({ input_token: token }).toString()}`, `${meta.appId}|${meta.appSecret}`);
+  const d = (json.data ?? {}) as { is_valid?: boolean; expires_at?: number; data_access_expires_at?: number; scopes?: unknown; granular_scopes?: unknown };
+  const granular = Array.isArray(d.granular_scopes)
+    ? (d.granular_scopes as { scope?: unknown; target_ids?: unknown }[]).map((g) => ({
+        scope: String(g.scope ?? ""),
+        targetIds: Array.isArray(g.target_ids) ? g.target_ids.map(String) : [],
+      }))
+    : [];
+  return {
+    valide: d.is_valid === true,
+    expireLe: typeof d.expires_at === "number" && d.expires_at > 0 ? new Date(d.expires_at * 1000).toISOString() : null,
+    scopes: Array.isArray(d.scopes) ? d.scopes.map(String) : [],
+    granular,
+  };
+}
+
+/**
+ * Renouvelle un jeton d'utilisateur système qui expire (60 jours) : Meta renvoie un NOUVEAU jeton valable 60 jours ;
+ * l'ancien reste valable jusqu'à sa propre échéance. Documentation Meta « Install Apps, Generate, Refresh, and Revoke
+ * Tokens » : GET oauth/access_token, grant_type=fb_exchange_token, set_token_expires_in_60_days=true.
+ */
+export async function renouvelerJeton(meta: MetaAppConfig, token: string): Promise<{ token: string; expiresIn?: number }> {
+  const q = new URLSearchParams({
+    grant_type: "fb_exchange_token",
+    client_id: meta.appId,
+    client_secret: meta.appSecret,
+    set_token_expires_in_60_days: "true",
+    fb_exchange_token: token,
+  });
+  const json = await graph(meta, "GET", `oauth/access_token?${q.toString()}`, null);
+  const nouveau = typeof json.access_token === "string" ? json.access_token : "";
+  if (!nouveau) throw new MetaError("Meta n'a pas renvoyé de nouveau jeton");
+  return { token: nouveau, expiresIn: secondes(json.expires_in) };
+}
+
+/** Échéance d'un jeton : d'après la réponse de Meta (expires_in), sinon d'après debug_token. */
+export async function echeanceJeton(meta: MetaAppConfig, token: string, expiresIn: number | undefined, now: Date): Promise<{ expireLe: string | null; nExpirePas?: boolean; inspecte?: JetonInspecte }> {
+  if (expiresIn) return { expireLe: new Date(now.getTime() + expiresIn * 1000).toISOString() };
+  const inspecte = await inspecterJeton(meta, token);
+  return inspecte.expireLe ? { expireLe: inspecte.expireLe, inspecte } : { expireLe: null, nExpirePas: true, inspecte };
 }
 
 const ID = /^\d{5,30}$/;
@@ -126,8 +182,30 @@ export async function terminerConnexion(deps: SignupDeps, connexion: Connexion, 
     const t = await echangerCode(deps.meta, input.code);
     token = t.token;
     note("code_echange", true, t.type ? `jeton ${t.type}` : undefined);
+    // Échéance du jeton (60 jours avec la configuration de PFlow) et droits réellement accordés (debug_token) :
+    // notés, jamais bloquants. Échéance inconnue : la tâche quotidienne (/api/cron/jetons) la redemande à Meta.
+    let expiration: { expireLe: string | null; nExpirePas?: boolean } | undefined;
+    let inspecte: JetonInspecte | undefined;
+    try {
+      inspecte = await inspecterJeton(deps.meta, token);
+    } catch {
+      inspecte = undefined;
+    }
+    if (t.expiresIn) expiration = { expireLe: new Date(now().getTime() + t.expiresIn * 1000).toISOString() };
+    else if (inspecte) expiration = inspecte.expireLe ? { expireLe: inspecte.expireLe } : { expireLe: null, nExpirePas: true };
+    note(
+      "jeton_echeance",
+      true,
+      !expiration ? "échéance pas encore lue (la tâche quotidienne la redemande à Meta)"
+        : expiration.expireLe ? `expire le ${expiration.expireLe.slice(0, 10)}, renouvelé automatiquement`
+        : "n'expire pas",
+    );
+    if (inspecte) {
+      const droits = inspecte.scopes.filter((s) => s.startsWith("whatsapp_") || s === "business_management");
+      note("jeton_droits", droits.includes("whatsapp_business_management") && droits.includes("whatsapp_business_messaging"), droits.join(", ") || "aucun droit WhatsApp");
+    }
     // 2. Gardé chiffré (indispensable : sans lui, le numéro du client ne peut pas être servi)
-    await deps.connexions.saveJeton(input.wabaId, c.restaurantId, (deps.chiffrer ?? chiffrerJeton)(token), t.type);
+    await deps.connexions.saveJeton(input.wabaId, c.restaurantId, (deps.chiffrer ?? chiffrerJeton)(token), t.type, expiration);
     note("jeton_garde", true, "chiffré (AES-256-GCM)");
   } catch (error) {
     note("code_echange", false, (error as Error).message);
