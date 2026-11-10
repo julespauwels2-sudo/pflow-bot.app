@@ -14,6 +14,7 @@ import type { StoredMessage } from "@/channels/core/types";
 import { isUnread, lastAt, plainExtract, shortTime, sortConversations, type SeenState } from "@/lib/inbox-view";
 import { MessageContent } from "./message-content";
 import { MobileHeader, useVisualViewport } from "./mobile";
+import { useAuth } from "./auth-gate";
 import { PushControls } from "./pwa";
 import { Notice } from "./ui";
 
@@ -50,6 +51,7 @@ export function MobileInboxList({
   onOpen: (contactId: string) => void;
   extra?: ReactNode;
 }) {
+  const { role } = useAuth();
   const rows = sortConversations(canaux);
   const waiting = rows.filter((r) => r.conv.transfertOuvert).length;
   return (
@@ -60,7 +62,7 @@ export function MobileInboxList({
           {waiting > 0 ? "" : " · tout est à jour"}
         </p>
       </MobileHeader>
-      <PushControls compact />
+      {role === "admin" && <PushControls compact />}
       {notice && (
         <Notice tone={notice.tone} onClose={onCloseNotice}>
           {notice.text}

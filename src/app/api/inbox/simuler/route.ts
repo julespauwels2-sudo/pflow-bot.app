@@ -20,7 +20,7 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const access = await inboxAccess(request);
+  const access = await inboxAccess(request, { adminSeulement: true });
   if (!access.ok) return access.response;
   if (access.runtime.mode !== "memory") return NextResponse.json({ error: "Simulation réservée au mode démo (stockage en mémoire)." }, { status: 403 });
   const parsed = schema.safeParse(await request.json().catch(() => null));

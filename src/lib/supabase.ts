@@ -29,6 +29,15 @@ export async function accessToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
+/**
+ * Examinateur de l'app (examen Meta) : présent dans bot_examinateurs (il ne voit que sa propre ligne). Table absente
+ * (migration pas jouée) : non.
+ */
+export async function isBotExaminateur(sb: SupabaseClient, userId: string): Promise<boolean> {
+  const { data, error } = await sb.from("bot_examinateurs").select("user_id").eq("user_id", userId).maybeSingle();
+  return !error && Boolean(data);
+}
+
 /** Vrai si le compte connecté est dans bot_admins (il ne voit que sa propre ligne). */
 export async function isBotAdmin(sb: SupabaseClient, userId: string): Promise<boolean> {
   const { data, error } = await sb.from("bot_admins").select("user_id").eq("user_id", userId).maybeSingle();

@@ -1,7 +1,7 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { AccountMenu } from "./account-menu";
 import { Logo } from "./logo";
+import { MainNav } from "./main-nav";
 import { DesktopOnly, MobileTabBar } from "./mobile";
 
 export { Logo };
@@ -18,18 +18,7 @@ export function AppShell({ children, breadcrumb, mobile = false }: { children: R
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
           <Logo />
           <nav className="flex max-w-full items-center gap-1 overflow-x-auto whitespace-nowrap">
-            <Link href="/modele" className="rounded-full px-3.5 py-2 text-xs font-extrabold tracking-[0.08em] text-ink uppercase transition hover:bg-white hover:text-nuit">
-              Modèle maître
-            </Link>
-            <Link href="/clients" className="rounded-full px-3.5 py-2 text-xs font-extrabold tracking-[0.08em] text-ink uppercase transition hover:bg-white hover:text-nuit">
-              Clients
-            </Link>
-            <Link href="/demos" className="rounded-full px-3.5 py-2 text-xs font-extrabold tracking-[0.08em] text-ink uppercase transition hover:bg-white hover:text-nuit">
-              Démos
-            </Link>
-            <Link href="/inbox" className="rounded-full px-3.5 py-2 text-xs font-extrabold tracking-[0.08em] text-ink uppercase transition hover:bg-white hover:text-nuit">
-              Boîte de réception
-            </Link>
+            <MainNav />
             <AccountMenu />
           </nav>
         </div>

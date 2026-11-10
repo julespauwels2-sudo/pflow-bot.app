@@ -94,32 +94,55 @@ notes sent by customers so the team can understand them. The screencast shows a 
 inbox, an automatic reply, then a reply written by a team member and received on the customer's phone. Messages are
 only sent in reply to a customer, or with approved utility templates for order updates.
 
-### Instructions pour l'examen (reviewer instructions)
+### Instructions pour l'examen (reviewer instructions) — texte final
 
-PFlow Bots is an internal dashboard used only by the PFlow team; restaurants and their customers interact with it
-through WhatsApp. The screencasts attached to each permission show the complete flow on our own WhatsApp Business
-Account (PFlow demo number), because Embedded Signup cannot be used to onboard other businesses until this review
-is approved.
+PFlow Bots is the internal dashboard PFlow uses to run WhatsApp ordering assistants for restaurants in Guadeloupe.
+Restaurants and their customers only interact with it through WhatsApp.
 
-To test the messaging flow yourself: send any message (for example "Hello, are you open tonight?") to our demo
-number +590 690 XX XX XX on WhatsApp. Our assistant replies within a few seconds. The reply in the screencast was
-then written from the PFlow Bots inbox.
+Embedded Signup cannot onboard other businesses until this review is approved, so the screencasts show the complete
+flows on our own WhatsApp Business Account and phone number (PFlow demo number, +590 691 26 68 53).
 
-Login to the dashboard (if needed): https://pflow-bot-app.vercel.app — test account: [e-mail] / [password]. This
-account only sees the PFlow demo number. Pages to review: "État" (accounts, webhook subscription, message templates)
-and "Boîte de réception" (inbox).
+1. Messaging (whatsapp_business_messaging), on WhatsApp:
+   - Send any message to +590 691 26 68 53 (for example "Hello, are you open tonight?").
+   - Our assistant replies within a few seconds.
 
-> À compléter par Jules : le numéro PFlow Démo complet ; le compte de test de l'examinateur (voir ci-dessous).
+2. Messaging, in the dashboard (reviewer account):
+   - Go to https://pflow-bot-app.vercel.app and log in with the reviewer account below.
+   - You land on the inbox ("Boîte de réception"). It only shows conversations of our demo number.
+   - Open your conversation: you see the message you sent and the assistant's reply.
+   - Click "Reprendre la main" (take over), type a reply and click "Envoyer" (send): you receive it on WhatsApp.
+   - Click "Rendre au bot" to hand the conversation back to the assistant.
 
-## Compte de test pour l'examinateur
+3. Management (whatsapp_business_management): reading the WhatsApp Business Account and its phone numbers,
+   subscribing and unsubscribing our app to the account's webhooks, and creating message templates are admin-only
+   actions in our dashboard. They are shown step by step in the screencast attached to this permission, on our own
+   account, with the result visible in WhatsApp Manager.
 
-Meta demande souvent un accès pour tester. Aujourd'hui, un administrateur de PFlow Bots voit **toutes** les
-conversations, y compris celles des restos clients : ne pas donner ton compte. Deux possibilités :
-1. Ne pas fournir de compte : indiquer que l'outil est interne, que les vidéos montrent tout, et que l'examinateur
-   peut tester l'envoi et la réception en écrivant au numéro de démo (c'est le cas d'usage visible par le public).
-   C'est ce que propose le texte ci-dessus, sans la ligne « Login ».
-2. Un compte examinateur limité au numéro PFlow Démo : à construire (rôle « lecture démo »), une PR à part si Meta
-   le réclame.
+Reviewer account: [e-mail] / [password]. This account is restricted to the inbox of our demo number; it cannot see
+any restaurant's data.
+
+## Compte examinateur : mise en place (Jules)
+
+Code : PR « Compte examinateur Meta » (table `bot_examinateurs`, boîte de réception filtrée côté serveur, navigation
+réduite). Une fois la PR fusionnée :
+
+1. SQL de la migration `supabase/migrations/20261113000000_bot_examinateurs.sql` (à valider ; je l'applique sur ton
+   « OK SQL examinateur »).
+2. Supabase → Authentication → Users → **Add user** → « Create new user » : une adresse dédiée (par exemple
+   `meta-review@pflow.fr`, ou un alias Gmail `jules.pauwels2+meta@gmail.com`), un mot de passe fort, « Auto Confirm
+   User » coché. **Jamais ton compte.**
+3. SQL Editor : `insert into public.bot_examinateurs (user_id, note) select id, 'Examen Meta' from auth.users where
+   email = '<adresse>';`
+4. Vérifier : se connecter avec ce compte sur https://pflow-bot-app.vercel.app → on arrive sur la boîte de
+   réception, seul « Numéro PFlow (démos) » apparaît, pas de lien Clients / Modèle maître / Démos / État ; toute autre
+   adresse (ex. /clients) renvoie vers la boîte de réception.
+5. Coller l'adresse et le mot de passe dans le champ « Instructions pour l'examen » chez Meta (texte ci-dessus).
+6. Après l'examen : supprimer l'utilisateur dans Authentication (la ligne de `bot_examinateurs` part avec).
+
+Ce que l'examinateur ne peut PAS faire : voir les conversations des restos clients (filtrage côté serveur, réponse
+« introuvable »), ouvrir les autres pages (redirection, et toutes les autres routes API exigent `bot_admins`), lire
+quoi que ce soit du CRM (il n'est ni dans `admins` ni dans `acces_restos` ; vérifié en lecture seule : seules les
+tables `metiers` et `modules_catalogue` sont lisibles par n'importe quel compte connecté).
 
 Sources : Meta, « Onboarding business customers as a Tech Provider » (accès avancé requis avant d'intégrer des
 clients) : https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-customers-as-a-tech-provider ;
