@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
+import { RETRAIT_SEULEMENT_TEXT,
   formatPayment,
   NO_ROUND_TEXT,
   formatFixedDelivery,
@@ -137,10 +137,18 @@ describe("livraison sur planning", () => {
     expect(v.horaires_du_jour).toBe("");
   });
 
-  it("pas de livraison : variables de livraison vides", () => {
+  it("pas de livraison, retrait : le bouton « Livraison » le dit (avec l'adresse si connue), zones ignorées", () => {
     const v = infoSheetVariables({ horaires: [], livraison: false, retrait: true, zonesLivraison: "ignorées" }, MARDI_MIDI, TZ);
-    expect(v.infos_livraison).toBe("");
+    expect(v.infos_livraison).toBe(RETRAIT_SEULEMENT_TEXT);
+    expect(v.zones_livraison).toBe("");
     expect(v.modes_service).toBe("Retrait sur place uniquement");
+    const avecAdresse = infoSheetVariables({ horaires: [], livraison: false, retrait: true, adresse: "Bourg de Sainte-Rose" }, MARDI_MIDI, TZ);
+    expect(avecAdresse.infos_livraison).toBe(`${RETRAIT_SEULEMENT_TEXT}\n📍 Bourg de Sainte-Rose`);
+  });
+
+  it("ni livraison ni retrait : rien", () => {
+    const v = infoSheetVariables({ horaires: [], livraison: false, retrait: false }, MARDI_MIDI, TZ);
+    expect(v.infos_livraison).toBe("");
   });
 });
 
