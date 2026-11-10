@@ -54,6 +54,23 @@ Points d'attention :
   pendant 30 jours après suppression : choisir un modèle qui n'a pas encore été approuvé, ou filmer avant d'avoir
   créé les 10). Le plus simple : filmer cette vidéo **avant** de créer les modèles sur le compte de PFlow.
 
+### Vérifier avant de filmer : les modèles passeront-ils sur le compte de PFlow ?
+
+Le canal PFlow Démo a deux identifiants : le WABA `1808772226929443` (il répond « Authorization Error » au jeton de
+pflow-bots-serveur : nouveau modèle de comptes de Meta) et le compte de messagerie `4170754433058228`. PFlow Bots
+interroge **d'abord le compte de messagerie**, puis le WABA, et ne crée rien sur un compte dont la lecture des modèles
+a échoué (testé). La seule inconnue est la réponse de Meta sur `4170754433058228/message_templates` : aucun appel
+réel n'a encore été fait (rien dans les journaux).
+
+Contrôle sans risque (lecture seule, ne crée rien) : page État → « Modèles WhatsApp de la livraison » → « Voir les
+modèles de chaque compte ».
+- La ligne « PFlow Démo (compte de PFlow) » affiche les 10 modèles avec un statut (« Absent », « Approuvé »…) :
+  la création passera, par le même compte. On peut filmer.
+- Elle affiche « Lecture chez Meta impossible (compte de messagerie 4170… : … ; WABA 1808… : …) » : envoie-moi le
+  texte. Piste la plus probable : le jeton de pflow-bots-serveur n'a pas la tâche « Gérer les modèles » sur ce compte
+  (Business Manager → Utilisateurs système → pflow-bots-serveur → Actifs → compte WhatsApp → cocher « Gérer les
+  modèles de messages »). En principe, pas besoin de régénérer le jeton : l'accès aux comptes est vérifié à chaque appel.
+
 ## Vidéo 2 : `whatsapp_business_messaging`
 
 Ce que l'examinateur doit voir : un client écrit au numéro de l'entreprise, le message arrive dans l'app (webhook), et

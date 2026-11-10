@@ -57,16 +57,19 @@ async function traiter(p: Extract<Pret, { rt: ChannelsRuntime }>, canal: Canal, 
   }
   const ids = [...new Set([canal.messagingAccountId, canal.wabaId].filter((v): v is string => Boolean(v && /^\d{5,30}$/.test(v))))];
   if (!ids.length) return { canalId: canal.id, libelle, compteId: null, jeton, error: "Aucun identifiant de compte sur ce canal (à compléter : compte de messagerie)" };
-  let derniere = "";
+  // Le compte de messagerie d'abord (nouveau modèle de comptes : le WABA peut refuser), puis le WABA. Rien n'est
+  // créé sur un compte dont la lecture des modèles a échoué. En cas d'échec partout : l'erreur de CHAQUE identifiant.
+  const erreurs: string[] = [];
   for (const id of ids) {
     try {
       const r = await modelesLivraison({ base: p.base, version: p.version }, id, token, creer);
       return { canalId: canal.id, libelle, compteId: id, jeton, ...r };
     } catch (error) {
-      derniere = (error as Error).message;
+      const type = id === canal.messagingAccountId ? "compte de messagerie" : "WABA";
+      erreurs.push(`${type} ${id} : ${(error as Error).message}`);
     }
   }
-  return { canalId: canal.id, libelle, compteId: ids[0], jeton, error: `Lecture chez Meta impossible : ${derniere}` };
+  return { canalId: canal.id, libelle, compteId: ids[0], jeton, error: `Lecture chez Meta impossible (${erreurs.join(" ; ")})` };
 }
 
 async function canauxResto(rt: ChannelsRuntime) {
