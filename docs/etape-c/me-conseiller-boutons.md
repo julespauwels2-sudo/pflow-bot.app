@@ -24,7 +24,7 @@ Pourquoi personnaliser Mexico et AG Pizza : leurs catégories CRM sont des **for
 catégorie (Pizzas), pas les familles voulues (Bœuf, Poulet… ; familles de pizzas). Cookies : l'automatique suffit
 (« Cookies », « Box », « Surprenez-moi » = 3 boutons).
 
-### Listes proposées (rien n'est enregistré)
+### Listes enregistrées (validées par Jules le 10 novembre 2026)
 
 Mexico :
 ```
@@ -48,13 +48,15 @@ AG Pizza :
 
 ## Mise en production (après fusion et déploiement)
 
-Le flux « IA - Recommandation » **du modèle maître en production** n'a pas encore l'option. Le plus simple : Modèle
-maître → IA - Recommandation → bloc Agent IA → cocher l'option → Publier. Tous les bots en profitent.
+Fait par Jules le 10 novembre 2026 (PR n° 27 fusionnée, option cochée et publiée dans « IA - Recommandation » du
+modèle maître). Listes de Mexico et d'AG Pizza enregistrées dans `bot_fiches` (champ `conseilChoix`, les autres
+champs de la fiche inchangés).
 
 ## Limites
 
 - **Lien direct vers le produit** : impossible pour l'instant, la page de commande du CRM ne lit aucun paramètre
-  produit. Le bouton ouvre la page de commande du resto. À faire dans une PR CRM séparée si besoin.
+  produit. Le bouton ouvre la page de commande du resto. PR CRM séparée prévue **après la migration du 19 au 21**
+(`docs/plan.md`).
 - Captures : prises dans le simulateur en mode local (vraie carte et vrais flux du modèle, aucune écriture en base) ;
   les réponses de l'IA y sont **simulées** (pas de clé Claude dans la session), écrites à partir de la vraie carte.
   À revérifier dans le simulateur avec « IA réelle ».

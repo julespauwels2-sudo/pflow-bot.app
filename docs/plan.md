@@ -30,6 +30,10 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - **CRM : qg77 et qg150 joués le 10 novembre** : secret de send-push dans Vault, plus aucun secret en clair ;
   rappels au resto à 5, 10 et 15 min pour une commande pas acceptée, « C'est l'heure » pour une commande
   programmée (PR CRM n° 85 et n° 101).
+- **« ⭐ Me conseiller » avec des boutons** (PR n° 27, option activée dans le modèle maître) : choix de la carte
+  (boutons ou liste), puis 2 ou 3 produits avec les prix, « Commander » et « Autre chose ». Listes personnalisées
+  enregistrées le 10 novembre pour Mexico (Bœuf, Poulet, Végan, Agneau ven-sam-dim) et AG Pizza (Viande, Fromage,
+  Veggie & poisson) ; Cookies : familles automatiques (Cookies, Box). Doc : `docs/etape-c/me-conseiller-boutons.md`.
 - **3 canaux en test** (Cookies An Nou, Mexico, ag_pizzaa), sans effet sur le trafic actuel ; alertes push du QG
   (10 types).
 
@@ -50,6 +54,9 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - ag pizza : « Revenir au modèle » pour la copie de l'Accueil (ou le 19).
 - Runbook `migration-3-clients.md`, partie 1 (vérifications des numéros).
 - Rappels de commande : vérifier à la prochaine vraie commande restée en attente.
+- Mexico : description du Burrito Végan et du Bowl Végan à corriger dans le CRM (Jules : « agneau effiloché », et
+  « crème, fromage râpé » qui ne sont pas végan non plus) ; ensuite vérifier que la carte lue par le bot ne
+  contient plus « agneau » pour ces plats.
 
 ### Migration du 19 au 21 novembre
 - 19 : prérequis communs, puis **Cookies** (mode « toujours ») : 5 étapes du runbook.
@@ -61,6 +68,9 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - Embedded Signup pour les nouveaux restos, dès la validation de Meta (examen + Tech Provider) ; au premier resto
   connecté : vérifier l'étape « jeton_droits » et « Renouveler maintenant ».
 - Supprimer le compte examinateur après l'examen.
+- **Lien direct vers un produit** (décision de Jules, 10 novembre 2026 : après la migration du 19 au 21) : PR CRM
+  séparée pour que la page de commande ouvre un produit précis (paramètre dans l'adresse), puis le bouton
+  « 🛒 Commander » de « Me conseiller » pointe vers le produit recommandé. Aujourd'hui il ouvre la page du resto.
 - Livraison : route `pflow-livraison` (contrat `ad59937`) et modèles de la livraison sur chaque compte.
 - Centre d'alertes unique ; Instagram (après validation de Meta) ; buckets publics du CRM avant le prochain
   questionnaire d'onboarding.
