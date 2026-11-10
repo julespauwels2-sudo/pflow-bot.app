@@ -16,6 +16,55 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 | B | Supabase (tables `bot_` uniquement, SQL montré avant), auth, lecture seule du CRM | Fait |
 | C | WhatsApp : connexion, webhook, coexistence, boîte de réception, tests sur le numéro de test Meta | Code prêt sans Meta (webhook, envoi, échos, boîte de réception), testé contre un faux Meta ; reste C0 (Meta) et la migration C — voir [`docs/etape-c/`](etape-c/README.md) et [`docs/journal.md`](journal.md) |
 
+## Où on en est (10 novembre 2026)
+
+### Fait (en production)
+- **Charte PFlow** sur toutes les pages (PR n° 20) ; règle pour toute nouvelle page (plus bas).
+- **Embedded Signup v4 en coexistence** (PR n° 17) : code et tables `bot_connexions_whatsapp`, `bot_jetons_whatsapp`
+  en place ; variables `META_APP_ID`, `META_ES_CONFIG_ID` dans Vercel ; champs du webhook abonnés. **Bloqué chez
+  Meta** tant que l'examen de l'app et le statut Tech Provider ne sont pas validés (pas notre configuration).
+- **Jeton Meta de 60 jours** (PR n° 21) : échéance gardée, renouvellement quotidien, alerte et lien de reconnexion ;
+  migration `bot_jetons_expiration` appliquée.
+- **Examen Meta sans Embedded Signup** (PR n° 22) : scénarios des 2 vidéos et textes en anglais
+  (`docs/etape-c/examen-meta-videos.md`) ; PFlow Démo dans la carte des modèles.
+- **CRM : qg77 et qg150 joués le 10 novembre** : secret de send-push dans Vault, plus aucun secret en clair ;
+  rappels au resto à 5, 10 et 15 min pour une commande pas acceptée, « C'est l'heure » pour une commande
+  programmée (PR CRM n° 85 et n° 101).
+- **3 canaux en test** (Cookies An Nou, Mexico, ag_pizzaa), sans effet sur le trafic actuel ; alertes push du QG
+  (10 types).
+
+### PR ouvertes (nuit du 10 novembre, à valider)
+- PR n° 23 : compte examinateur Meta (boîte de réception limitée à PFlow Démo) ; SQL `bot_examinateurs` à valider.
+- PR n° 24 : modèles de la livraison, erreur de chaque identifiant ; contrôle avant la vidéo.
+- PR n° 25 : bouton « Livraison » pour un resto en retrait seulement.
+- PR de documentation : préparation de la migration (`docs/etape-c/preparation-migration-19-21.md`) et ce point.
+- PR CRM : test `sons-tendance` réparé (date figée), sans toucher au code.
+
+### Avant le 19 novembre
+- Examen Meta : compte examinateur (PR n° 23 + SQL + création du compte), contrôle « Voir les modèles » sur le
+  compte de PFlow, les 2 vidéos, soumission des 2 autorisations avec les textes en anglais.
+- Fiches des 3 restos (`docs/etape-c/preparation-migration-19-21.md`) : adresses de Mexico et d'ag pizza ; points
+  de vente et moyens de paiement de Cookies ; FAQ et règles proposées à valider.
+- Décisions : Cookies en zones ou en tournées ; paiement en ligne de Cookies (SumUp / Stripe ou rien) ; nom affiché
+  « AG Pizza » dans le CRM.
+- ag pizza : « Revenir au modèle » pour la copie de l'Accueil (ou le 19).
+- Runbook `migration-3-clients.md`, partie 1 (vérifications des numéros).
+- Rappels de commande : vérifier à la prochaine vraie commande restée en attente.
+
+### Migration du 19 au 21 novembre
+- 19 : prérequis communs, puis **Cookies** (mode « toujours ») : 5 étapes du runbook.
+- 20 : **Mexico** et **ag pizza** (mots-clés uniquement).
+- 21 : clôture d'UChat (bots désactivés, contrôle des numéros).
+
+### Après le 22 novembre
+- UChat résilié avant le renouvellement du 22 ; puis retrait de Smart Link et renouvellement de `PONT_CLE`.
+- Embedded Signup pour les nouveaux restos, dès la validation de Meta (examen + Tech Provider) ; au premier resto
+  connecté : vérifier l'étape « jeton_droits » et « Renouveler maintenant ».
+- Supprimer le compte examinateur après l'examen.
+- Livraison : route `pflow-livraison` (contrat `ad59937`) et modèles de la livraison sur chaque compte.
+- Centre d'alertes unique ; Instagram (après validation de Meta) ; buckets publics du CRM avant le prochain
+  questionnaire d'onboarding.
+
 ## Points notés pour plus tard
 
 ### Sécurité du CRM (décisions de Jules, novembre 2026)
