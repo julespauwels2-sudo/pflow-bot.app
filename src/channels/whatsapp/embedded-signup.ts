@@ -17,7 +17,7 @@
 import { chiffrerJeton } from "@/lib/jetons-chiffres";
 import type { Canal, ChannelStore } from "../core/types";
 import type { Connexion, ConnexionEtape, ConnexionStore } from "../core/connexions";
-import { LIVRAISON_TEMPLATES, templatePayload } from "./livraison-templates";
+import { LIVRAISON_TEMPLATES, templateComponents, templatePayload } from "./livraison-templates";
 
 /** Seul numéro de test des canaux créés par l'Embedded Signup : le bot ne répond qu'à Jules tant qu'il est en test. */
 export const JULES_TEST_NUMERO = "590690938108";
@@ -288,22 +288,41 @@ export async function terminerConnexion(deps: SignupDeps, connexion: Connexion, 
 }
 
 export interface ModelesResultat {
-  /** Les 10 modèles de la livraison et leur statut chez Meta (null : absent du compte). */
-  etat: { name: string; status: string | null; motif?: string }[];
+  /**
+   * Les 10 modèles de la livraison et leur statut chez Meta (null : absent du compte) ; motif de refus, catégorie
+   * retenue par Meta, score de qualité, et si le texte enregistré chez Meta est celui d'aujourd'hui.
+   */
+  etat: { name: string; status: string | null; motif?: string; categorie?: string; qualite?: string; texteAJour?: boolean }[];
   crees: string[];
+  /** Modèles refusés modifiés avec le texte d'aujourd'hui (renvoyés à l'examen de Meta). */
+  corriges?: string[];
   echecs: { name: string; erreur: string }[];
 }
 
+type ModeleMeta = { id?: string; status: string; motif?: string; categorie?: string; qualite?: string; texte?: string };
+
 /**
  * Les 10 modèles de la livraison sur un compte WhatsApp Business : leur statut (APPROVED, PENDING, REJECTED…) et, si
- * `creer`, la création des manquants (envoyés à l'examen de Meta). Un modèle existant n'est jamais modifié.
+ * `creer`, la création des manquants (envoyés à l'examen de Meta). Si `corriger` : les modèles REFUSÉS dont le texte
+ * n'est plus celui d'aujourd'hui sont modifiés sur place (POST /{id}, même nom) et renvoyés à l'examen. Un modèle
+ * approuvé ou en cours d'examen n'est jamais modifié.
  */
-export async function modelesLivraison(target: GraphTarget, wabaId: string, token: string, creer: boolean): Promise<ModelesResultat> {
+export async function modelesLivraison(target: GraphTarget, wabaId: string, token: string, creer: boolean, corriger = false): Promise<ModelesResultat> {
   const lire = async () => {
-    const liste = await graph(target, "GET", `${wabaId}/message_templates?fields=name,status,rejected_reason,language&limit=200`, token);
-    const parNom = new Map<string, { status: string; motif?: string }>();
-    for (const t of (liste.data as { name?: string; status?: string; rejected_reason?: string; language?: string }[] | undefined) ?? []) {
-      if (t.name && (!t.language || t.language === "fr")) parNom.set(t.name, { status: t.status ?? "?", ...(t.rejected_reason && t.rejected_reason !== "NONE" ? { motif: t.rejected_reason } : {}) });
+    const liste = await graph(target, "GET", `${wabaId}/message_templates?fields=id,name,status,category,rejected_reason,quality_score,language,components&limit=200`, token);
+    const parNom = new Map<string, ModeleMeta>();
+    type Brut = { id?: string; name?: string; status?: string; category?: string; rejected_reason?: string; quality_score?: { score?: string }; language?: string; components?: { type?: string; text?: string }[] };
+    for (const t of (liste.data as Brut[] | undefined) ?? []) {
+      if (!t.name || (t.language && t.language !== "fr")) continue;
+      const texte = t.components?.find((c) => c.type === "BODY")?.text;
+      parNom.set(t.name, {
+        status: t.status ?? "?",
+        ...(t.id ? { id: t.id } : {}),
+        ...(t.rejected_reason && t.rejected_reason !== "NONE" ? { motif: t.rejected_reason } : {}),
+        ...(t.category ? { categorie: t.category } : {}),
+        ...(t.quality_score?.score && t.quality_score.score !== "UNKNOWN" ? { qualite: t.quality_score.score } : {}),
+        ...(texte !== undefined ? { texte } : {}),
+      });
     }
     return parNom;
   };
@@ -322,9 +341,34 @@ export async function modelesLivraison(target: GraphTarget, wabaId: string, toke
       }
     }
   }
+  const corriges: string[] = [];
+  if (corriger) {
+    for (const t of LIVRAISON_TEMPLATES) {
+      const m = avant.get(t.name);
+      if (!m?.id || m.status !== "REJECTED" || m.texte === t.body) continue;
+      try {
+        await graph(target, "POST", encodeURIComponent(m.id), token, { category: "UTILITY", components: templateComponents(t) });
+        corriges.push(t.name);
+        avant.set(t.name, { ...m, status: "PENDING", texte: t.body, motif: undefined });
+      } catch (error) {
+        echecs.push({ name: t.name, erreur: (error as Error).message });
+      }
+    }
+  }
   return {
-    etat: LIVRAISON_TEMPLATES.map((t) => ({ name: t.name, status: avant.get(t.name)?.status ?? null, ...(avant.get(t.name)?.motif ? { motif: avant.get(t.name)!.motif } : {}) })),
+    etat: LIVRAISON_TEMPLATES.map((t) => {
+      const m = avant.get(t.name);
+      return {
+        name: t.name,
+        status: m?.status ?? null,
+        ...(m?.motif ? { motif: m.motif } : {}),
+        ...(m?.categorie ? { categorie: m.categorie } : {}),
+        ...(m?.qualite ? { qualite: m.qualite } : {}),
+        ...(m && m.texte !== undefined ? { texteAJour: m.texte === t.body } : {}),
+      };
+    }),
     crees,
+    ...(corriger ? { corriges } : {}),
     echecs,
   };
 }

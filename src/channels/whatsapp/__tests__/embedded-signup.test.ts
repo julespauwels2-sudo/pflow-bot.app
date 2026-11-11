@@ -23,6 +23,8 @@ let server: Server;
 let base = "";
 const calls: Call[] = [];
 let existingTemplates: string[] = [];
+/** Modèles complets renvoyés par la liste (prioritaires sur existingTemplates). */
+let fullTemplates: Record<string, unknown>[] | null = null;
 let failOn: string | null = null;
 
 beforeAll(async () => {
@@ -52,7 +54,8 @@ beforeAll(async () => {
       if (path === "9876543210/subscribed_apps") return json(200, { success: true });
       if (path.startsWith("1808772226929443/")) return json(400, { error: { message: "Authorization Error", code: 100, error_subcode: 2388339 } });
       if (path === "1234567890/smb_app_data") return json(200, { request_id: "r1" });
-      if (/^\d+\/message_templates\?/.test(path)) return json(200, { data: existingTemplates.map((name) => ({ name, status: "APPROVED", language: "fr" })) });
+      if (/^\d+\/message_templates\?/.test(path)) return json(200, { data: fullTemplates ?? existingTemplates.map((name) => ({ name, status: "APPROVED", language: "fr" })) });
+      if (/^tpl-\d+$/.test(path) && req.method === "POST") return json(200, { success: true });
       if (/^\d+\/message_templates$/.test(path)) return json(200, { id: "t1", status: "PENDING", category: "UTILITY" });
       if (path === "1234567890/messages") return json(200, { messages: [{ id: "wamid.sent" }] });
       json(404, { error: { message: "inconnu" } });
@@ -65,6 +68,7 @@ afterAll(() => new Promise<void>((r) => server.close(() => r())));
 afterEach(() => {
   calls.length = 0;
   existingTemplates = [];
+  fullTemplates = null;
   failOn = null;
 });
 
@@ -108,6 +112,14 @@ describe("modèles de la livraison", () => {
       expect(t.examples.length, t.name).toBe(vars.length);
       expect(t.body.trim().startsWith("{{"), t.name).toBe(false); // ni au début…
       expect(/\}\}[.!?]?$/.test(t.body.trim()), t.name).toBe(false); // …ni à la fin
+    }
+    for (const t of LIVRAISON_TEMPLATES) {
+      const vars = (t.body.match(/\{\{\d+\}\}/g) ?? []).length;
+      const mots = t.body.replace(/\{\{\d+\}\}/g, " ").split(/\s+/).filter(Boolean).length;
+      expect(mots, t.name).toBeGreaterThanOrEqual(3 * vars + 1); // assez de texte autour des variables
+      // Le CRM envoie « Votre livreur » quand le livreur n'a pas de nom : jamais « Votre livreur Votre livreur ».
+      const sansNom = t.body.replace("{{1}}", "Votre livreur");
+      expect(/livreur Votre livreur/i.test(sansNom), t.name).toBe(false);
     }
     expect(templatePayload(LIVRAISON_TEMPLATES[0])).toEqual({
       name: "pflow_livraison_confirmee",
@@ -343,6 +355,43 @@ describe("page État : modèles compte par compte, client test hors CRM, débran
     await rt.store.ensureCanal({ ...canal("5550003333", "9990001111"), role: "pflow" as const });
     const avecPflow = await (await route.GET(new Request("http://localhost/x"))).json();
     expect(avecPflow.comptes.find((c: { libelle: string }) => c.libelle.includes("5550003333")).libelle).toContain("PFlow Démo");
+  });
+
+  it("modèles refusés : motif, catégorie et texte lus ; « corriger » ne modifie QUE les refusés à l'ancien texte", async () => {
+    env();
+    const route = await import("@/app/api/etat/modeles-livraison/route");
+    const { getChannelsRuntime } = await import("@/channels/core/runtime");
+    const rt = await getChannelsRuntime();
+    await rt.store.ensureCanal(canal("5550004444", "1808772226929443", "4170754433058228"));
+    const actuel = (n: string) => LIVRAISON_TEMPLATES.find((t) => t.name === n)!.body;
+    const corps = (text: string) => [{ type: "BODY", text }];
+    fullTemplates = [
+      { id: "tpl-1", name: "pflow_livraison_en_route", status: "REJECTED", rejected_reason: "INVALID_FORMAT", category: "UTILITY", language: "fr", components: corps("Ancien texte {{1}} {{2}}.") },
+      { id: "tpl-2", name: "pflow_livraison_heure_maj", status: "REJECTED", rejected_reason: "INCORRECT_CATEGORY", category: "AUTHENTICATION", language: "fr", components: corps("Ancien {{1}} {{2}}.") },
+      { id: "tpl-3", name: "pflow_livraison_confirmee", status: "PENDING", rejected_reason: "NONE", category: "UTILITY", language: "fr", components: corps("Ancien texte en cours d'examen {{1}} {{2}}.") },
+      { id: "tpl-4", name: "pflow_livraison_annulee", status: "REJECTED", rejected_reason: "INVALID_FORMAT", language: "fr", components: corps(actuel("pflow_livraison_annulee")) },
+      { id: "tpl-5", name: "pflow_livraison_aucun_livreur", status: "APPROVED", quality_score: { score: "GREEN" }, language: "fr", components: corps(actuel("pflow_livraison_aucun_livreur")) },
+    ];
+    const lu = await (await route.GET(new Request("http://localhost/x"))).json();
+    const compte = lu.comptes.find((c: { compteId: string }) => c.compteId === "4170754433058228");
+    const etat = (n: string) => compte.etat.find((t: { name: string }) => t.name === n);
+    expect(etat("pflow_livraison_en_route")).toMatchObject({ status: "REJECTED", motif: "INVALID_FORMAT", texteAJour: false });
+    expect(etat("pflow_livraison_heure_maj")).toMatchObject({ motif: "INCORRECT_CATEGORY", categorie: "AUTHENTICATION" });
+    expect(etat("pflow_livraison_confirmee").motif).toBeUndefined();
+    expect(etat("pflow_livraison_aucun_livreur")).toMatchObject({ qualite: "GREEN", texteAJour: true });
+    expect(calls.some((c) => c.path.includes("fields=id,name,status,category,rejected_reason,quality_score"))).toBe(true);
+
+    calls.length = 0;
+    // Adresse à part : la limite de débit de la route est partagée avec les autres tests.
+    const headers = { "x-forwarded-for": "10.0.0.42" };
+    const r = await (await route.POST(new Request("http://localhost/x", { method: "POST", headers, body: JSON.stringify({ canalId: compte.canalId, corriger: true }) }))).json();
+    const posts = calls.filter((c) => c.method === "POST");
+    // Seuls les 2 refusés à l'ancien texte ; ni le refusé déjà à jour, ni l'examen en cours, ni l'approuvé ; aucune création.
+    expect(posts.map((c) => c.path).sort()).toEqual(["tpl-1", "tpl-2"]);
+    expect(posts[0].body).toMatchObject({ category: "UTILITY" });
+    expect((posts.find((c) => c.path === "tpl-1")!.body!.components as { text?: string }[])[0].text).toBe(actuel("pflow_livraison_en_route"));
+    expect(r.comptes[0].corriges.sort()).toEqual(["pflow_livraison_en_route", "pflow_livraison_heure_maj"]);
+    expect(r.comptes[0].crees).toEqual([]);
   });
 
   it("client test hors CRM (Cedyan) : lien, connexion, canal en test relié à aucun resto, seul Jules en test ; puis débranchement", async () => {
