@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, Loading, Notice, Select } from "@/components/ui";
 import { errorText } from "@/data/browser";
 import { accessToken } from "@/lib/supabase";
+import { MOTIFS_REFUS } from "@/channels/whatsapp/livraison-templates";
 
 interface Ligne {
   id: string;
@@ -290,8 +291,9 @@ interface CompteModeles {
   libelle: string;
   compteId: string | null;
   jeton: "client" | "general";
-  etat?: { name: string; status: string | null; motif?: string }[];
+  etat?: { name: string; status: string | null; motif?: string; categorie?: string; qualite?: string; texteAJour?: boolean }[];
   crees?: string[];
+  corriges?: string[];
   echecs?: { name: string; erreur: string }[];
   error?: string;
 }
@@ -342,6 +344,7 @@ export function ModelesLivraisonCard({ canalIds, presentation = false }: { canal
   }
 
   const manquants = (c: CompteModeles) => c.etat?.filter((t) => !t.status).length ?? 0;
+  const aCorriger = (c: CompteModeles) => c.etat?.filter((t) => t.status === "REJECTED" && t.texteAJour === false).length ?? 0;
   const total = comptes?.reduce((n, c) => n + manquants(c), 0) ?? 0;
   return (
     <Card
@@ -386,6 +389,21 @@ export function ModelesLivraisonCard({ canalIds, presentation = false }: { canal
                   Créer les {manquants(c)} manquants
                 </Button>
               )}
+              {aCorriger(c) > 0 && (
+                <Button
+                  variant="secondary"
+                  className={manquants(c) > 0 ? "" : "ml-auto"}
+                  disabled={busy}
+                  onClick={() =>
+                    void lancer(
+                      { method: "POST", body: JSON.stringify({ canalId: c.canalId, corriger: true }) },
+                      `Corriger les ${aCorriger(c)} modèles refusés du compte ${c.compteId} ?\n\nChaque modèle refusé reçoit le texte d'aujourd'hui (même nom, mêmes variables) et repart à l'examen de Meta. Les modèles approuvés ou en cours d'examen ne sont pas touchés.`,
+                    )
+                  }
+                >
+                  Corriger les {aCorriger(c)} refusés
+                </Button>
+              )}
             </div>
             {c.error && <p className="mt-1 text-xs text-alerte">{c.error}</p>}
             {c.etat && (
@@ -394,11 +412,20 @@ export function ModelesLivraisonCard({ canalIds, presentation = false }: { canal
                   <li key={t.name} className="flex flex-wrap items-center gap-2">
                     <code className="text-xs">{t.name}</code>
                     {t.status ? <Badge tone={STATUTS[t.status]?.ton ?? "neutral"}>{STATUTS[t.status]?.texte ?? t.status}</Badge> : <Badge tone="neutral">Absent</Badge>}
-                    {t.motif && <span className="text-xs text-alerte">{t.motif}</span>}
+                    {t.categorie && t.categorie !== "UTILITY" && <Badge tone="warning">catégorie {t.categorie}</Badge>}
+                    {t.qualite && <Badge>qualité {t.qualite}</Badge>}
+                    {t.texteAJour === false && <Badge tone="warning">ancien texte</Badge>}
+                    {t.motif && (
+                      <span className="block w-full text-xs text-alerte">
+                        {t.motif}
+                        {MOTIFS_REFUS[t.motif] ? ` : ${MOTIFS_REFUS[t.motif]}` : ""}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
             )}
+            {c.corriges && c.corriges.length > 0 && <p className="mt-1 text-xs text-ok">{c.corriges.length} corrigé(s) et renvoyé(s) à l&apos;examen de Meta.</p>}
             {c.crees && c.crees.length > 0 && <p className="mt-1 text-xs text-ok">{c.crees.length} créé(s) et soumis à Meta (réponse en quelques heures, parfois 1 à 2 jours).</p>}
             {c.echecs?.map((e) => (
               <p key={e.name} className="mt-1 text-xs text-alerte">

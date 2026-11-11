@@ -3,7 +3,9 @@
  * compte WhatsApp ; un modèle appartient à un compte, il faut donc les 10 sur le compte de chaque resto. Administrateurs
  * du bot seulement.
  * - GET : pour chaque compte, le statut des 10 chez Meta (APPROVED, PENDING, REJECTED…, ou absent) ;
- * - POST { canalId } ou { tous: true } : crée les manquants et les soumet à l'examen. Jamais de modification.
+ * - POST { canalId } ou { tous: true } : crée les manquants et les soumet à l'examen ;
+ * - POST { canalId, corriger: true } : modifie les modèles REFUSÉS de ce compte avec le texte d'aujourd'hui (même nom),
+ *   renvoyés à l'examen. Jamais un modèle approuvé ou en cours d'examen.
  * Jeton : celui du client si le numéro a été connecté par l'Embedded Signup, sinon le jeton général (WHATSAPP_TOKEN).
  * Identifiant : celui du compte de messagerie s'il est connu (nouveau modèle de comptes de Meta), sinon le WABA ; le
  * second est essayé si le premier est refusé.
@@ -41,7 +43,7 @@ interface CompteResultat extends Partial<ModelesResultat> {
   error?: string;
 }
 
-async function traiter(p: Extract<Pret, { rt: ChannelsRuntime }>, canal: Canal, creer: boolean, noms: Map<string, string>): Promise<CompteResultat> {
+async function traiter(p: Extract<Pret, { rt: ChannelsRuntime }>, canal: Canal, creer: boolean, noms: Map<string, string>, corriger = false): Promise<CompteResultat> {
   const nom = canal.role === "pflow" ? "PFlow Démo (compte de PFlow)" : noms.get(canal.restaurantId);
   const libelle = `${canal.numeroAffiche ?? canal.accountId}${nom ? ` · ${nom}` : ""}`;
   let token = p.token;
@@ -62,7 +64,7 @@ async function traiter(p: Extract<Pret, { rt: ChannelsRuntime }>, canal: Canal, 
   const erreurs: string[] = [];
   for (const id of ids) {
     try {
-      const r = await modelesLivraison({ base: p.base, version: p.version }, id, token, creer);
+      const r = await modelesLivraison({ base: p.base, version: p.version }, id, token, creer, corriger);
       return { canalId: canal.id, libelle, compteId: id, jeton, ...r };
     } catch (error) {
       const type = id === canal.messagingAccountId ? "compte de messagerie" : "WABA";
@@ -91,7 +93,11 @@ export async function GET(request: Request) {
   return NextResponse.json({ comptes }, { headers: { "cache-control": "no-store" } });
 }
 
-const corps = z.union([z.object({ canalId: z.string().min(1).max(64) }), z.object({ tous: z.literal(true) })]);
+const corps = z.union([
+  z.object({ canalId: z.string().min(1).max(64), corriger: z.literal(true) }),
+  z.object({ canalId: z.string().min(1).max(64) }),
+  z.object({ tous: z.literal(true) }),
+]);
 
 export async function POST(request: Request) {
   const p = await preparer(request, 5);
@@ -103,6 +109,7 @@ export async function POST(request: Request) {
   if (!cibles.length) return NextResponse.json({ error: "Canal inconnu" }, { status: 400 });
   const noms = await nomsRestos(p.rt);
   const comptes = [];
-  for (const canal of cibles) comptes.push(await traiter(p, canal, true, noms));
+  const corriger = "corriger" in parsed.data;
+  for (const canal of cibles) comptes.push(await (corriger ? traiter(p, canal, false, noms, true) : traiter(p, canal, true, noms)));
   return NextResponse.json({ comptes });
 }
