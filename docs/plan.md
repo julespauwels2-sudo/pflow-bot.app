@@ -71,6 +71,11 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - **Lien direct vers un produit** (décision de Jules, 10 novembre 2026 : après la migration du 19 au 21) : PR CRM
   séparée pour que la page de commande ouvre un produit précis (paramètre dans l'adresse), puis le bouton
   « 🛒 Commander » de « Me conseiller » pointe vers le produit recommandé. Aujourd'hui il ouvre la page du resto.
+- **Modèles de la livraison, version _v2** (11 novembre 2026) : les 6 modèles refusés en INCORRECT_CATEGORY
+  (confirmee, livreur_trouve, en_route, arrive_bientot, livreur_arrive, heure_maj) ne peuvent pas être modifiés chez
+  Meta. Ils deviennent `pflow_livraison_<nom>_v2` (textes validés, sans code). Les anciens restent chez Meta (jamais
+  supprimés : nom bloqué des semaines) et sont ignorés. Le CRM garde ses noms logiques et les traduit au moment de
+  l'envoi. Sur PFlow Démo : page État → « Créer les 6 manquants » (après accord de Jules).
 - Livraison : route `pflow-livraison` (contrat `ad59937`) et modèles de la livraison sur chaque compte.
 - Centre d'alertes unique ; Instagram (après validation de Meta) ; buckets publics du CRM avant le prochain
   questionnaire d'onboarding.

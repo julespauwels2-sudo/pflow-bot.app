@@ -291,7 +291,8 @@ interface CompteModeles {
   libelle: string;
   compteId: string | null;
   jeton: "client" | "general";
-  etat?: { name: string; status: string | null; motif?: string; categorie?: string; qualite?: string; texteAJour?: boolean }[];
+  etat?: { name: string; status: string | null; motif?: string; categorie?: string; qualite?: string; texteAJour?: boolean; texteMeta?: string; remplace?: string }[];
+  anciens?: { name: string; status: string; motif?: string; texteMeta?: string; remplacePar: string }[];
   crees?: string[];
   corriges?: string[];
   echecs?: { name: string; erreur: string }[];
@@ -421,9 +422,29 @@ export function ModelesLivraisonCard({ canalIds, presentation = false }: { canal
                         {MOTIFS_REFUS[t.motif] ? ` : ${MOTIFS_REFUS[t.motif]}` : ""}
                       </span>
                     )}
+                    {t.remplace && <span className="block w-full text-[11px] text-muted">remplace {t.remplace} (refusé, ignoré)</span>}
+                    {t.texteMeta && (
+                      <details className="w-full text-xs text-muted">
+                        <summary className="cursor-pointer">Texte enregistré chez Meta</summary>
+                        <p className="mt-1 whitespace-pre-wrap">{t.texteMeta}</p>
+                      </details>
+                    )}
                   </li>
                 ))}
               </ul>
+            )}
+            {c.anciens && c.anciens.length > 0 && (
+              <details className="mt-2 text-xs" data-testid="modeles-anciens">
+                <summary className="cursor-pointer font-semibold text-muted">Anciens modèles ({c.anciens.length}) : refusés, gardés chez Meta, ignorés</summary>
+                <ul className="mt-1 space-y-1">
+                  {c.anciens.map((a) => (
+                    <li key={a.name}>
+                      <code>{a.name}</code> <Badge tone="neutral">{STATUTS[a.status]?.texte ?? a.status}</Badge> → remplacé par <code>{a.remplacePar}</code>
+                      {a.texteMeta && <p className="whitespace-pre-wrap text-muted">Texte chez Meta : {a.texteMeta}</p>}
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
             {c.corriges && c.corriges.length > 0 && <p className="mt-1 text-xs text-ok">{c.corriges.length} corrigé(s) et renvoyé(s) à l&apos;examen de Meta.</p>}
             {c.crees && c.crees.length > 0 && <p className="mt-1 text-xs text-ok">{c.crees.length} créé(s) et soumis à Meta (réponse en quelques heures, parfois 1 à 2 jours).</p>}
