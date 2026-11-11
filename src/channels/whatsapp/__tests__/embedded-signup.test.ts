@@ -120,6 +120,8 @@ describe("modèles de la livraison", () => {
       // Le CRM envoie « Votre livreur » quand le livreur n'a pas de nom : jamais « Votre livreur Votre livreur ».
       const sansNom = t.body.replace("{{1}}", "Votre livreur");
       expect(/livreur Votre livreur/i.test(sansNom), t.name).toBe(false);
+      // Jamais de code (ni le mot) : Meta classe le message en « Authentification » (refus INCORRECT_CATEGORY du 11/11).
+      expect(/\bcode\b/i.test(t.body), t.name).toBe(false);
     }
     expect(templatePayload(LIVRAISON_TEMPLATES[0])).toEqual({
       name: "pflow_livraison_confirmee",
