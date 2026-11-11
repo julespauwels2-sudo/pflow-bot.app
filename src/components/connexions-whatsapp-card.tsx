@@ -310,7 +310,11 @@ const STATUTS: Record<string, { texte: string; ton: "neutral" | "success" | "war
  * modèle appartient à un compte). Statut chez Meta, et création des manquants (soumis à l'examen), jamais de
  * modification.
  */
-export function ModelesLivraisonCard() {
+/**
+ * canalIds : seulement ces canaux (mode présentation de la page État) ; presentation : sans le bouton « Créer les
+ * manquants sur tous les comptes ».
+ */
+export function ModelesLivraisonCard({ canalIds, presentation = false }: { canalIds?: string[]; presentation?: boolean } = {}) {
   const [comptes, setComptes] = useState<CompteModeles[] | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -320,7 +324,7 @@ export function ModelesLivraisonCard() {
     const r = await fetch("/api/etat/modeles-livraison", { ...init, headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) } });
     const body = (await r.json().catch(() => ({}))) as { comptes?: CompteModeles[]; error?: string };
     if (!r.ok) throw new Error(body.error ?? `Erreur ${r.status}`);
-    return body.comptes ?? [];
+    return (body.comptes ?? []).filter((c) => !canalIds || canalIds.includes(c.canalId));
   }
 
   async function lancer(init?: RequestInit, confirmer?: string) {
@@ -355,7 +359,7 @@ export function ModelesLivraisonCard() {
           <Button variant="secondary" onClick={() => void lancer()} disabled={busy}>
             {busy ? "Lecture chez Meta…" : comptes ? "Actualiser" : "Voir les modèles de chaque compte"}
           </Button>
-          {comptes && total > 0 && (
+          {comptes && total > 0 && !presentation && (
             <Button
               onClick={() => void lancer({ method: "POST", body: JSON.stringify({ tous: true }) }, `Créer les ${total} modèles manquants sur tous les comptes et les soumettre à Meta ?`)}
               disabled={busy}

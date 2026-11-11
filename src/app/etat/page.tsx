@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { MobileHeader } from "@/components/mobile";
 import { PushControls } from "@/components/pwa";
@@ -28,7 +29,34 @@ const time = (iso: string) => new Date(iso).toLocaleString("fr-FR", { day: "2-di
 const usd = (n: number) => `${n.toLocaleString("fr-FR", { minimumFractionDigits: 4, maximumFractionDigits: 4 })} $`;
 const NAMES = { whatsapp: "WhatsApp", instagram: "Instagram" } as const;
 
+/**
+ * Mode présentation (/etat?presentation=pflow), pour la vidéo de l'examen Meta : seulement le canal PFlow Démo et son
+ * compte de messagerie. Aucune carte avec des données de clients (numéros, noms, comptes, appels IA, événements, alertes).
+ */
+const PRESENTATION_COMPTE_PFLOW = "4170754433058228";
+type Presentation = { compteId: string } | null;
+
 export default function SystemStatusPage() {
+  return (
+    <Suspense
+      fallback={
+        <AppShell mobile>
+          <Loading />
+        </AppShell>
+      }
+    >
+      <SystemStatusLoader />
+    </Suspense>
+  );
+}
+
+/** Le mode est lu dans l'adresse avant le premier affichage des données : rien d'un client n'apparaît, même un instant. */
+function SystemStatusLoader() {
+  const params = useSearchParams();
+  return <SystemStatusView presentation={params.get("presentation") === "pflow" ? { compteId: PRESENTATION_COMPTE_PFLOW } : null} />;
+}
+
+function SystemStatusView({ presentation }: { presentation: Presentation }) {
   const [server, setServer] = useState<{ status: "loading" } | { status: "error"; error: string } | { status: "ready"; data: SystemStatus }>({ status: "loading" });
   const [tick, setTick] = useState(0);
   const { state } = useLoad(async (repos) => {
@@ -63,6 +91,27 @@ export default function SystemStatusPage() {
       cancelled = true;
     };
   }, [tick]);
+
+  if (presentation) {
+    return (
+      <AppShell mobile>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-4xl md:text-5xl">État du <span className="text-rose">système</span></h1>
+            <p className="mt-1 max-w-2xl text-sm text-muted">Canal PFlow Démo (compte de PFlow). Les clés sont seulement détectées : leur valeur n&apos;est jamais lue ni affichée.</p>
+          </div>
+          <Button variant="secondary" onClick={() => setTick((t) => t + 1)}>
+            Actualiser
+          </Button>
+        </div>
+        <div className="mt-6 grid gap-4 lg:grid-cols-2" data-testid="etat-presentation">
+          {server.status === "loading" && <Loading />}
+          {server.status === "error" && <Notice tone="error">{server.error}</Notice>}
+          {server.status === "ready" && <PresentationCards data={server.data} compteId={presentation.compteId} />}
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell mobile>
@@ -120,6 +169,50 @@ export default function SystemStatusPage() {
         </Card>
       </div>
     </AppShell>
+  );
+}
+
+/** Mode présentation : le canal PFlow Démo seulement (canaux, accès du token, diagnostic, modèles), et les clés détectées. */
+function PresentationCards({ data, compteId }: { data: SystemStatus; compteId: string }) {
+  const pflow = data.comptes.filter((c) => c.plateforme === "whatsapp" && c.role === "pflow");
+  const whatsapp = data.canaux.find((c) => c.plateforme === "whatsapp");
+  return (
+    <>
+      <Card title="Canaux et services">
+        <ul className="space-y-2 text-sm">
+          {whatsapp && (
+            <li>
+              <span className="flex flex-wrap items-center gap-2">
+                <strong>Webhook WhatsApp</strong>
+                {whatsapp.configure ? <Badge tone="success">actif</Badge> : <Badge>inactif</Badge>}
+                <code className="min-w-0 text-xs break-all text-muted">{whatsapp.webhook}</code>
+              </span>
+            </li>
+          )}
+          <li>
+            <strong>IA</strong> {data.services.ia.active ? <Badge tone="success">active</Badge> : <Badge>inactive</Badge>}{" "}
+            <span className="text-xs text-muted">{data.services.ia.modele}</span>
+          </li>
+          <li className="text-xs text-muted">Hébergement : {data.services.deploiement}</li>
+        </ul>
+      </Card>
+      {pflow.length > 0 ? <CanauxCard comptes={pflow} /> : <Notice tone="error">Canal PFlow Démo introuvable.</Notice>}
+      {whatsapp?.configure && <WhatsAppAccessCard canaux={pflow.map((c) => c.numero)} />}
+      {whatsapp?.configure && <WhatsAppAccountsCard compteId={compteId} />}
+      <ModelesLivraisonCard canalIds={pflow.map((c) => c.id)} presentation />
+      <Card title="Clés détectées" className="lg:col-span-2">
+        <ul className="grid gap-x-8 gap-y-1 text-sm md:grid-cols-2">
+          {data.cles.map((k) => (
+            <li key={k.name} className="flex items-center justify-between gap-2">
+              <span className="min-w-0">
+                <code className="text-xs break-all">{k.name}</code> <span className="text-muted">· {k.role}</span>
+              </span>
+              {k.present ? <Badge tone="success">présente</Badge> : <Badge>absente</Badge>}
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </>
   );
 }
 
@@ -332,7 +425,7 @@ interface AccessResult {
 }
 
 /** Test de l'accès du token WhatsApp : lectures seules chez Meta, aucun message envoyé. */
-function WhatsAppAccessCard() {
+function WhatsAppAccessCard({ canaux }: { canaux?: string[] } = {}) {
   const [result, setResult] = useState<{ status: "idle" } | { status: "loading" } | { status: "error"; error: string } | { status: "ready"; data: AccessResult }>({ status: "idle" });
   async function run() {
     setResult({ status: "loading" });
@@ -362,7 +455,7 @@ function WhatsAppAccessCard() {
       {result.status === "ready" && (
         <div className="mt-3 space-y-3 text-sm" data-testid="acces-whatsapp">
           {result.data.resultats.length === 0 && <p className="text-muted">Aucun canal WhatsApp enregistré.</p>}
-          {result.data.resultats.map((r) => (
+          {result.data.resultats.filter((r) => !canaux || canaux.includes(r.canal)).map((r) => (
             <div key={r.canal}>
               <p className="font-medium">
                 {r.canal} <Badge>{r.etat}</Badge>
@@ -433,7 +526,7 @@ interface AccountsResult {
 }
 
 /** Diagnostic des comptes WhatsApp accessibles au token du serveur : lecture seule chez Meta. */
-function WhatsAppAccountsCard() {
+function WhatsAppAccountsCard({ compteId }: { compteId?: string } = {}) {
   const [result, setResult] = useState<{ status: "idle" } | { status: "loading" } | { status: "error"; error: string } | { status: "ready"; data: AccountsResult }>({ status: "idle" });
   const [saisis, setSaisis] = useState("");
   async function run() {
@@ -443,17 +536,26 @@ function WhatsAppAccountsCard() {
       const response = await fetch("/api/etat/comptes-whatsapp", {
         method: "POST",
         headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({ comptes: saisis }),
+        body: JSON.stringify({ comptes: compteId ?? saisis }),
       });
       const body = (await response.json().catch(() => ({}))) as AccountsResult & { error?: string };
       if (!response.ok) throw new Error(body.error ?? `Erreur ${response.status}`);
-      setResult({ status: "ready", data: body });
+      // Mode présentation : ce compte seulement (ni les autres comptes, ni leurs erreurs, ni le SQL proposé).
+      const data = compteId
+        ? { ...body, comptes: body.comptes.filter((c) => c.id === compteId), erreurs: body.erreurs.filter((e) => e.includes(compteId)), propositions: [] }
+        : body;
+      setResult({ status: "ready", data });
     } catch (error) {
       setResult({ status: "error", error: errorText(error) });
     }
   }
   return (
     <Card title="Diagnostic des comptes WhatsApp" className="lg:col-span-2">
+      {compteId ? (
+        <p className="mb-3 text-sm">
+          Compte de messagerie <span className="font-mono">{compteId}</span> (PFlow Démo)
+        </p>
+      ) : (
       <label className="mb-3 block text-sm">
         <span className="font-semibold">Comptes à interroger directement (facultatif)</span>
         <textarea
@@ -468,6 +570,7 @@ function WhatsAppAccountsCard() {
           sait pas lister les comptes de l&apos;entreprise.
         </span>
       </label>
+      )}
       <div className="flex flex-wrap items-center gap-3">
         <Button variant="secondary" onClick={run} disabled={result.status === "loading"}>
           {result.status === "loading" ? "Lecture chez Meta…" : "Lancer le diagnostic"}
