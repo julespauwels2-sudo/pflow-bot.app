@@ -17,7 +17,7 @@
 import { chiffrerJeton } from "@/lib/jetons-chiffres";
 import type { Canal, ChannelStore } from "../core/types";
 import type { Connexion, ConnexionEtape, ConnexionStore } from "../core/connexions";
-import { LIVRAISON_TEMPLATES, templateComponents, templatePayload } from "./livraison-templates";
+import { ANCIENS_NOMS_LIVRAISON, LIVRAISON_TEMPLATES, templateComponents, templatePayload } from "./livraison-templates";
 
 /** Seul numéro de test des canaux créés par l'Embedded Signup : le bot ne répond qu'à Jules tant qu'il est en test. */
 export const JULES_TEST_NUMERO = "590690938108";
@@ -292,7 +292,9 @@ export interface ModelesResultat {
    * Les 10 modèles de la livraison et leur statut chez Meta (null : absent du compte) ; motif de refus, catégorie
    * retenue par Meta, score de qualité, et si le texte enregistré chez Meta est celui d'aujourd'hui.
    */
-  etat: { name: string; status: string | null; motif?: string; categorie?: string; qualite?: string; texteAJour?: boolean }[];
+  etat: { name: string; status: string | null; motif?: string; categorie?: string; qualite?: string; texteAJour?: boolean; texteMeta?: string; remplace?: string }[];
+  /** Anciens noms remplacés par une version _v2 (refusés, gardés chez Meta) : affichés pour information, jamais utilisés. */
+  anciens?: { name: string; status: string; motif?: string; texteMeta?: string; remplacePar: string }[];
   crees: string[];
   /** Modèles refusés modifiés avec le texte d'aujourd'hui (renvoyés à l'examen de Meta). */
   corriges?: string[];
@@ -351,10 +353,18 @@ export async function modelesLivraison(target: GraphTarget, wabaId: string, toke
         corriges.push(t.name);
         avant.set(t.name, { ...m, status: "PENDING", texte: t.body, motif: undefined });
       } catch (error) {
-        echecs.push({ name: t.name, erreur: (error as Error).message });
+        const message = (error as Error).message;
+        // Meta refuse de modifier un modèle refusé pour sa catégorie : il faut une nouvelle version (nouveau nom, _v2…).
+        const bloque = /cat[ée]gor/i.test(message);
+        echecs.push({ name: t.name, erreur: bloque ? `Modification bloquée par Meta (catégorie) : il faut une nouvelle version du modèle. Réponse de Meta : ${message}` : message });
       }
     }
   }
+  const anciens = ANCIENS_NOMS_LIVRAISON.flatMap((name) => {
+    const m = avant.get(name);
+    const remplacePar = LIVRAISON_TEMPLATES.find((t) => t.remplace === name)!.name;
+    return m ? [{ name, status: m.status, ...(m.motif ? { motif: m.motif } : {}), ...(m.texte !== undefined ? { texteMeta: m.texte } : {}), remplacePar }] : [];
+  });
   return {
     etat: LIVRAISON_TEMPLATES.map((t) => {
       const m = avant.get(t.name);
@@ -364,9 +374,11 @@ export async function modelesLivraison(target: GraphTarget, wabaId: string, toke
         ...(m?.motif ? { motif: m.motif } : {}),
         ...(m?.categorie ? { categorie: m.categorie } : {}),
         ...(m?.qualite ? { qualite: m.qualite } : {}),
-        ...(m && m.texte !== undefined ? { texteAJour: m.texte === t.body } : {}),
+        ...(m && m.texte !== undefined ? { texteAJour: m.texte === t.body, texteMeta: m.texte } : {}),
+        ...(t.remplace ? { remplace: t.remplace } : {}),
       };
     }),
+    ...(anciens.length ? { anciens } : {}),
     crees,
     ...(corriger ? { corriges } : {}),
     echecs,

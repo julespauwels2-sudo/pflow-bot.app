@@ -12,7 +12,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { chiffrerJeton, cleJetons, dechiffrerJeton } from "@/lib/jetons-chiffres";
 import { createMemoryChannelStore } from "@/channels/core/memory-store";
 import { createMemoryConnexionStore, hashJeton, nouveauJetonLien, jetonValide } from "@/channels/core/connexions";
-import { LIVRAISON_TEMPLATES, templatePayload } from "../livraison-templates";
+import { ANCIENS_NOMS_LIVRAISON, LIVRAISON_TEMPLATES, nomModeleLivraison, templatePayload } from "../livraison-templates";
 import { terminerConnexion, type MetaAppConfig } from "../embedded-signup";
 
 const KEY = randomBytes(32);
@@ -55,6 +55,8 @@ beforeAll(async () => {
       if (path.startsWith("1808772226929443/")) return json(400, { error: { message: "Authorization Error", code: 100, error_subcode: 2388339 } });
       if (path === "1234567890/smb_app_data") return json(200, { request_id: "r1" });
       if (/^\d+\/message_templates\?/.test(path)) return json(200, { data: fullTemplates ?? existingTemplates.map((name) => ({ name, status: "APPROVED", language: "fr" })) });
+      if (path === "tpl-9" && req.method === "POST")
+        return json(400, { error: { message: "La modification de ce modèle refusé n'est pas autorisée, la catégorie est incorrecte.", code: 100 } });
       if (/^tpl-\d+$/.test(path) && req.method === "POST") return json(200, { success: true });
       if (/^\d+\/message_templates$/.test(path)) return json(200, { id: "t1", status: "PENDING", category: "UTILITY" });
       if (path === "1234567890/messages") return json(200, { messages: [{ id: "wamid.sent" }] });
@@ -94,12 +96,12 @@ describe("modèles de la livraison", () => {
   it("les 10 noms du contrat, textes conformes aux règles de Meta, bouton « Suivre ma livraison »", () => {
     expect(LIVRAISON_TEMPLATES.map((t) => t.name).sort()).toEqual(
       [
-        "pflow_livraison_confirmee",
-        "pflow_livraison_livreur_trouve",
-        "pflow_livraison_en_route",
-        "pflow_livraison_heure_maj",
-        "pflow_livraison_arrive_bientot",
-        "pflow_livraison_livreur_arrive",
+        "pflow_livraison_confirmee_v2",
+        "pflow_livraison_livreur_trouve_v2",
+        "pflow_livraison_en_route_v2",
+        "pflow_livraison_heure_maj_v2",
+        "pflow_livraison_arrive_bientot_v2",
+        "pflow_livraison_livreur_arrive_v2",
         "pflow_livraison_paiement_refuse",
         "pflow_livraison_aucun_livreur",
         "pflow_livraison_annulee",
@@ -120,9 +122,11 @@ describe("modèles de la livraison", () => {
       // Le CRM envoie « Votre livreur » quand le livreur n'a pas de nom : jamais « Votre livreur Votre livreur ».
       const sansNom = t.body.replace("{{1}}", "Votre livreur");
       expect(/livreur Votre livreur/i.test(sansNom), t.name).toBe(false);
+      // Jamais de code (ni le mot) : Meta classe le message en « Authentification » (refus INCORRECT_CATEGORY du 11/11).
+      expect(/\bcode\b/i.test(t.body), t.name).toBe(false);
     }
     expect(templatePayload(LIVRAISON_TEMPLATES[0])).toEqual({
-      name: "pflow_livraison_confirmee",
+      name: "pflow_livraison_confirmee_v2",
       language: "fr",
       category: "UTILITY",
       components: [
@@ -144,7 +148,8 @@ const input = { code: "code-de-meta-0123456789", wabaId: "9876543210", phoneNumb
 describe("fin du parcours (coexistence)", () => {
   it("code → jeton chiffré → numéro → app abonnée → contacts puis historique → canal en test → modèles manquants", async () => {
     const { connexions, store, c } = await nouvelleConnexion();
-    existingTemplates = ["pflow_livraison_confirmee", "autre_modele"];
+    // Un ancien nom refusé (ignoré) et une version _v2 déjà là : seuls les 9 autres sont créés, jamais l'ancien nom.
+    existingTemplates = ["pflow_livraison_confirmee", "pflow_livraison_confirmee_v2", "autre_modele"];
     const done = await terminerConnexion({ meta: meta(), connexions, store, chiffrer: (t) => chiffrerJeton(t, KEY) }, c, input);
 
     expect(done.etat).toBe("terminee");
@@ -330,7 +335,7 @@ describe("page État : modèles compte par compte, client test hors CRM, débran
     const rt = await getChannelsRuntime();
     // Comme en production : WABA 1808… refusé (nouveau modèle), compte de messagerie 4170… qui répond.
     await rt.store.ensureCanal(canal("5550001111", "1808772226929443", "4170754433058228"));
-    existingTemplates = ["pflow_livraison_en_route", "pflow_livraison_annulee"];
+    existingTemplates = ["pflow_livraison_en_route_v2", "pflow_livraison_annulee"];
 
     const lu = await (await route.GET(new Request("http://localhost/x"))).json();
     const compte = lu.comptes.find((c: { canalId: string; compteId: string }) => c.compteId === "4170754433058228");
@@ -344,7 +349,7 @@ describe("page État : modèles compte par compte, client test hors CRM, débran
     expect(cree.comptes[0].crees).toHaveLength(8);
     const posts = calls.filter((c) => c.method === "POST");
     expect(posts.every((c) => c.path === "4170754433058228/message_templates" && c.auth === "Bearer jeton-general-pflow")).toBe(true);
-    expect(posts.map((c) => c.body?.name)).not.toContain("pflow_livraison_en_route");
+    expect(posts.map((c) => c.body?.name)).not.toContain("pflow_livraison_en_route_v2");
     expect(JSON.stringify(cree)).not.toContain("jeton-general-pflow");
     // Sans compte de messagerie et WABA refusé : erreur affichée, rien créé.
     await rt.store.ensureCanal(canal("5550002222", "1808772226929443"));
@@ -357,7 +362,7 @@ describe("page État : modèles compte par compte, client test hors CRM, débran
     expect(avecPflow.comptes.find((c: { libelle: string }) => c.libelle.includes("5550003333")).libelle).toContain("PFlow Démo");
   });
 
-  it("modèles refusés : motif, catégorie et texte lus ; « corriger » ne modifie QUE les refusés à l'ancien texte", async () => {
+  it("modèles refusés : motif, catégorie, texte chez Meta ; anciens noms ignorés ; « corriger » seulement sur les refusés à l'ancien texte", async () => {
     env();
     const route = await import("@/app/api/etat/modeles-livraison/route");
     const { getChannelsRuntime } = await import("@/channels/core/runtime");
@@ -365,20 +370,31 @@ describe("page État : modèles compte par compte, client test hors CRM, débran
     await rt.store.ensureCanal(canal("5550004444", "1808772226929443", "4170754433058228"));
     const actuel = (n: string) => LIVRAISON_TEMPLATES.find((t) => t.name === n)!.body;
     const corps = (text: string) => [{ type: "BODY", text }];
+    const ancienCode = "Votre livreur {{1}} arrive dans 2 minutes avec votre commande. Votre code de livraison : {{2}}.";
     fullTemplates = [
-      { id: "tpl-1", name: "pflow_livraison_en_route", status: "REJECTED", rejected_reason: "INVALID_FORMAT", category: "UTILITY", language: "fr", components: corps("Ancien texte {{1}} {{2}}.") },
-      { id: "tpl-2", name: "pflow_livraison_heure_maj", status: "REJECTED", rejected_reason: "INCORRECT_CATEGORY", category: "AUTHENTICATION", language: "fr", components: corps("Ancien {{1}} {{2}}.") },
-      { id: "tpl-3", name: "pflow_livraison_confirmee", status: "PENDING", rejected_reason: "NONE", category: "UTILITY", language: "fr", components: corps("Ancien texte en cours d'examen {{1}} {{2}}.") },
+      // Anciens noms, refusés en INCORRECT_CATEGORY : affichés pour information, jamais modifiés ni recréés.
+      { id: "tpl-8", name: "pflow_livraison_confirmee", status: "REJECTED", rejected_reason: "INCORRECT_CATEGORY", language: "fr", components: corps("Ancien confirmee {{1}} {{2}}.") },
+      { id: "tpl-7", name: "pflow_livraison_arrive_bientot", status: "REJECTED", rejected_reason: "INCORRECT_CATEGORY", language: "fr", components: corps(ancienCode) },
+      // Versions actuelles.
+      { id: "tpl-1", name: "pflow_livraison_en_route_v2", status: "REJECTED", rejected_reason: "INVALID_FORMAT", category: "UTILITY", language: "fr", components: corps("Ancien texte {{1}} {{2}} {{3}}.") },
+      { id: "tpl-9", name: "pflow_livraison_heure_maj_v2", status: "REJECTED", rejected_reason: "INCORRECT_CATEGORY", category: "AUTHENTICATION", language: "fr", components: corps("Ancien {{1}} {{2}} {{3}}.") },
+      { id: "tpl-3", name: "pflow_livraison_confirmee_v2", status: "PENDING", rejected_reason: "NONE", category: "UTILITY", language: "fr", components: corps("Ancien texte en cours d'examen {{1}} {{2}}.") },
       { id: "tpl-4", name: "pflow_livraison_annulee", status: "REJECTED", rejected_reason: "INVALID_FORMAT", language: "fr", components: corps(actuel("pflow_livraison_annulee")) },
       { id: "tpl-5", name: "pflow_livraison_aucun_livreur", status: "APPROVED", quality_score: { score: "GREEN" }, language: "fr", components: corps(actuel("pflow_livraison_aucun_livreur")) },
     ];
     const lu = await (await route.GET(new Request("http://localhost/x"))).json();
     const compte = lu.comptes.find((c: { compteId: string }) => c.compteId === "4170754433058228");
     const etat = (n: string) => compte.etat.find((t: { name: string }) => t.name === n);
-    expect(etat("pflow_livraison_en_route")).toMatchObject({ status: "REJECTED", motif: "INVALID_FORMAT", texteAJour: false });
-    expect(etat("pflow_livraison_heure_maj")).toMatchObject({ motif: "INCORRECT_CATEGORY", categorie: "AUTHENTICATION" });
-    expect(etat("pflow_livraison_confirmee").motif).toBeUndefined();
+    expect(compte.etat.map((t: { name: string }) => t.name)).not.toContain("pflow_livraison_confirmee");
+    expect(etat("pflow_livraison_en_route_v2")).toMatchObject({ status: "REJECTED", motif: "INVALID_FORMAT", texteAJour: false, texteMeta: "Ancien texte {{1}} {{2}} {{3}}.", remplace: "pflow_livraison_en_route" });
+    expect(etat("pflow_livraison_heure_maj_v2")).toMatchObject({ motif: "INCORRECT_CATEGORY", categorie: "AUTHENTICATION" });
+    expect(etat("pflow_livraison_confirmee_v2").motif).toBeUndefined();
     expect(etat("pflow_livraison_aucun_livreur")).toMatchObject({ qualite: "GREEN", texteAJour: true });
+    expect(etat("pflow_livraison_livreur_trouve_v2").status).toBeNull(); // à créer
+    expect(compte.anciens).toEqual([
+      { name: "pflow_livraison_confirmee", status: "REJECTED", motif: "INCORRECT_CATEGORY", texteMeta: "Ancien confirmee {{1}} {{2}}.", remplacePar: "pflow_livraison_confirmee_v2" },
+      { name: "pflow_livraison_arrive_bientot", status: "REJECTED", motif: "INCORRECT_CATEGORY", texteMeta: ancienCode, remplacePar: "pflow_livraison_arrive_bientot_v2" },
+    ]);
     expect(calls.some((c) => c.path.includes("fields=id,name,status,category,rejected_reason,quality_score"))).toBe(true);
 
     calls.length = 0;
@@ -386,12 +402,36 @@ describe("page État : modèles compte par compte, client test hors CRM, débran
     const headers = { "x-forwarded-for": "10.0.0.42" };
     const r = await (await route.POST(new Request("http://localhost/x", { method: "POST", headers, body: JSON.stringify({ canalId: compte.canalId, corriger: true }) }))).json();
     const posts = calls.filter((c) => c.method === "POST");
-    // Seuls les 2 refusés à l'ancien texte ; ni le refusé déjà à jour, ni l'examen en cours, ni l'approuvé ; aucune création.
-    expect(posts.map((c) => c.path).sort()).toEqual(["tpl-1", "tpl-2"]);
-    expect(posts[0].body).toMatchObject({ category: "UTILITY" });
-    expect((posts.find((c) => c.path === "tpl-1")!.body!.components as { text?: string }[])[0].text).toBe(actuel("pflow_livraison_en_route"));
-    expect(r.comptes[0].corriges.sort()).toEqual(["pflow_livraison_en_route", "pflow_livraison_heure_maj"]);
+    // Seuls les 2 refusés actuels à l'ancien texte ; ni les anciens noms, ni le refusé à jour, ni l'examen en cours, ni l'approuvé ; aucune création.
+    expect(posts.map((c) => c.path).sort()).toEqual(["tpl-1", "tpl-9"]);
+    expect((posts.find((c) => c.path === "tpl-1")!.body!.components as { text?: string }[])[0].text).toBe(actuel("pflow_livraison_en_route_v2"));
+    expect(r.comptes[0].corriges).toEqual(["pflow_livraison_en_route_v2"]);
+    // Meta refuse la modification (catégorie) : message clair, il faut une nouvelle version.
+    expect(r.comptes[0].echecs[0]).toMatchObject({ name: "pflow_livraison_heure_maj_v2" });
+    expect(r.comptes[0].echecs[0].erreur).toContain("Modification bloquée par Meta (catégorie)");
     expect(r.comptes[0].crees).toEqual([]);
+
+    // « Créer les manquants » : les _v2 absents seulement, jamais un ancien nom.
+    calls.length = 0;
+    const cree = await (await route.POST(new Request("http://localhost/x", { method: "POST", headers, body: JSON.stringify({ canalId: compte.canalId }) }))).json();
+    const noms = calls.filter((c) => c.method === "POST").map((c) => c.body?.name as string);
+    expect(noms.sort()).toEqual(
+      ["pflow_livraison_arrive_bientot_v2", "pflow_livraison_livreur_arrive_v2", "pflow_livraison_livreur_trouve_v2", "pflow_livraison_paiement_refuse", "pflow_livraison_annulee_sans_livreur"].sort(),
+    );
+    expect(noms.some((n) => ANCIENS_NOMS_LIVRAISON.includes(n))).toBe(false);
+    expect(cree.comptes[0].crees).toHaveLength(5);
+  });
+
+  it("correspondance des noms : nom logique du CRM → nom chez Meta (_v2) ; nom à jour gardé ; inconnu : null", () => {
+    expect(nomModeleLivraison("pflow_livraison_confirmee")).toBe("pflow_livraison_confirmee_v2");
+    expect(nomModeleLivraison("pflow_livraison_heure_maj_v2")).toBe("pflow_livraison_heure_maj_v2");
+    expect(nomModeleLivraison("pflow_livraison_annulee")).toBe("pflow_livraison_annulee");
+    expect(nomModeleLivraison("autre_modele")).toBeNull();
+    expect(ANCIENS_NOMS_LIVRAISON.sort()).toEqual(
+      ["confirmee", "livreur_trouve", "en_route", "arrive_bientot", "livreur_arrive", "heure_maj"].map((n) => `pflow_livraison_${n}`).sort(),
+    );
+    // Jamais un nom actuel identique à un ancien nom ; noms acceptés par Meta (minuscules, chiffres, _).
+    expect(LIVRAISON_TEMPLATES.every((t) => /^[a-z0-9_]{1,512}$/.test(t.name) && !ANCIENS_NOMS_LIVRAISON.includes(t.name))).toBe(true);
   });
 
   it("client test hors CRM (Cedyan) : lien, connexion, canal en test relié à aucun resto, seul Jules en test ; puis débranchement", async () => {

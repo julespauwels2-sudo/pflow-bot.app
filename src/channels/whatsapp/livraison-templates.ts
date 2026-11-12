@@ -4,14 +4,24 @@
  * https://order.pflow.fr/suivi/{{1}}. Créés automatiquement sur le compte WhatsApp de chaque resto connecté par
  * l'Embedded Signup (POST /{waba-id}/message_templates). Les noms et l'ordre des variables ne doivent jamais changer.
  *
- * 11 novembre 2026 : textes de livreur_trouve, en_route, arrive_bientot, livreur_arrive et heure_maj réécrits après
- * leur refus par Meta sur le compte de PFlow (mêmes variables, même ordre). Le livreur ({{1}}) n'est plus collé à
- * « Votre livreur » : le CRM envoie « Votre livreur » quand le livreur n'a pas de nom affiché.
+ * 11 novembre 2026 : les 6 modèles confirmee, livreur_trouve, en_route, arrive_bientot, livreur_arrive et heure_maj
+ * ont été refusés par Meta (INCORRECT_CATEGORY : un code dans le message relève d'« Authentification »). Nouvelle
+ * version validée par Jules : même structure que les 4 approuvés ({{1}} resto, {{2}} n° de commande, {{3}} heure),
+ * plus de prénom du livreur, AUCUN code (ni le mot) : le code s'affiche seulement sur la page de suivi.
+ * Meta ne laisse pas modifier un modèle refusé pour sa catégorie : ces 6 deviennent des modèles neufs, suffixe _v2
+ * (le CRM garde ses noms logiques, traduits au moment de l'envoi : nomModeleLivraison).
  */
 export interface LivraisonTemplate {
+  /** Nom du modèle chez Meta. */
   name: string;
   body: string;
   examples: string[];
+  /**
+   * Nom logique (celui de la file des notifications du CRM) quand il diffère du nom chez Meta : modèle refusé en
+   * INCORRECT_CATEGORY, que Meta ne laisse pas modifier, remplacé par une nouvelle version (suffixe _v2). L'ancien
+   * modèle reste chez Meta (un nom supprimé est bloqué plusieurs semaines) et n'est plus jamais utilisé.
+   */
+  remplace?: string;
 }
 
 export const SUIVI_URL = "https://order.pflow.fr/suivi/{{1}}";
@@ -20,29 +30,34 @@ export const SUIVI_BOUTON = "Suivre ma livraison";
 
 export const LIVRAISON_TEMPLATES: LivraisonTemplate[] = [
   {
-    name: "pflow_livraison_confirmee",
-    body: "Chez {{1}}, votre commande n° {{2}} est confirmée. Nous cherchons un livreur PFlow. Votre code de livraison vous sera envoyé quand le livreur arrivera.",
+    name: "pflow_livraison_confirmee_v2",
+    remplace: "pflow_livraison_confirmee",
+    body: "Chez {{1}}, votre commande n° {{2}} est confirmée. Un livreur va lui être attribué. Le suivi de la livraison est disponible avec le bouton ci-dessous.",
     examples: ["Bokit An Nou", "1042"],
   },
   {
-    name: "pflow_livraison_livreur_trouve",
-    body: "Un livreur a accepté votre commande. {{1}} la récupérera au restaurant dès qu'elle sera prête. Nous vous préviendrons ici quand elle sera en route.",
-    examples: ["Alice"],
+    name: "pflow_livraison_livreur_trouve_v2",
+    remplace: "pflow_livraison_livreur_trouve",
+    body: "Chez {{1}}, un livreur a été attribué à votre commande n° {{2}}. Il la récupérera au restaurant dès qu'elle sera prête. Le suivi est disponible avec le bouton ci-dessous.",
+    examples: ["Bokit An Nou", "1042"],
   },
   {
-    name: "pflow_livraison_en_route",
-    body: "Votre commande a quitté le restaurant. {{1}} est en route vers chez vous, arrivée prévue : {{2}}. Suivez la livraison avec le bouton ci-dessous.",
-    examples: ["Alice", "12h45"],
+    name: "pflow_livraison_en_route_v2",
+    remplace: "pflow_livraison_en_route",
+    body: "Chez {{1}}, votre commande n° {{2}} a été remise au livreur. Heure d'arrivée estimée : {{3}}. Le suivi de la livraison est disponible avec le bouton ci-dessous.",
+    examples: ["Bokit An Nou", "1042", "12h45"],
   },
   {
-    name: "pflow_livraison_arrive_bientot",
-    body: "Votre commande arrive dans environ 2 minutes. {{1}} vous demandera votre code de livraison, qui est le {{2}}. Gardez-le à portée de main pour la remise.",
-    examples: ["Alice", "4821"],
+    name: "pflow_livraison_arrive_bientot_v2",
+    remplace: "pflow_livraison_arrive_bientot",
+    body: "Chez {{1}}, votre commande n° {{2}} arrive dans environ 2 minutes. Les informations de remise sont affichées sur la page de suivi, accessible avec le bouton ci-dessous.",
+    examples: ["Bokit An Nou", "1042"],
   },
   {
-    name: "pflow_livraison_livreur_arrive",
-    body: "Votre commande est arrivée. {{1}} vous attend et vous demandera votre code de livraison, qui est le {{2}}. Donnez-le pour recevoir votre commande.",
-    examples: ["Alice", "4821"],
+    name: "pflow_livraison_livreur_arrive_v2",
+    remplace: "pflow_livraison_livreur_arrive",
+    body: "Chez {{1}}, le livreur de votre commande n° {{2}} est arrivé à votre adresse. Les informations de remise sont affichées sur la page de suivi, accessible avec le bouton ci-dessous.",
+    examples: ["Bokit An Nou", "1042"],
   },
   {
     name: "pflow_livraison_paiement_refuse",
@@ -65,11 +80,24 @@ export const LIVRAISON_TEMPLATES: LivraisonTemplate[] = [
     examples: ["Bokit An Nou", "1042"],
   },
   {
-    name: "pflow_livraison_heure_maj",
-    body: "L'heure de livraison de votre commande a changé. {{1}} arrivera vers {{2}}. Suivez la livraison avec le bouton ci-dessous.",
-    examples: ["Alice", "12h52"],
+    name: "pflow_livraison_heure_maj_v2",
+    remplace: "pflow_livraison_heure_maj",
+    body: "Chez {{1}}, l'heure de livraison de votre commande n° {{2}} a été mise à jour. Nouvelle heure d'arrivée estimée : {{3}}. Le détail est disponible sur la page de suivi.",
+    examples: ["Bokit An Nou", "1042", "12h52"],
   },
 ];
+
+/** Anciens noms chez Meta (refusés, remplacés par une version _v2) : ignorés partout, jamais utilisés ni recréés. */
+export const ANCIENS_NOMS_LIVRAISON: string[] = LIVRAISON_TEMPLATES.flatMap((t) => (t.remplace ? [t.remplace] : []));
+
+/**
+ * Nom du modèle à utiliser chez Meta pour un nom reçu du CRM : nom logique (ancien nom) traduit vers sa version _v2,
+ * nom déjà à jour gardé tel quel ; null pour un nom inconnu.
+ */
+export function nomModeleLivraison(nom: string): string | null {
+  const t = LIVRAISON_TEMPLATES.find((x) => x.name === nom || x.remplace === nom);
+  return t ? t.name : null;
+}
 
 /** Les composants (texte + bouton) d'un modèle de livraison. */
 export function templateComponents(t: LivraisonTemplate): Record<string, unknown>[] {
