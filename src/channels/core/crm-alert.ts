@@ -3,9 +3,12 @@
  * « Je veux le mien », une notification part aussi sur l'appli, avec son propre son (cloche).
  *
  * PFlow Bots pose l'alerte dans la file du CRM (rpc public.app_alerte_bot, clé de service du projet Supabase du CRM) ;
- * la fonction qg-notifier du CRM l'envoie à l'appli. Facultatif : sans les deux variables, rien ne change.
+ * la fonction qg-notifier du CRM l'envoie à l'appli.
  *   PFLOW_CRM_SUPABASE_URL           https://<projet du CRM>.supabase.co
  *   PFLOW_CRM_SERVICE_ROLE_KEY       clé service_role de ce projet
+ * Sans PFLOW_CRM_SERVICE_ROLE_KEY (décision de Jules du 20/11) : PFlow Bots et le CRM partagent le même projet Supabase
+ * (tekntxvkjhgyvbbwbogt), donc les variables déjà posées servent : NEXT_PUBLIC_SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY.
+ * Garde-fou : si PFLOW_CRM_SUPABASE_URL désigne un AUTRE projet, la clé de PFlow Bots n'y est jamais envoyée.
  * Au mieux : ne lève jamais d'erreur et ne change pas le résultat de l'alerte push (src/channels/core/alerts.ts).
  */
 export interface CrmAlertConfig {
@@ -19,9 +22,19 @@ export interface CrmAlertConfig {
 export const CRM_MOTIFS = ["Je veux le mien"];
 
 export function crmAlertConfigFromEnv(env: (name: string) => string): CrmAlertConfig | undefined {
-  const url = env("PFLOW_CRM_SUPABASE_URL")?.trim().replace(/\/+$/, "");
-  const serviceKey = env("PFLOW_CRM_SERVICE_ROLE_KEY")?.trim();
-  return url && serviceKey ? { url, serviceKey } : undefined;
+  const propre = (v: string | undefined) => v?.trim().replace(/\/+$/, "") || undefined;
+  const urlCrm = propre(env("PFLOW_CRM_SUPABASE_URL"));
+  const cleCrm = env("PFLOW_CRM_SERVICE_ROLE_KEY")?.trim();
+  if (cleCrm) {
+    const url = urlCrm ?? propre(env("NEXT_PUBLIC_SUPABASE_URL"));
+    return url ? { url, serviceKey: cleCrm } : undefined;
+  }
+  // Même projet Supabase que PFlow Bots : ses propres variables.
+  const urlBots = propre(env("NEXT_PUBLIC_SUPABASE_URL"));
+  const cleBots = env("SUPABASE_SERVICE_ROLE_KEY")?.trim();
+  if (!urlBots || !cleBots) return undefined;
+  if (urlCrm && urlCrm !== urlBots) return undefined; // autre projet : jamais la clé de PFlow Bots
+  return { url: urlBots, serviceKey: cleBots };
 }
 
 export interface CrmAlertInput {

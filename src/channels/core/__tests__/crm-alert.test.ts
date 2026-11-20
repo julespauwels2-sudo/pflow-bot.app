@@ -32,6 +32,23 @@ describe("alerte vers l'appli iPhone (CRM)", () => {
     expect(alertConfigFromEnv(env({ PFLOW_CRM_SUPABASE_URL: "https://x.supabase.co", PFLOW_CRM_SERVICE_ROLE_KEY: "k" }))).toEqual({ crm: { url: "https://x.supabase.co", serviceKey: "k" } });
   });
 
+  it("sans PFLOW_CRM_SERVICE_ROLE_KEY : les variables de PFlow Bots (même projet Supabase), jamais vers un autre projet", () => {
+    const env = (vars: Record<string, string>) => (name: string) => vars[name] ?? "";
+    const bots = { NEXT_PUBLIC_SUPABASE_URL: "https://tekntxvkjhgyvbbwbogt.supabase.co/", SUPABASE_SERVICE_ROLE_KEY: "cle-bots" };
+    // Les deux variables déjà dans Vercel suffisent.
+    expect(crmAlertConfigFromEnv(env(bots))).toEqual({ url: "https://tekntxvkjhgyvbbwbogt.supabase.co", serviceKey: "cle-bots" });
+    expect(alertConfigFromEnv(env(bots))).toEqual({ crm: { url: "https://tekntxvkjhgyvbbwbogt.supabase.co", serviceKey: "cle-bots" } });
+    // PFLOW_CRM_SUPABASE_URL sur le même projet : accepté.
+    expect(crmAlertConfigFromEnv(env({ ...bots, PFLOW_CRM_SUPABASE_URL: "https://tekntxvkjhgyvbbwbogt.supabase.co" }))?.serviceKey).toBe("cle-bots");
+    // PFLOW_CRM_SUPABASE_URL sur un autre projet, sans sa clé : rien (la clé de PFlow Bots n'y part jamais).
+    expect(crmAlertConfigFromEnv(env({ ...bots, PFLOW_CRM_SUPABASE_URL: "https://autre.supabase.co" }))).toBeUndefined();
+    // La clé dédiée l'emporte ; sans URL dédiée, l'URL de PFlow Bots.
+    expect(crmAlertConfigFromEnv(env({ ...bots, PFLOW_CRM_SERVICE_ROLE_KEY: "cle-crm" }))).toEqual({ url: "https://tekntxvkjhgyvbbwbogt.supabase.co", serviceKey: "cle-crm" });
+    // Une seule des deux variables de PFlow Bots : rien.
+    expect(crmAlertConfigFromEnv(env({ NEXT_PUBLIC_SUPABASE_URL: bots.NEXT_PUBLIC_SUPABASE_URL }))).toBeUndefined();
+    expect(crmAlertConfigFromEnv(env({ SUPABASE_SERVICE_ROLE_KEY: "cle-bots" }))).toBeUndefined();
+  });
+
   it("« Je veux le mien » : l'alerte est posée dans le CRM", async () => {
     const crm = fauxCrm();
     expect(await sendCrmAlert(crm.config, input)).toBe("posee");
