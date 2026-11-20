@@ -11,15 +11,19 @@
  */
 import type { AlertPush, Canal, ChannelStore } from "./types";
 import { alertPushPayload, pushConfigFromEnv, sendPushToAll, type PushConfig } from "./push";
+import { crmAlertConfigFromEnv, sendCrmAlert, type CrmAlertConfig } from "./crm-alert";
 
 export interface AlertConfig {
   /** Notifications push (clés VAPID). Absent : « non_configure », l'alerte reste dans la boîte de réception. */
   push?: PushConfig;
+  /** L'appli iPhone « PFlow » de Jules, via le CRM (src/channels/core/crm-alert.ts). Facultatif. */
+  crm?: CrmAlertConfig;
 }
 
 export function alertConfigFromEnv(env: (name: string) => string): AlertConfig {
   const push = pushConfigFromEnv(env);
-  return push ? { push } : {};
+  const crm = crmAlertConfigFromEnv(env);
+  return { ...(push ? { push } : {}), ...(crm ? { crm } : {}) };
 }
 
 export interface AlertInput {
@@ -47,6 +51,10 @@ export const alertDelivered = (result: AlertResult) => result.voie === "push";
 
 /** Envoie l'alerte en notification push. Ne lève jamais d'erreur. */
 export async function sendAlert(deps: { store: ChannelStore; config?: AlertConfig; now: Date }, input: AlertInput): Promise<AlertResult> {
-  const push = await sendPushToAll({ store: deps.store, config: deps.config?.push, now: deps.now }, alertPushPayload(input));
+  const [push] = await Promise.all([
+    sendPushToAll({ store: deps.store, config: deps.config?.push, now: deps.now }, alertPushPayload(input)),
+    // en plus, au mieux : l'appli iPhone de Jules (ne change pas le résultat ci-dessous)
+    sendCrmAlert(deps.config?.crm, input),
+  ]);
   return { voie: push.statut === "envoyee" ? "push" : "aucune", push: push.statut, erreurs: push.erreurs };
 }
