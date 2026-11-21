@@ -62,6 +62,9 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - 19 : prérequis communs, puis **Cookies** (mode « toujours ») : 5 étapes du runbook.
 - 20 : **Mexico** et **ag pizza** (mots-clés uniquement).
 - 21 : clôture d'UChat (bots désactivés, contrôle des numéros).
+- **21 novembre (en cours)** : bascule des 3 clients d'UChat vers PFlow Bots. Rien n'est fusionné ni déployé en
+  production avant « bascules terminées » (Jules) : PR n° 34 (démo PFlow qui redémarre) et PR « modèles de la
+  livraison sur les comptes des restos » en attente.
 
 ### Après le 22 novembre
 - UChat résilié avant le renouvellement du 22 ; puis retrait de Smart Link et renouvellement de `PONT_CLE`.
@@ -77,6 +80,11 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
   supprimés : nom bloqué des semaines) et sont ignorés. Le CRM garde ses noms logiques et les traduit au moment de
   l'envoi. Sur PFlow Démo : page État → « Créer les 6 manquants » (après accord de Jules).
 - Livraison : route `pflow-livraison` (contrat `ad59937`) et modèles de la livraison sur chaque compte.
+- **Modèles de la livraison sur les comptes des restos** (21 novembre 2026, après les bascules) : les 10 modèles
+  (6 en `_v2` + 4 d'origine) sont approuvés sur PFlow Démo seulement. Pour Cookies An Nou, Mexico et AG Pizza :
+  page État → « Voir les modèles de chaque compte » (lecture), puis « Créer les N manquants » compte par compte
+  (accord de Jules). Les numéros de test de Meta (+1 555…, ex. l'ancien numéro de test de Cookies) sont écartés.
+  Ne dépend pas de l'examen Meta (comptes du portefeuille de PFlow, jeton général).
 - Centre d'alertes unique ; Instagram (après validation de Meta) ; buckets publics du CRM avant le prochain
   questionnaire d'onboarding.
 
