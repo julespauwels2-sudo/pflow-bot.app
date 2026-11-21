@@ -675,9 +675,15 @@ class EngineRun {
         if (demoButtons.length) this.send({ kind: "buttons", text: answer, buttons: demoButtons });
         else this.send({ kind: "text", text: answer });
         // Pas de fonction proposer_commande : le bouton « Commander » remplace le lien retiré.
-        const url = orderButtonFallback ? this.orderButtonUrl() : undefined;
+        // Réponse sur la carte (produit, disponibilité, prix) d'un bot de resto : le message suivant est celui pour
+        // commander, à la place de la relance du bloc en attente (« Besoin d'un petit coup de main ? »).
+        const aboutMenu = decision.sujet === "carte" && !client.demo;
+        const url = orderButtonFallback || aboutMenu ? this.orderButtonUrl() : undefined;
         if (url) this.send({ kind: "link", text: TEXTS.orderLink, url, buttonLabel: TEXTS.orderButton });
-        if (repromptNode) {
+        if (repromptNode && url && aboutMenu) {
+          // Le bloc reste en attente (ses boutons déjà envoyés marchent toujours), sans être renvoyé.
+          this.refreshExpiry();
+        } else if (repromptNode) {
           this.sendPrompt(repromptNode);
           this.refreshExpiry();
         } else if (aiNode && this.session) {
