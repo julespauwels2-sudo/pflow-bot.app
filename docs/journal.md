@@ -1137,3 +1137,12 @@ mien » y arrivaient : les transferts des clients des restos ne partaient qu'en 
   l'instant le type « prospect » dans l'appli (son « cloche ») : `app_alerte_bot` fixe ce type, le changer demande un
   script SQL dans le CRM.
 
+## 21 novembre 2026 (soir) — questions de tournée et emoji d'accueil (PR, sans fusion)
+
+- **Tournées** : « Vous passez quand à Jarry ? » partait à l'équipe parce que la fiche de Cookies l'imposait (règle
+  spéciale), et aucun planning n'est saisi (`bot_tournees` vide ; rien dans le CRM). La consigne de l'IA en livraison
+  sur planning dit maintenant : répondre avec les tournées à venir, transférer seulement si l'info manque ou si le
+  client veut une confirmation précise. Nouvelle règle de la fiche de Cookies proposée (SQL montré, non appliqué).
+- **Emoji d'accueil** : champ de la fiche + variable `{{emoji_accueil}}` (🍽️ si vide). Pré-remplissage 🍪 / 🌯 / 🍕
+  et remplacement dans l'Accueil du modèle maître et la copie d'AG Pizza : SQL montré, à jouer après le déploiement.
+- Détails et SQL : `docs/etape-c/tournees-emoji.md`. 506 tests.

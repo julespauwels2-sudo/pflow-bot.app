@@ -138,6 +138,8 @@ export interface InfoSheet {
   modesPaiement?: string;
   zonesLivraison?: string;
   pointsDeVente?: string;
+  /** Emoji du message d'accueil (variable {{emoji_accueil}}), ex. « 🍪 ». Vide : 🍽️. */
+  emojiAccueil?: string;
   /** Carte complète pour l'IA (produits, prix, allergènes). Étape B : lue dans PFlow Order. */
   resumeCarte?: string;
   /** Questions fréquentes, en texte libre (pour l'IA). */
