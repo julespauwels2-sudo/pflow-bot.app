@@ -1,15 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { MobileConversation, MobileInboxList } from "@/components/inbox-mobile";
 import { MessageContent } from "@/components/message-content";
 import { MobileHeader, useIsMobile } from "@/components/mobile";
 import { OPEN_CONVERSATION_EVENT, PushControls } from "@/components/pwa";
 import { markSeen, readSeen, type SeenState } from "@/lib/inbox-view";
+import { fusionnerConversation, majConversationListe, mentionEnvoi, nouvelEnvoi, reglerEnvoi, type EnvoiLocal, type LigneConversation, type MessageAffiche } from "@/lib/inbox-envoi";
 import { Badge, Button, Card, Loading, Notice, Textarea } from "@/components/ui";
 import type { InboxCanal, InboxConversation } from "@/channels/core/inbox";
-import type { StoredMessage } from "@/channels/core/types";
 import { accessToken } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-gate";
 
@@ -19,18 +19,26 @@ type InboxState =
   | { status: "off"; missing: string[] }
   | { status: "ready"; mode: "supabase" | "memory"; canaux: InboxCanal[] };
 
-type Thread = { messages: (StoredMessage & { texte: string })[] };
+type Thread = { messages: MessageAffiche[] };
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
+async function call<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; status: number; body: T & { error?: string } }> {
   const token = await accessToken();
   const response = await fetch(path, {
     ...init,
     headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}), ...(init?.headers ?? {}) },
   });
   const body = (await response.json().catch(() => ({}))) as T & { error?: string };
-  if (!response.ok) throw new Error(body.error ?? `Erreur ${response.status}`);
+  return { ok: response.ok, status: response.status, body };
+}
+
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const { ok, status, body } = await call<T>(path, init);
+  if (!ok) throw new Error(body.error ?? `Erreur ${status}`);
   return body;
 }
+
+/** Réponse de POST /api/inbox/[contactId]. */
+type ActionResponse = { ok?: boolean; pause?: InboxConversation["pause"]; message?: MessageAffiche };
 
 const REFRESH_MS = 5000;
 const who = (canal: InboxCanal, conv: InboxConversation) => conv.nom || (canal.plateforme === "instagram" ? `Instagram ${conv.waId.slice(-4)}` : `+${conv.waId}`);
@@ -42,6 +50,11 @@ export default function InboxPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [thread, setThread] = useState<Thread | null>(null);
   const [notice, setNotice] = useState<{ tone: "error" | "success"; text: string } | null>(null);
+  // Réponses envoyées depuis cet écran, par conversation (affichées tout de suite, puis confirmées).
+  const [envois, setEnvois] = useState<Record<string, EnvoiLocal[]>>({});
+  const selectedRef = useRef<string | null>(null);
+  // Les réponses partent l'une après l'autre (même ordre chez le client), sans bloquer l'écran.
+  const file = useRef<Promise<void>>(Promise.resolve());
   const isMobile = useIsMobile();
   const [seen, setSeen] = useState<SeenState>({ initAt: new Date(0).toISOString(), seen: {} });
   useEffect(() => {
@@ -61,7 +74,9 @@ export default function InboxPage() {
 
   const loadThread = useCallback(async (contactId: string) => {
     try {
-      setThread(await api<Thread>(`/api/inbox/${encodeURIComponent(contactId)}`));
+      const data = await api<Thread>(`/api/inbox/${encodeURIComponent(contactId)}`);
+      // Réponse arrivée après un changement de conversation : on l'ignore.
+      if (selectedRef.current === contactId) setThread(data);
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
     }
@@ -78,6 +93,7 @@ export default function InboxPage() {
   }, [thread]);
   const show = useCallback(
     (contactId: string | null) => {
+      selectedRef.current = contactId;
       setSelected(contactId);
       setThread(null);
       if (!contactId) return;
@@ -124,8 +140,8 @@ export default function InboxPage() {
     let cancelled = false;
     const tick = async () => {
       if (cancelled) return;
-      await refresh();
-      if (selected) await loadThread(selected);
+      // Liste et conversation en même temps : la conversation n'attend plus la liste (plus lente).
+      await Promise.all([refresh(), selected ? loadThread(selected) : null]);
     };
     void tick();
     const timer = setInterval(tick, REFRESH_MS);
@@ -135,22 +151,61 @@ export default function InboxPage() {
     };
   }, [refresh, loadThread, selected]);
 
-  async function act(action: Record<string, unknown>, success: string | null): Promise<boolean> {
-    if (!selected) return false;
+  /** Reprendre la main / rendre au bot : la pause s'affiche dès la réponse, la liste se recharge ensuite. */
+  async function act(action: { type: "reprendre" | "relancer" }, success: string): Promise<void> {
+    const contactId = selected;
+    if (!contactId) return;
     try {
-      await api(`/api/inbox/${encodeURIComponent(selected)}`, { method: "POST", body: JSON.stringify(action) });
-      setNotice(success ? { tone: "success", text: success } : null);
-      await refresh();
-      await loadThread(selected);
-      return true;
+      const result = await api<ActionResponse>(`/api/inbox/${encodeURIComponent(contactId)}`, { method: "POST", body: JSON.stringify(action) });
+      setNotice({ tone: "success", text: success });
+      setState((s) => (s.status === "ready" ? { ...s, canaux: majConversationListe(s.canaux, contactId, { pause: result.pause ?? null }) } : s));
+      void Promise.all([refresh(), loadThread(contactId)]);
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
-      return false;
     }
+  }
+
+  /** Répondre : le message s'affiche tout de suite (« envoi… »), part dans l'ordre, puis « envoyé ✓ » ou « échec ». */
+  function repondre(contactId: string, texte: string) {
+    const envoi = nouvelEnvoi(texte);
+    setEnvois((all) => ({ ...all, [contactId]: [...(all[contactId] ?? []), envoi] }));
+    file.current = file.current.then(() => envoyer(contactId, envoi));
+  }
+
+  async function envoyer(contactId: string, envoi: EnvoiLocal) {
+    let resultat: Parameters<typeof reglerEnvoi>[2];
+    try {
+      const { ok, status, body } = await call<ActionResponse>(`/api/inbox/${encodeURIComponent(contactId)}`, {
+        method: "POST",
+        body: JSON.stringify({ type: "repondre", texte: envoi.texte }),
+      });
+      resultat = ok ? { ok: true, ...(body.message ? { message: body.message } : {}) } : { ok: false, erreur: body.error ?? `Erreur ${status}`, ...(body.message ? { message: body.message } : {}) };
+      if (ok) {
+        const at = body.message?.at ?? envoi.at;
+        setState((s) =>
+          s.status === "ready"
+            ? { ...s, canaux: majConversationListe(s.canaux, contactId, { ...("pause" in body ? { pause: body.pause ?? null } : {}), dernierMessage: { texte: envoi.texte, sens: "sortant", at } }) }
+            : s,
+        );
+      }
+    } catch (error) {
+      // Réseau coupé : rien n'est parti (ou on ne le sait pas) ; « Réessayer » reste possible.
+      resultat = { ok: false, erreur: error instanceof Error ? error.message : String(error) };
+    }
+    setEnvois((all) => ({ ...all, [contactId]: reglerEnvoi(all[contactId] ?? [], envoi.tempId, resultat) }));
+  }
+
+  function reessayer(contactId: string, tempId: string) {
+    const envoi = (envois[contactId] ?? []).find((e) => e.tempId === tempId);
+    if (!envoi) return;
+    setEnvois((all) => ({ ...all, [contactId]: (all[contactId] ?? []).filter((e) => e.tempId !== tempId) }));
+    repondre(contactId, envoi.texte);
   }
 
   const conversations = state.status === "ready" ? state.canaux.flatMap((c) => c.conversations.map((v) => ({ canal: c, conv: v }))) : [];
   const current = conversations.find((x) => x.conv.contactId === selected);
+  const lignes: LigneConversation[] | null =
+    thread && current ? fusionnerConversation(thread.messages, envois[current.conv.contactId] ?? [], { canalId: current.canal.canalId, contactId: current.conv.contactId }) : null;
 
   if (isMobile) {
     return (
@@ -173,13 +228,14 @@ export default function InboxPage() {
               <MobileConversation
                 canal={current.canal}
                 conv={current.conv}
-                thread={thread}
+                lignes={lignes}
                 notice={notice}
                 onCloseNotice={() => setNotice(null)}
                 onBack={backToList}
                 onTakeOver={async () => void (await act({ type: "reprendre" }, "Tu as la main : le bot se tait pour ce client."))}
                 onRelease={async () => void (await act({ type: "relancer" }, "Le bot a repris la conversation."))}
-                onReply={(texte) => act({ type: "repondre", texte }, null)}
+                onReply={(texte) => repondre(current.conv.contactId, texte)}
+                onRetry={(tempId) => reessayer(current.conv.contactId, tempId)}
               />
             )}
           </>
@@ -254,15 +310,16 @@ export default function InboxPage() {
                 </div>
               </Card>
               <Card title={current ? who(current.canal, current.conv) : "Conversation"} className="min-w-0">
-                {!current || !thread ? (
+                {!current || !lignes ? (
                   <p className="text-sm text-muted">Choisis une conversation.</p>
                 ) : (
                   <ConversationView
                     conv={current.conv}
-                    thread={thread}
-                    onTakeOver={() => act({ type: "reprendre" }, "Tu as la main : le bot se tait pour ce client.")}
-                    onRelease={() => act({ type: "relancer" }, "Le bot a repris la conversation.")}
-                    onReply={async (texte) => void (await act({ type: "repondre", texte }, "Message envoyé."))}
+                    lignes={lignes}
+                    onTakeOver={() => void act({ type: "reprendre" }, "Tu as la main : le bot se tait pour ce client.")}
+                    onRelease={() => void act({ type: "relancer" }, "Le bot a repris la conversation.")}
+                    onReply={(texte) => repondre(current.conv.contactId, texte)}
+                    onRetry={(tempId) => reessayer(current.conv.contactId, tempId)}
                   />
                 )}
               </Card>
@@ -282,18 +339,27 @@ function pauseLabel(conv: InboxConversation): string {
 
 function ConversationView({
   conv,
-  thread,
+  lignes,
   onTakeOver,
   onRelease,
   onReply,
+  onRetry,
 }: {
   conv: InboxConversation;
-  thread: Thread;
+  lignes: LigneConversation[];
   onTakeOver: () => void;
   onRelease: () => void;
-  onReply: (texte: string) => Promise<void> | void;
+  onReply: (texte: string) => void;
+  onRetry: (tempId: string) => void;
 }) {
   const [texte, setTexte] = useState("");
+  // Dernier message visible : à l'ouverture et à chaque nouveau message (si on était déjà en bas, ou après un envoi).
+  const zone = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+  useLayoutEffect(() => {
+    const el = zone.current;
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
+  }, [lignes.length]);
   return (
     <div className="space-y-3" data-testid="inbox-thread">
       <div className="flex flex-wrap items-center gap-2">
@@ -312,9 +378,16 @@ function ConversationView({
         )}
         <span className="ml-auto text-xs text-muted">{conv.fenetreOuverte ? "Fenêtre de 24 h ouverte" : "Fenêtre de 24 h fermée"}</span>
       </div>
-      <div className="max-h-[60vh] space-y-1.5 overflow-y-auto rounded-2xl bg-chat-motif p-3 aplat-nuit">
-        {thread.messages.map((m) => (
-          <div key={m.id} className={`flex ${m.sens === "entrant" ? "justify-start" : "justify-end"}`}>
+      <div
+        ref={zone}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+        }}
+        className="max-h-[60vh] space-y-1.5 overflow-y-auto rounded-2xl bg-chat-motif p-3 aplat-nuit"
+      >
+        {lignes.map((m) => (
+          <div key={m.cle} data-testid="inbox-message" data-etat={m.envoi?.etat} className={`flex ${m.sens === "entrant" ? "justify-start" : "justify-end"}`}>
             <div
               className={`max-w-[80%] overflow-hidden rounded-2xl px-3 py-1.5 text-sm font-medium whitespace-pre-wrap ${
                 m.sens === "entrant" ? "carte" : m.auteur === "humain" ? "aplat-rose" : "aplat-bleu"
@@ -322,8 +395,14 @@ function ConversationView({
             >
               <span className="mb-0.5 block text-[10px] font-semibold text-muted">
                 {m.sens === "entrant" ? "Client" : m.sens === "echo" ? "Gérant (appli)" : m.auteur === "humain" ? "Équipe" : "Bot"} · {time(m.at)}
+                {mentionEnvoi(m) && <span data-testid="inbox-envoi-etat"> · {mentionEnvoi(m)}</span>}
                 {m.statut === "echec" && <span className="text-alerte"> · échec{m.erreur ? ` : ${m.erreur}` : ""}</span>}
                 {m.statut === "lu" && " · lu"}
+                {m.envoi?.etat === "echec" && (
+                  <button type="button" className="ml-1 font-bold text-rose underline" onClick={() => onRetry(m.envoi!.tempId)}>
+                    Réessayer
+                  </button>
+                )}
               </span>
               <MessageContent texte={m.texte} contenu={m.contenu} />
             </div>
@@ -332,10 +411,12 @@ function ConversationView({
       </div>
       <form
         className="flex gap-2"
-        onSubmit={async (e) => {
+        onSubmit={(e) => {
           e.preventDefault();
           if (!texte.trim()) return;
-          await onReply(texte);
+          // Affiché tout de suite dans la conversation : la zone se vide sans attendre Meta.
+          stick.current = true;
+          onReply(texte);
           setTexte("");
         }}
       >

@@ -33,7 +33,7 @@ const sent = () => fs.readFileSync(LOG, 'utf8').trim().split('\n').filter(Boolea
   const thread = p.getByTestId('inbox-thread');
   await thread.getByText('bonjour').waitFor();
   await thread.getByText('Bienvenue chez Cookies An Nou', { exact: false }).waitFor();
-  await thread.getByText('[🔗 Commander]', { exact: false }).waitFor();
+  await thread.getByText('Commander', { exact: true }).first().waitFor();
   step('fil de la conversation : message du client et réponses du bot (bouton Commander)');
 
   await p.getByRole('button', { name: 'Reprendre la main' }).click();
@@ -49,8 +49,10 @@ const sent = () => fs.readFileSync(LOG, 'utf8').trim().split('\n').filter(Boolea
 
   await p.getByLabel('Réponse').fill('Oui, je suis là, je regarde votre commande 🙂');
   await p.getByRole('button', { name: 'Envoyer' }).click();
-  await p.getByText('Message envoyé.').waitFor();
-  await thread.locator('div.whitespace-pre-wrap', { hasText: 'Oui, je suis là' }).waitFor();
+  // Affichée tout de suite (« envoi… »), puis confirmée (« envoyé ✓ ») à la réponse de Meta.
+  const bulle = thread.locator('[data-testid=inbox-message]', { hasText: 'Oui, je suis là' });
+  await bulle.waitFor({ timeout: 500 });
+  await bulle.getByText('envoyé ✓').waitFor();
   if (!sent().some((s) => s.body.text && s.body.text.body.startsWith('Oui, je suis là'))) throw new Error('réponse non envoyée à Meta');
   step('réponse à la main : envoyée à Meta, affichée « Équipe »');
   await p.screenshot({ path: OUT + '/c-inbox.png' });
@@ -59,8 +61,9 @@ const sent = () => fs.readFileSync(LOG, 'utf8').trim().split('\n').filter(Boolea
   await p.getByText('Le bot a repris la conversation.').waitFor();
   await p.getByLabel('Message du client simulé').fill('bonjour');
   await p.getByRole('button', { name: 'Simuler un message client' }).click();
-  for (let i = 0; i < 30 && sent().length < before + 3; i++) await p.waitForTimeout(200);
-  if (sent().length < before + 3) throw new Error('le bot ne répond pas après « Rendre au bot »');
+  // Réponse de l'équipe + au moins un message du bot (accueil court s'il a déjà accueilli ce client dans les 12 h).
+  for (let i = 0; i < 30 && sent().length < before + 2; i++) await p.waitForTimeout(200);
+  if (sent().length < before + 2) throw new Error('le bot ne répond pas après « Rendre au bot »');
   step('rendre au bot : il répond de nouveau');
 
   if (errors.length) throw new Error('Erreurs console : ' + errors.join(' | '));

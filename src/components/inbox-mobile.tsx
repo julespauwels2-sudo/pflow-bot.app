@@ -10,15 +10,13 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { InboxCanal, InboxConversation } from "@/channels/core/inbox";
-import type { StoredMessage } from "@/channels/core/types";
+import { mentionEnvoi, type LigneConversation } from "@/lib/inbox-envoi";
 import { isUnread, lastAt, plainExtract, shortTime, sortConversations, type SeenState } from "@/lib/inbox-view";
 import { MessageContent } from "./message-content";
 import { MobileHeader, useVisualViewport } from "./mobile";
 import { useAuth } from "./auth-gate";
 import { PushControls } from "./pwa";
 import { Notice } from "./ui";
-
-export type Thread = { messages: (StoredMessage & { texte: string })[] };
 
 const who = (canal: InboxCanal, conv: InboxConversation) => conv.nom || (canal.plateforme === "instagram" ? `Instagram ${conv.waId.slice(-4)}` : `+${conv.waId}`);
 const initials = (name: string) =>
@@ -124,33 +122,35 @@ export function MobileInboxList({
 export function MobileConversation({
   canal,
   conv,
-  thread,
+  lignes,
   notice,
   onCloseNotice,
   onBack,
   onTakeOver,
   onRelease,
   onReply,
+  onRetry,
 }: {
   canal: InboxCanal;
   conv: InboxConversation;
-  thread: Thread | null;
+  /** Messages affichés (conversation + réponses en cours d'envoi) ; null pendant le chargement. */
+  lignes: LigneConversation[] | null;
   notice: { tone: "error" | "success"; text: string } | null;
   onCloseNotice: () => void;
   onBack: () => void;
   onTakeOver: () => Promise<void> | void;
   onRelease: () => Promise<void> | void;
-  onReply: (texte: string) => Promise<boolean>;
+  onReply: (texte: string) => void;
+  onRetry: (tempId: string) => void;
 }) {
   const [texte, setTexte] = useState("");
-  const [busy, setBusy] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const stick = useRef(true);
   const vv = useVisualViewport();
   const name = who(canal, conv);
   const pause = pauseLabel(conv);
-  const count = thread?.messages.length ?? 0;
+  const count = lignes?.length ?? 0;
   // Clavier ouvert : la partie visible est nettement plus petite que la fenêtre.
   const keyboard = vv.height !== null && typeof window !== "undefined" && window.innerHeight - vv.height > 120;
 
@@ -178,13 +178,13 @@ export function MobileConversation({
     el.style.height = `${Math.min(el.scrollHeight, 132)}px`;
   }, [texte]);
 
-  async function send() {
+  // Le message s'affiche tout de suite (« envoi… ») et la zone se vide : on peut enchaîner sans attendre Meta.
+  function send() {
     const value = texte.trim();
-    if (!value || busy) return;
-    setBusy(true);
+    if (!value) return;
     stick.current = true;
-    if (await onReply(value)) setTexte("");
-    setBusy(false);
+    onReply(value);
+    setTexte("");
     input.current?.focus();
   }
 
@@ -247,11 +247,11 @@ export function MobileConversation({
         className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain px-3 py-3"
         data-testid="inbox-mobile-messages"
       >
-        {!thread ? (
+        {!lignes ? (
           <p className="py-10 text-center text-sm text-muted">Chargement…</p>
         ) : (
-          thread.messages.map((m) => (
-            <div key={m.id} className={`flex ${m.sens === "entrant" ? "justify-start" : "justify-end"}`}>
+          lignes.map((m) => (
+            <div key={m.cle} data-testid="inbox-message" data-etat={m.envoi?.etat} className={`flex ${m.sens === "entrant" ? "justify-start" : "justify-end"}`}>
               <div
                 className={`max-w-[85%] overflow-hidden rounded-2xl px-3 py-1.5 text-base leading-snug break-words whitespace-pre-wrap ${
                   m.sens === "entrant" ? "rounded-tl-sm carte" : m.auteur === "humain" || m.sens === "echo" ? "rounded-tr-sm aplat-rose" : "rounded-tr-sm aplat-bleu"
@@ -266,8 +266,14 @@ export function MobileConversation({
                   footer={
                     <span className="mt-0.5 block text-right text-[11px] text-muted">
                       {clock(m.at)}
+                      {mentionEnvoi(m) && <span data-testid="inbox-envoi-etat"> · {mentionEnvoi(m)}</span>}
                       {m.statut === "lu" && " · lu"}
                       {m.statut === "echec" && <span className="text-alerte"> · échec{m.erreur ? ` : ${m.erreur}` : ""}</span>}
+                      {m.envoi?.etat === "echec" && (
+                        <button type="button" className="ml-1 font-bold text-rose underline" onClick={() => onRetry(m.envoi!.tempId)}>
+                          Réessayer
+                        </button>
+                      )}
                     </span>
                   }
                 />
@@ -281,7 +287,7 @@ export function MobileConversation({
         className={`flex shrink-0 items-end gap-2 rounded-t-[var(--radius-card)] carte px-2 pt-2 ${keyboard ? "pb-2" : "pb-[max(0.5rem,env(safe-area-inset-bottom))]"}`}
         onSubmit={(e) => {
           e.preventDefault();
-          void send();
+          send();
         }}
       >
         {conv.fenetreOuverte ? (
@@ -299,7 +305,7 @@ export function MobileConversation({
             <button
               type="submit"
               aria-label="Envoyer"
-              disabled={!texte.trim() || busy}
+              disabled={!texte.trim()}
               className="bg-brand shadow-bouton grid size-11 shrink-0 place-items-center rounded-full text-nuit disabled:opacity-40 disabled:shadow-none"
               data-testid="mobile-envoyer"
             >

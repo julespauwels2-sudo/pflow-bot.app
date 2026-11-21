@@ -10,6 +10,7 @@ export async function GET(request: Request) {
   const access = await inboxAccess(request);
   if (!access.ok) return access.response;
   const { runtime } = access;
-  const canaux = await listInbox(runtime.store, await runtime.workspace(), new Date());
-  return NextResponse.json({ available: true, mode: runtime.mode, role: access.role, canaux: canauxVisibles(access.role, canaux, await idsCanauxPflow(runtime)) });
+  // Données des bots, numéros et conversations lus en même temps (plus de lectures à la file).
+  const [canaux, pflow] = await Promise.all([listInbox(runtime.store, runtime.workspace(), new Date()), idsCanauxPflow(runtime)]);
+  return NextResponse.json({ available: true, mode: runtime.mode, role: access.role, canaux: canauxVisibles(access.role, canaux, pflow) });
 }
