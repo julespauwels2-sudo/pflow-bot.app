@@ -87,7 +87,7 @@ describe("alertes : push seulement", () => {
     const store = await withDevice();
     const push = fakePush();
     const res = await sendAlert({ store, config: push.config, now: new Date() }, input);
-    expect(res).toEqual({ voie: "push", push: "envoyee", erreurs: [] });
+    expect(res).toEqual({ voie: "push", push: "envoyee", appli: "non_configure", erreurs: [] });
     expect(alertDelivered(res)).toBe(true);
     expect(push.notifications).toEqual([{ title: "🔔 Je veux le mien", body: "Marc : « C'est combien ? »", url: "/inbox?contact=contact-1", tag: "conversation-contact-1" }]);
   });

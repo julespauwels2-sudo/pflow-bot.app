@@ -252,3 +252,20 @@ describe("routes /api/push (mode mémoire, sans Supabase)", () => {
     expect((await (await GET(json("GET"))).json()).appareils).toEqual([]);
   }, 20_000);
 });
+
+describe("route /api/etat/alerte-test (mode mémoire, sans Supabase)", () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    process.env = { ...saved };
+  });
+
+  it("passe par les deux voies et rend le résultat de chacune ; aucune voie : 409", async () => {
+    process.env.CHANNELS_STORE = "memory";
+    for (const k of ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "PFLOW_CRM_SUPABASE_URL", "PFLOW_CRM_SERVICE_ROLE_KEY", "VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY"]) delete process.env[k];
+    const { POST } = await import("@/app/api/etat/alerte-test/route");
+    const res = await POST(new Request("http://localhost/api/etat/alerte-test", { method: "POST", headers: { "x-forwarded-for": "10.0.0.77" } }));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ voie: "aucune", push: "non_configure", appli: "non_configure" });
+  });
+});
+

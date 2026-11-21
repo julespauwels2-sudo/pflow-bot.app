@@ -8,6 +8,7 @@ import { getChannelsRuntime } from "@/channels/core/runtime";
 import { checkBotAdmin } from "@/lib/server-auth";
 import { channelStatuses, keyStatuses, servicesStatus } from "@/lib/system-status";
 import { pushConfigFromEnv } from "@/channels/core/push";
+import { countAppDevices, crmAlertConfigFromEnv } from "@/channels/core/crm-alert";
 import { etatJeton } from "@/channels/whatsapp/jetons-renouvellement";
 
 export const runtime = "nodejs";
@@ -28,7 +29,11 @@ export async function GET(request: Request) {
   let horsListe: { at: string; fin: string }[] = [];
   /** Jetons Meta des clients qui expirent dans moins de 10 jours (renouvellement en échec) ou expirés. */
   let jetonsEnDanger: { resto: string; joursRestants: number | null; erreur?: string }[] = [];
-  const push = { configure: Boolean(pushConfigFromEnv((name) => process.env[name]?.trim() || "")), appareils: 0 };
+  const env = (name: string) => process.env[name]?.trim() || "";
+  const push = { configure: Boolean(pushConfigFromEnv(env)), appareils: 0 };
+  /** L'appli iPhone « PFlow » (via le CRM) : configurée, et nombre d'iPhone actifs (null : ne répond pas). */
+  const crmConfig = crmAlertConfigFromEnv(env);
+  const appli = { configure: Boolean(crmConfig), appareils: await countAppDevices(crmConfig) };
   if (canaux.some((c) => c.configure)) {
     try {
       const rt = await getChannelsRuntime();
@@ -54,8 +59,15 @@ export async function GET(request: Request) {
           canal,
           source: t.source,
           prevenu: t.gerantPrevenu,
-          // Voie : « push » ou « aucune » ; les anciennes alertes (WhatsApp, e-mail) gardent leur voie d'origine.
-          voie: t.alertePush ? (t.alertePush === "envoyee" ? "push" : "aucune") : (t.alerteVoie ?? (t.gerantPrevenu ? "ancienne" : "aucune")),
+          // Voie : « push » (Web Push parti), « appli » (prévenu sans le Web Push : l'appli l'a prise), « aucune » ; les
+          // anciennes alertes (WhatsApp, e-mail) gardent leur voie d'origine.
+          voie: t.alertePush
+            ? t.alertePush === "envoyee"
+              ? "push"
+              : t.gerantPrevenu
+                ? "appli"
+                : "aucune"
+            : (t.alerteVoie ?? (t.gerantPrevenu ? "ancienne" : "aucune")),
           ...(t.alertePush ? { push: t.alertePush } : {}),
           ouverte: !t.resoluLe,
           ...(t.alerteErreur ? { erreur: maskId(t.alerteErreur) } : {}),
@@ -79,7 +91,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json(
-    { cles: keyStatuses(), canaux, services: servicesStatus(), comptes, evenements, alertes, push, horsListe, jetonsEnDanger, ...(erreurCanaux ? { erreurCanaux } : {}) },
+    { cles: keyStatuses(), canaux, services: servicesStatus(), comptes, evenements, alertes, push, appli, horsListe, jetonsEnDanger, ...(erreurCanaux ? { erreurCanaux } : {}) },
     { headers: { "cache-control": "no-store" } },
   );
 }
