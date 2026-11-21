@@ -25,6 +25,8 @@ export {
   formatPayment,
   EXCEPTIONAL_ROUNDS_TITLE,
   NO_ROUND_TEXT,
+  DEFAULT_WELCOME_EMOJI,
+  welcomeEmoji,
   type InfoVariables,
 } from "./info-vars";
 export {

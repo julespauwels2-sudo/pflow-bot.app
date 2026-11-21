@@ -1,9 +1,9 @@
-/** « Je veux le mien » sonne aussi sur l'appli iPhone de Jules (via le CRM, rpc app_alerte_bot). Au mieux, facultatif. */
+/** TOUTES les alertes partent aussi sur l'appli iPhone de Jules (via le CRM, rpc app_alerte_bot), en plus du Web Push. */
 import { describe, expect, it } from "vitest";
 import { createMemoryChannelStore } from "@/channels/core/memory-store";
 import type { Canal } from "@/channels/core/types";
-import { alertConfigFromEnv, sendAlert } from "../alerts";
-import { crmAlertConfigFromEnv, sendCrmAlert, type CrmAlertConfig } from "../crm-alert";
+import { alertConfigFromEnv, alertDelivered, sendAlert } from "../alerts";
+import { appAlertTexts, countAppDevices, crmAlertConfigFromEnv, sendCrmAlert, type CrmAlertConfig } from "../crm-alert";
 
 const canal: Canal = {
   id: "pflow", role: "pflow", restaurantId: "", plateforme: "whatsapp", accountId: "1000000099", triggerMode: "toujours", numeroAffiche: "PFlow Démo",
@@ -11,17 +11,21 @@ const canal: Canal = {
 };
 const input = { canal, motif: "Je veux le mien", contactName: "Marc", contactId: "590690111111", extrait: "C'est\n combien ?", conversationId: "contact-1" };
 
-function fauxCrm(status = 200) {
-  const appels: { url: string; headers: Record<string, string>; body: Record<string, string> }[] = [];
+/** Faux CRM : liste des iPhone actifs (GET app_appareils) et file des notifications (rpc app_alerte_bot). */
+function fauxCrm(opts: { status?: number; appareils?: number; id?: number | null } = {}) {
+  const { status = 200, appareils = 1, id = 1 } = opts;
+  const appels: { url: string; method: string; headers: Record<string, string>; body?: Record<string, string> }[] = [];
   const config: CrmAlertConfig = {
     url: "https://crm.supabase.co",
     serviceKey: "service",
     fetch: (async (url: string, o: RequestInit) => {
-      appels.push({ url, headers: o.headers as Record<string, string>, body: JSON.parse(String(o.body)) });
-      return new Response("1", { status });
+      appels.push({ url, method: o.method ?? "GET", headers: o.headers as Record<string, string>, ...(o.body ? { body: JSON.parse(String(o.body)) } : {}) });
+      if (status !== 200) return new Response("{}", { status });
+      if (url.includes("/app_appareils")) return Response.json(Array.from({ length: appareils }, (_, i) => ({ id: `a${i}` })));
+      return Response.json(id);
     }) as unknown as typeof fetch,
   };
-  return { config, appels };
+  return { config, appels, rpc: () => appels.filter((a) => a.url.endsWith("/rpc/app_alerte_bot")) };
 }
 
 describe("alerte vers l'appli iPhone (CRM)", () => {
@@ -49,29 +53,56 @@ describe("alerte vers l'appli iPhone (CRM)", () => {
     expect(crmAlertConfigFromEnv(env({ SUPABASE_SERVICE_ROLE_KEY: "cle-bots" }))).toBeUndefined();
   });
 
-  it("« Je veux le mien » : l'alerte est posée dans le CRM", async () => {
+  it("toutes les alertes partent sur l'appli : resto dans le titre, une notification par alerte (heure dans la clé)", async () => {
     const crm = fauxCrm();
-    expect(await sendCrmAlert(crm.config, input)).toBe("posee");
-    expect(crm.appels).toHaveLength(1);
-    expect(crm.appels[0].url).toBe("https://crm.supabase.co/rest/v1/rpc/app_alerte_bot");
-    expect(crm.appels[0].headers.Authorization).toBe("Bearer service");
-    expect(crm.appels[0].body).toEqual({ p_cle: "mien:contact-1", p_titre: "🔔 Je veux le mien : Marc", p_corps: "« C'est combien ? »", p_url: "/crm#bots" });
+    const t1 = new Date("2026-11-21T14:00:00.000Z");
+    expect(await sendCrmAlert(crm.config, input, t1)).toEqual({ statut: "posee" });
+    const [mien] = crm.rpc();
+    expect(mien.headers.Authorization).toBe("Bearer service");
+    expect(mien.body).toEqual({ p_cle: "mien:contact-1:2026-11-21T14:00:00.000Z", p_titre: "🔔 Je veux le mien", p_corps: "Marc : « C'est combien ? »", p_url: "/crm#bots" });
+    // Transfert d'un client de resto (« parler à quelqu'un ») : même chemin, le resto dans le titre.
+    const transfert = { ...input, resto: "Mexico", motif: "Le client demande à parler à l'équipe", contactName: "Léa", extrait: "je voudrais parler à quelqu'un" };
+    expect(await sendCrmAlert(crm.config, transfert, new Date("2026-11-21T14:05:00.000Z"))).toEqual({ statut: "posee" });
+    expect(crm.rpc()[1].body).toMatchObject({ p_cle: "alerte:contact-1:2026-11-21T14:05:00.000Z", p_titre: "🔔 Mexico · Le client demande à parler à l'équipe", p_corps: "Léa : « je voudrais parler à quelqu'un »" });
+    // Deux alertes de la même conversation : deux clés différentes (deux notifications).
+    expect(crm.rpc()[0].body!.p_cle).not.toBe(crm.rpc()[1].body!.p_cle);
+    // Textes coupés aux longueurs de la file (titre 80, corps 110).
+    const long = appAlertTexts({ ...transfert, motif: "x".repeat(200), extrait: "y".repeat(500) });
+    expect(long.titre.length).toBeLessThanOrEqual(80);
+    expect(long.corps.length).toBeLessThanOrEqual(110);
   });
 
-  it("autres motifs, ou pas configuré : rien", async () => {
-    const crm = fauxCrm();
-    expect(await sendCrmAlert(crm.config, { ...input, motif: "Parler à Jules" })).toBe("ignoree");
-    expect(await sendCrmAlert(undefined, input)).toBe("ignoree");
-    expect(crm.appels).toHaveLength(0);
+  it("pas reçue par l'appli : aucun iPhone, notifications coupées dans le QG, pas configurée", async () => {
+    expect(await sendCrmAlert(fauxCrm({ appareils: 0 }).config, input)).toMatchObject({ statut: "aucun_appareil" });
+    expect(await sendCrmAlert(fauxCrm({ id: null }).config, input)).toMatchObject({ statut: "coupee" });
+    expect(await sendCrmAlert(undefined, input)).toEqual({ statut: "non_configure" });
   });
 
   it("le CRM en erreur ne casse pas l'alerte (et ne la marque pas reçue)", async () => {
-    const crm = fauxCrm(500);
-    expect(await sendCrmAlert(crm.config, input)).toBe("crm 500");
+    const crm = fauxCrm({ status: 500 });
+    expect(await sendCrmAlert(crm.config, input)).toEqual({ statut: "echec", erreur: "appli : appareils 500" });
     const res = await sendAlert({ store: createMemoryChannelStore([canal]), config: { crm: crm.config }, now: new Date() }, input);
-    expect(res.voie).toBe("aucune");
-    expect(crm.appels).toHaveLength(2);
+    expect(res).toMatchObject({ voie: "aucune", appli: "echec" });
+    expect(alertDelivered(res)).toBe(false);
     const plante = { ...crm.config, fetch: (async () => { throw new Error("réseau"); }) as unknown as typeof fetch };
-    expect(await sendCrmAlert(plante, input)).toBe("crm : réseau");
+    expect(await sendCrmAlert(plante, input)).toEqual({ statut: "echec", erreur: "appli : réseau" });
+  });
+
+  it("deux voies : reçue si l'appli OU le Web Push l'a prise ; « aucune » seulement si aucune des deux", async () => {
+    // Web Push non configuré, appli OK : reçue par l'appli.
+    const ok = await sendAlert({ store: createMemoryChannelStore([canal]), config: { crm: fauxCrm().config }, now: new Date() }, input);
+    expect(ok).toMatchObject({ voie: "appli", push: "non_configure", appli: "posee" });
+    expect(alertDelivered(ok)).toBe(true);
+    // Aucun iPhone et pas de Web Push : non reçue, les deux raisons gardées.
+    const rien = await sendAlert({ store: createMemoryChannelStore([canal]), config: { crm: fauxCrm({ appareils: 0 }).config }, now: new Date() }, input);
+    expect(rien).toMatchObject({ voie: "aucune", appli: "aucun_appareil" });
+    expect(rien.erreurs.join(" | ")).toContain("aucun iPhone enregistré");
+    expect(rien.erreurs.join(" | ")).toContain("clés VAPID non définies");
+  });
+
+  it("nombre d'iPhone actifs (page État)", async () => {
+    expect(await countAppDevices(fauxCrm({ appareils: 2 }).config)).toBe(2);
+    expect(await countAppDevices(fauxCrm({ status: 500 }).config)).toBeNull();
+    expect(await countAppDevices(undefined)).toBeNull();
   });
 });

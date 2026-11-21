@@ -301,11 +301,14 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   // Alertes au gérant (Jules pour PFlow Démo) : notification push seulement (src/channels/core/alerts.ts). Le
   // transfert ouvert garde l'alerte visible dans la boîte de réception, même si le push n'est pas parti.
   const alertDeps = { store, config: deps.alerts, now };
+  // D'où vient l'alerte (titre de la notification de l'appli) : le resto, ou PFlow Démo pour le numéro PFlow.
+  const alertResto = canal.role === "pflow" ? "PFlow Démo" : bot.client.nomResto;
   const flowsStarted = result.events.flatMap((e) => (e.type === "flow_started" ? [e.flowId] : []));
   for (const e of result.events) {
     if (e.type !== "handoff") continue;
     const alert = await sendAlert(alertDeps, {
       canal,
+      resto: alertResto,
       motif: handoffMotif(e.source, flowsStarted),
       contactName: event.profileName,
       contactId: event.waId,
@@ -319,6 +322,7 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   if (question) {
     const alert = await sendAlert(alertDeps, {
       canal,
+      resto: alertResto,
       motif: demoAlert?.motif ?? "Question pendant la démo (le bot continue)",
       contactName: event.profileName,
       contactId: event.waId,

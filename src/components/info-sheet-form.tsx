@@ -202,6 +202,9 @@ export function InfoSheetForm({
               <DeliveryEditor sheet={sheet} timezone={timezone} onChange={change} zonesLocked={isLocked("zonesLivraison")} />
             </div>
           )}
+          <Field label="Emoji d'accueil" hint="Affiché dans le message d'accueil après le nom du resto ({{emoji_accueil}}). Vide : 🍽️.">
+            <Input className="max-w-32" placeholder="🍽️" maxLength={16} {...text("emojiAccueil")} data-testid="emoji-accueil" />
+          </Field>
           <Field label="Points de vente">
             <Textarea placeholder="Restaurant, food truck le samedi au marché…" {...text("pointsDeVente")} />
           </Field>

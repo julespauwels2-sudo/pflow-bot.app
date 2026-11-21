@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AiRequest, InfoSheet } from "@/engine";
 import { askClaude, buildClaudeParams } from "../claude";
-import { buildKnowledgeBase, missingKnowledge } from "../knowledge";
+import { buildKnowledgeBase, missingKnowledge, NO_ROUND_QUESTION_RULE, ROUND_QUESTION_RULE } from "../knowledge";
 import { costUsd, formatUsd } from "../models";
 import { buildPrompt, decisionJsonSchema, demoRules, formatLocalNow } from "../prompt";
 import { aiRequestSchema } from "../schemas";
@@ -84,9 +84,9 @@ describe("base de connaissances", () => {
 describe("prompt", () => {
   it("met les règles, la consigne et la base en cache, puis le contexte du message", () => {
     const prompt = buildPrompt(request);
-    expect(prompt.system.map((b) => b.title)).toEqual(["Règles PFlow", "Consigne de l'agent", "Base de connaissances", "Contexte"]);
-    expect(prompt.system.findIndex((b) => b.cache)).toBe(2);
-    const context = prompt.system[3].text;
+    expect(prompt.system.map((b) => b.title)).toEqual(["Règles PFlow", "Consigne de l'agent", "Style des réponses", "Base de connaissances", "Contexte"]);
+    expect(prompt.system.findIndex((b) => b.cache)).toBe(3);
+    const context = prompt.system[4].text;
     expect(context).toContain("mardi 3 novembre 2026, 12:00");
     expect(context).toContain("Prénom du client : Léa.");
     expect(context).toContain("- lancer_commande : Le client veut commander");
@@ -116,7 +116,7 @@ describe("prompt", () => {
     const schema = decisionJsonSchema([]) as { properties: { action: { enum: string[] } } };
     expect(schema.properties.action.enum).toEqual(["repondre", "transfert_humain"]);
     const prompt = buildPrompt({ ...request, functions: [] });
-    expect(prompt.system[3].text).toContain("Aucune");
+    expect(prompt.system[4].text).toContain("Aucune");
   });
 
   it("formate la date locale en français", () => {
@@ -152,8 +152,8 @@ describe("appel à Claude", () => {
     expect(params.thinking).toEqual({ type: "disabled" });
     expect(params).not.toHaveProperty("temperature");
     const system = params.system as Anthropic.TextBlockParam[];
-    expect(system[2].cache_control).toEqual({ type: "ephemeral" });
-    expect(system[3].cache_control).toBeUndefined();
+    expect(system[3].cache_control).toEqual({ type: "ephemeral" });
+    expect(system[4].cache_control).toBeUndefined();
     expect(params.output_config?.format?.type).toBe("json_schema");
 
     expect(result.decision).toEqual({ action: "fonction", fonction: "lancer_commande", texte: "" });
@@ -165,6 +165,13 @@ describe("appel à Claude", () => {
   it("tolère une réponse sans le champ « fonction »", async () => {
     const { client } = fakeClient({ text: JSON.stringify({ action: "repondre", texte: "Oui !" }) });
     expect((await askClaude(client, request)).decision).toEqual({ action: "repondre", texte: "Oui !" });
+  });
+
+  it("lit le sujet de la réponse (carte / autre) ; un sujet inconnu est refusé", async () => {
+    const { client } = fakeClient({ text: JSON.stringify({ action: "repondre", fonction: "", texte: "Oui !", sujet: "carte" }) });
+    expect((await askClaude(client, request)).decision).toEqual({ action: "repondre", texte: "Oui !", sujet: "carte" });
+    const bad = fakeClient({ text: JSON.stringify({ action: "repondre", texte: "Oui !", sujet: "météo" }) });
+    await expect(askClaude(bad.client, request)).rejects.toThrow("mauvais format");
   });
 
   it("utilise le modèle choisi dans l'agent", () => {
@@ -246,3 +253,69 @@ describe("démo sur le numéro PFlow : règles de l'IA", () => {
   });
 });
 
+
+/**
+ * Fiche de Cookies An Nou après la mise à jour proposée le 21 novembre 2026 (docs/etape-c/tournees-emoji.md) :
+ * la règle qui forçait parler_equipe pour toute question de tournée est remplacée.
+ */
+const COOKIES_REGLES_2026_11_21 = [
+  "- Livraison uniquement lors des tournées de Leslie dans les entreprises. Pour une date ou un lieu de passage, réponds avec les tournées à venir de la base de connaissances ; n'invente jamais une zone, une date ni un lieu.",
+  "- Si le lieu ou la date demandés ne figurent dans aucune tournée à venir, s'il n'y a aucune tournée, ou si le client veut une confirmation précise (passage dans son entreprise, heure exacte) : utilise parler_equipe.",
+  "- Pas de retrait sur place, sauf dans les 4 points de vente, en quantité limitée.",
+  "- Ne jamais promettre de paiement en ligne : aujourd'hui, le paiement se fait à la livraison.",
+].join("\n");
+
+describe("questions de tournée (« Vous passez quand à Jarry ? »)", () => {
+  const cookies: InfoSheet = {
+    horaires: [],
+    livraison: true,
+    retrait: false,
+    zonesLivraison: "Livraison en entreprise, lors des tournées de Leslie : elle passe dans les entreprises selon son planning (jours et lieux précis).",
+    reglesSpeciales: COOKIES_REGLES_2026_11_21,
+  };
+  const jarry = { id: "t1", date: "2026-11-24", de: "11:30", a: "13:00", lieux: "Jarry — Orange, EDF" };
+  const ask = (infoSheet: InfoSheet) => buildPrompt({ ...request, message: "Vous passez quand à Jarry ?", infoSheet });
+
+  it("avec planning : les tournées et la consigne de répondre soi-même sont dans le contexte", () => {
+    const kb = ask({ ...cookies, tournees: [jarry] }).system[3].text;
+    expect(kb).toContain("## Livraison sur planning (tournées à venir)");
+    expect(kb).toContain("• *Mardi 24 novembre* (11h30 – 13h) : Jarry — Orange, EDF");
+    expect(kb).toContain(ROUND_QUESTION_RULE);
+    expect(kb).not.toContain(NO_ROUND_QUESTION_RULE);
+    // Plus aucune règle de la fiche ne force le transfert pour une question de tournée.
+    expect(kb).not.toMatch(/vous passez quand à Jarry \?[^\n]*parler_equipe/i);
+    expect(kb).toContain("ne figurent dans aucune tournée à venir");
+  });
+
+  it("sans planning (aucune tournée) : rien d'inventé, l'IA passe la main à l'équipe", () => {
+    const kb = ask(cookies).system[3].text;
+    expect(kb).not.toContain("Jarry —");
+    expect(kb).not.toContain(ROUND_QUESTION_RULE);
+    expect(kb).toContain("## Zones de livraison");
+    expect(kb).toContain("s'il n'y a aucune tournée");
+    expect(kb).toContain("utilise parler_equipe");
+    // Mode planning choisi sans tournée : « aucune tournée » + transfert.
+    const planning = ask({ ...cookies, livraisonMode: "planning" }).system[3].text;
+    expect(planning).toContain(NO_ROUND_QUESTION_RULE);
+  });
+
+  it("Mexico et AG Pizza (retrait seulement) : base de connaissances inchangée", () => {
+    for (const regles of ["- Pas de livraison : retrait sur place uniquement.", "- Pas de livraison : ne jamais proposer de livraison, uniquement le retrait sur place."]) {
+      const kb = buildKnowledgeBase({
+        nomResto: "Mexico",
+        infoSheet: { horaires: [], livraison: false, retrait: true, modesPaiement: "par carte ou en espèces.", reglesSpeciales: regles },
+        lienCommande: "https://x",
+      });
+      expect(kb).toBe(
+        [
+          "# Mexico",
+          "## Horaires d'ouverture\nNon renseignés.",
+          "## Modes de service\nLivraison : non, le resto ne livre pas.\nRetrait sur place : oui.",
+          "## Moyens de paiement\npar carte ou en espèces.",
+          `## Règles spéciales du resto\n${regles}`,
+          "## Commander\nCommande en ligne sur la page de commande PFlow Order, ouverte par le bouton « Commander » (fonctions proposer_commande ou lancer_commande). N'écris jamais son adresse.",
+        ].join("\n\n"),
+      );
+    }
+  });
+});

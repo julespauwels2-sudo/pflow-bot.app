@@ -62,6 +62,17 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - 19 : prérequis communs, puis **Cookies** (mode « toujours ») : 5 étapes du runbook.
 - 20 : **Mexico** et **ag pizza** (mots-clés uniquement).
 - 21 : clôture d'UChat (bots désactivés, contrôle des numéros).
+- **21 novembre, avant les bascules** : toutes les alertes (transferts de tous les canaux, questions sans réponse,
+  alertes techniques) partent aussi sur l'appli mobile PFlow ; Web Push gardé ; bandeau de la page État sur les deux
+  voies ; bouton « Envoyer une alerte de test ». PR à fusionner après validation de la Preview.
+- **21 novembre (soir)** : l'IA répond aux questions de tournée avec les tournées saisies ; emoji d'accueil par resto
+  (`{{emoji_accueil}}`). PR avec Preview ; après fusion : écritures en base de `docs/etape-c/tournees-emoji.md`
+  (fiche de Cookies, emojis, Accueil), puis saisir les tournées de Leslie dans la fiche de Cookies.
+- **21 novembre (nuit)** : emoji d'accueil en production (fait). PR « réponses de l'IA » (courtes, bouton Commander
+  après une réponse sur la carte) : vérifier avec l'IA réelle sur la Preview (clé Claude à cocher pour la Preview),
+  puis fusion avec l'accord de Jules, avant ou après la bascule d'AG Pizza.
+- **Après les bascules** : lenteur des réponses manuelles dans la boîte de réception (mesure, cause, affichage
+  immédiat) : PR séparée.
 
 ### Après le 22 novembre
 - PR « Envoi rapide depuis la boîte de réception » (21 novembre) : réponse affichée tout de suite puis confirmée,

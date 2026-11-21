@@ -51,7 +51,7 @@ const accueil: FlowGraph = {
     ifVariable("c_nouv", 240, 80, "nouvelle_conversation", "oui"),
     message("m", 560, -40, [
       {
-        text: "👋 Hello {{prenom}} ! Bienvenue chez {{nom_resto}} 🍔 Une petite faim ? Composez votre commande en quelques clics 👇",
+        text: "👋 Hello {{prenom}} ! Bienvenue chez {{nom_resto}} {{emoji_accueil}} Une petite faim ? Composez votre commande en quelques clics 👇",
         buttons: [orderButton("cmd", "Commander")],
       },
       {

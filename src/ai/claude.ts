@@ -65,9 +65,9 @@ export async function askClaude(client: Pick<Anthropic, "messages">, req: AiRequ
   const parsed = aiDecisionSchema.safeParse(json);
   if (!parsed.success) throw new Error("Réponse de l'IA au mauvais format");
 
-  const { action, fonction, texte } = parsed.data;
+  const { action, fonction, texte, sujet } = parsed.data;
   return {
-    decision: { action, ...(fonction ? { fonction } : {}), texte },
+    decision: { action, ...(fonction ? { fonction } : {}), texte, ...(sujet ? { sujet } : {}) },
     usage,
     model: response.model || model,
     costUsd: costUsd(model, usage),
