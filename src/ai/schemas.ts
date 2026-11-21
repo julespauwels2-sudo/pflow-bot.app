@@ -35,4 +35,5 @@ export const aiDecisionSchema = z.object({
   // Toujours présents avec les sorties structurées ; tolérés absents par sécurité.
   fonction: z.string().default(""),
   texte: z.string().default(""),
+  sujet: z.enum(["carte", "autre"]).optional(),
 });

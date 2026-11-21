@@ -173,7 +173,17 @@ export function formatFixedDelivery(days: DeliveryDays[], zonesText = ""): strin
 
 export const EXCEPTIONAL_ROUNDS_TITLE = "📅 *Livraisons exceptionnelles*";
 
+/** Emoji d'accueil quand la fiche n'en donne pas. */
+export const DEFAULT_WELCOME_EMOJI = "🍽️";
+
+/** Emoji du message d'accueil : celui de la fiche, sinon 🍽️. */
+export function welcomeEmoji(sheet: Pick<InfoSheet, "emojiAccueil">): string {
+  return sheet.emojiAccueil?.trim() || DEFAULT_WELCOME_EMOJI;
+}
+
 export interface InfoVariables {
+  /** Emoji du message d'accueil (fiche du resto, 🍽️ par défaut). */
+  emoji_accueil: string;
   horaires: string;
   horaires_du_jour: string;
   adresse: string;
@@ -251,6 +261,7 @@ export function infoSheetVariables(sheet: InfoSheet, now: Date, timezone: string
   if (paiement) parts.push(`💳 *Paiement*\n${paiement}`);
 
   return {
+    emoji_accueil: welcomeEmoji(sheet),
     horaires,
     horaires_du_jour: sheet.horaires.length ? formatTodayHours(sheet, now, timezone) : "",
     adresse,

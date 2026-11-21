@@ -14,6 +14,15 @@ import {
   type InfoSheet,
 } from "@/engine";
 
+/**
+ * Questions de passage (« vous passez quand à Jarry ? ») en livraison sur planning : l'IA répond elle-même avec
+ * les tournées à venir, et ne passe la main que si l'info manque ou si le client veut une confirmation précise.
+ */
+export const ROUND_QUESTION_RULE =
+  "Question sur un passage (« vous passez quand à Jarry ? », « vous venez jeudi ? ») : réponds toi-même avec la date, l'horaire et le lieu des tournées ci-dessus qui correspondent. Si le lieu ou la date demandés n'apparaissent dans aucune de ces tournées, dis-le simplement et propose de demander à l'équipe. Passe la main à l'équipe seulement si le client le souhaite ou s'il veut une confirmation précise (passage dans son entreprise à une adresse exacte, heure exacte, réservation).";
+export const NO_ROUND_QUESTION_RULE =
+  "Question sur une date ou un lieu de passage : aucune tournée n'est renseignée, n'invente rien et passe la main à l'équipe, qui connaît le planning.";
+
 /** Nombre maximum de tournées données à l'IA (les plus proches). */
 export const MAX_AI_ROUNDS = 12;
 
@@ -71,6 +80,7 @@ export function buildKnowledgeBase({ nomResto, infoSheet: sheet, lienCommande }:
           [
             rounds.length ? rounds.map(formatRound).join("\n") : NO_ROUND_TEXT,
             "Le resto livre uniquement à ces dates et à ces endroits. Ne propose jamais une autre date ou un autre lieu.",
+            rounds.length ? ROUND_QUESTION_RULE : NO_ROUND_QUESTION_RULE,
           ].join("\n"),
         ),
       );

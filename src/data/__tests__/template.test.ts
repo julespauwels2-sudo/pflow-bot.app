@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_CHANNEL_SETTINGS, findTrigger, runEngine, type Flow, type InfoSheet } from "@/engine";
+import { DEFAULT_CHANNEL_SETTINGS, findTrigger, runEngine, type AiRequest, type Flow, type InfoSheet } from "@/engine";
+import { ROUND_QUESTION_RULE } from "@/ai/knowledge";
+import { buildPrompt } from "@/ai/prompt";
 import { lintFlow } from "@/editor/lint";
 import { createLocalRepositories } from "../local/repositories";
 import { createMemoryStore } from "../local/store";
@@ -66,6 +68,82 @@ describe("modèle maître", () => {
     }
   });
 
+  it("accueil : l'emoji de la fiche de chaque resto remplace l'emoji fixe (🍽️ si vide)", async () => {
+    const repos = setup();
+    const template = await createMasterTemplate(repos);
+    const flows = (await repos.flows.listByOwner(template.id)).map(toEngineFlow).filter((f): f is Flow => f !== null);
+    const welcome = async (nomResto: string, emojiAccueil?: string) => {
+      const r = await runEngine({
+        now: new Date("2026-11-21T16:00:00Z"),
+        client: { id: "c", nomResto, orderSlug: "slug", timezone: "America/Guadeloupe" },
+        channel: { id: "ch", clientId: "c", triggerMode: "toujours" as const, ...DEFAULT_CHANNEL_SETTINGS },
+        flows,
+        infoSheet: { horaires: [], ...(emojiAccueil === undefined ? {} : { emojiAccueil }) },
+        contact: { id: "x", profileName: "Léa", pause: null, aiUsage: { day: "", calls: 0 } },
+        session: null,
+        message: { kind: "text", text: "bonjour" },
+      });
+      return (r.outgoing[0] as { text: string }).text;
+    };
+    const suite = " Une petite faim ? Composez votre commande en quelques clics 👇";
+    expect(await welcome("Cookies An Nou", "🍪")).toBe(`👋 Hello Léa ! Bienvenue chez Cookies An Nou 🍪${suite}`);
+    expect(await welcome("Mexico", "🌯")).toBe(`👋 Hello Léa ! Bienvenue chez Mexico 🌯${suite}`);
+    expect(await welcome("AG Pizza", "🍕")).toBe(`👋 Hello Léa ! Bienvenue chez AG Pizza 🍕${suite}`);
+    // Champ vide ou absent : 🍽️, jamais le 🍔 d'avant ni « {{emoji_accueil}} » brut.
+    expect(await welcome("Nouveau resto")).toBe(`👋 Hello Léa ! Bienvenue chez Nouveau resto 🍽️${suite}`);
+    expect(await welcome("Nouveau resto", "  ")).toBe(`👋 Hello Léa ! Bienvenue chez Nouveau resto 🍽️${suite}`);
+    const json = JSON.stringify(flows);
+    expect(json).not.toContain("🍔");
+    expect(json).toContain("{{emoji_accueil}}");
+  });
+
+  it("« Vous passez quand à Jarry ? » arrive à l'IA avec les tournées à venir (jamais les passées)", async () => {
+    const repos = setup();
+    const template = await createMasterTemplate(repos);
+    const flows = (await repos.flows.listByOwner(template.id)).map(toEngineFlow).filter((f): f is Flow => f !== null);
+    const requests: AiRequest[] = [];
+    const ai = async (req: AiRequest) => {
+      requests.push(req);
+      return { decision: { action: "repondre" as const, texte: "Leslie passe à Jarry mardi 24 novembre, de 11h30 à 13h 🍪" }, usage: { inputTokens: 1, outputTokens: 1 } };
+    };
+    const ask = (infoSheet: InfoSheet) =>
+      runEngine(
+        {
+          now: new Date("2026-11-21T16:00:00Z"),
+          client: { id: "c", nomResto: "Cookies An Nou", orderSlug: "cookies-an-nou", timezone: "America/Guadeloupe" },
+          channel: { id: "ch", clientId: "c", triggerMode: "toujours" as const, ...DEFAULT_CHANNEL_SETTINGS },
+          flows,
+          infoSheet,
+          contact: { id: "x", profileName: "Léa", pause: null, aiUsage: { day: "", calls: 0 }, lastInboundAt: "2026-11-21T15:58:00Z" },
+          session: null,
+          message: { kind: "text", text: "Vous passez quand à Jarry ?" },
+        },
+        { ai },
+      );
+    const base: InfoSheet = { horaires: [], livraison: true, retrait: false };
+    const r = await ask({
+      ...base,
+      tournees: [
+        { id: "passee", date: "2026-11-17", lieux: "Jarry — Orange" },
+        { id: "t1", date: "2026-11-24", de: "11:30", a: "13:00", lieux: "Jarry — Orange, EDF" },
+      ],
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0].infoSheet.tournees?.map((t) => t.id)).toEqual(["t1"]);
+    const kbOf = (req: AiRequest) => buildPrompt(req).system.find((b) => b.title === "Base de connaissances")!.text;
+    const kb = kbOf(requests[0]);
+    expect(kb).toContain("Jarry — Orange, EDF");
+    expect(kb).toContain(ROUND_QUESTION_RULE);
+    // La réponse de l'IA part telle quelle : pas de transfert.
+    expect(r.outgoing.some((m) => "text" in m && m.text.includes("mardi 24 novembre"))).toBe(true);
+    expect(r.events.some((e) => e.type === "handoff")).toBe(false);
+
+    // Sans planning : l'IA reçoit une fiche sans tournée (et donc la consigne de passer la main).
+    await ask(base);
+    expect(requests[1].infoSheet.tournees ?? []).toEqual([]);
+    expect(kbOf(requests[1])).not.toContain(ROUND_QUESTION_RULE);
+  });
+
   it("tourne dans le moteur avec les infos d'un client", async () => {
     const repos = setup();
     const template = await createMasterTemplate(repos);
@@ -83,7 +161,7 @@ describe("modèle maître", () => {
     const r = await runEngine({ ...base, message: { kind: "text", text: "yo" } });
     expect(r.outgoing[0]).toMatchObject({
       kind: "link",
-      text: "👋 Hello Léa ! Bienvenue chez Cookies An Nou 🍔 Une petite faim ? Composez votre commande en quelques clics 👇",
+      text: "👋 Hello Léa ! Bienvenue chez Cookies An Nou 🍽️ Une petite faim ? Composez votre commande en quelques clics 👇",
       url: "https://order.pflow.fr/c/cookies-an-nou",
     });
     expect(r.outgoing[1]).toMatchObject({ kind: "buttons" });
@@ -127,7 +205,7 @@ describe("modèle maître", () => {
 
     // 4. « Pauwels Jules » : pas de prénom deviné → « Hello ! ».
     const first = await say("bonjour", contact("Pauwels Jules"));
-    expect(textOf(first.outgoing[0])).toBe("👋 Hello ! Bienvenue chez Cookies An Nou 🍔 Une petite faim ? Composez votre commande en quelques clics 👇");
+    expect(textOf(first.outgoing[0])).toBe("👋 Hello ! Bienvenue chez Cookies An Nou 🍽️ Une petite faim ? Composez votre commande en quelques clics 👇");
 
     // 2. Re-« bonjour » 5 min plus tard : version courte (une bulle, 3 boutons), pas le grand accueil.
     const again = await say("Bonjour");

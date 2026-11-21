@@ -1138,3 +1138,47 @@ ni déployé en production avant « bascules terminées »**. Deux PR séparées
   (les modèles de PFlow Démo ont été créés de la même façon). L'examen ne concerne que l'Embedded Signup des comptes
   de clients extérieurs.
 
+## 21 novembre 2026 (suite) — toutes les alertes sur l'appli PFlow (avant les bascules)
+
+Jules a supprimé la PWA de PFlow Bots et utilise l'appli mobile PFlow (celle du CRM). Seules les alertes « Je veux le
+mien » y arrivaient : les transferts des clients des restos ne partaient qu'en Web Push, donc nulle part.
+
+**Fait (PR séparée, à fusionner avant les bascules après validation de la Preview)**
+- **Toutes les alertes** partent sur l'appli, par le même chemin que « Je veux le mien » (rpc `app_alerte_bot`) :
+  transferts de tous les canaux (restos compris), questions sans réponse de la démo, « Je veux le mien », et une
+  nouvelle **alerte technique** (jetons Meta non renouvelés, tâche quotidienne). Le Web Push reste envoyé en plus.
+- Titre de la notification : le resto (ou PFlow Démo) et le motif ; texte : le client et son message.
+- **Une notification par alerte** : l'heure est dans la clé. Avant, la clé `mien:<conversation>` ne prévenait qu'une
+  fois par conversation, car `qg_notif_poser` ignore une clé déjà posée.
+- **Reçue par l'appli** = posée dans la file ET au moins un iPhone actif (`app_appareils`). Sinon : « aucun iPhone »,
+  « notifications coupées dans le QG », « non configurée » ou l'erreur.
+- **Page État** :
+  - le bandeau rouge s'affiche si une alerte n'a été reçue par aucune des deux voies, ou si aucune voie ne peut joindre
+    Jules (ni iPhone, ni appareil Web Push) ;
+  - la liste indique la voie (appli PFlow ou Web Push) ;
+  - bouton « Envoyer une alerte de test » (les deux voies, résultat de chacune).
+- Aucune migration : « gérant prévenu » = appli OU Web Push ; les erreurs de l'appli vont dans `alerte_erreur`.
+- L'appli reçoit l'alerte sous 2 minutes au plus (rythme de qg-notifier dans le CRM). Toutes ces alertes ont pour
+  l'instant le type « prospect » dans l'appli (son « cloche ») : `app_alerte_bot` fixe ce type, le changer demande un
+  script SQL dans le CRM.
+
+## 21 novembre 2026 (soir) — questions de tournée et emoji d'accueil (PR, sans fusion)
+
+- **Tournées** : « Vous passez quand à Jarry ? » partait à l'équipe parce que la fiche de Cookies l'imposait (règle
+  spéciale), et aucun planning n'est saisi (`bot_tournees` vide ; rien dans le CRM). La consigne de l'IA en livraison
+  sur planning dit maintenant : répondre avec les tournées à venir, transférer seulement si l'info manque ou si le
+  client veut une confirmation précise. Nouvelle règle de la fiche de Cookies proposée (SQL montré, non appliqué).
+- **Emoji d'accueil** : champ de la fiche + variable `{{emoji_accueil}}` (🍽️ si vide). Pré-remplissage 🍪 / 🌯 / 🍕
+  et remplacement dans l'Accueil du modèle maître et la copie d'AG Pizza : SQL montré, à jouer après le déploiement.
+- Détails et SQL : `docs/etape-c/tournees-emoji.md`. 506 tests.
+
+## 21 novembre 2026 (nuit) — mise en ligne de l'emoji d'accueil, réglage des réponses de l'IA (PR)
+
+- **Fait en production (accord de Jules)** : fiche de Cookies (nouvelles règles de tournée) ; PR n° 38 fusionnée,
+  déploiement `dpl_FW4Jd4Ded5Zz7cPr8M2hAF8msuNt` (commit `a91fb75` ; précédent `dca51d6`) ; emojis 🍪 / 🌯 / 🍕 ;
+  Accueil du modèle maître en v4 avec `{{emoji_accueil}}` ; copie de l'Accueil d'AG Pizza supprimée (il suit le
+  modèle maître). Accueil des 3 restos vérifié avec le moteur sur les données de production.
+- **PR (sans fusion)** : réponses de l'IA des restos plus courtes, jour et heure jamais annoncés sauf demande ;
+  après une réponse sur la carte, le bouton « Commander » au lieu de « Besoin d'un petit coup de main ? » (nouveau
+  champ « sujet » de la réponse de l'IA). Démos et transferts inchangés. `docs/etape-c/ia-reponses-courtes.md`.
+  514 tests.

@@ -65,6 +65,17 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - **21 novembre (en cours)** : bascule des 3 clients d'UChat vers PFlow Bots. Rien n'est fusionné ni déployé en
   production avant « bascules terminées » (Jules) : PR n° 34 (démo PFlow qui redémarre) et PR « modèles de la
   livraison sur les comptes des restos » en attente.
+- **21 novembre, avant les bascules** : toutes les alertes (transferts de tous les canaux, questions sans réponse,
+  alertes techniques) partent aussi sur l'appli mobile PFlow ; Web Push gardé ; bandeau de la page État sur les deux
+  voies ; bouton « Envoyer une alerte de test ». PR à fusionner après validation de la Preview.
+- **21 novembre (soir)** : l'IA répond aux questions de tournée avec les tournées saisies ; emoji d'accueil par resto
+  (`{{emoji_accueil}}`). PR avec Preview ; après fusion : écritures en base de `docs/etape-c/tournees-emoji.md`
+  (fiche de Cookies, emojis, Accueil), puis saisir les tournées de Leslie dans la fiche de Cookies.
+- **21 novembre (nuit)** : emoji d'accueil en production (fait). PR « réponses de l'IA » (courtes, bouton Commander
+  après une réponse sur la carte) : vérifier avec l'IA réelle sur la Preview (clé Claude à cocher pour la Preview),
+  puis fusion avec l'accord de Jules, avant ou après la bascule d'AG Pizza.
+- **Après les bascules** : lenteur des réponses manuelles dans la boîte de réception (mesure, cause, affichage
+  immédiat) : PR séparée.
 
 ### Après le 22 novembre
 - UChat résilié avant le renouvellement du 22 ; puis retrait de Smart Link et renouvellement de `PONT_CLE`.

@@ -20,6 +20,8 @@ interface SystemStatus {
   evenements: { source: string; cle: string; at: string; erreur?: string }[];
   alertes?: { at: string; canal: string; source: string; prevenu: boolean; voie: string; push?: string; erreur?: string; ouverte: boolean }[];
   push?: { configure: boolean; appareils: number };
+  /** L'appli iPhone « PFlow » (via le CRM) : configurée, iPhone actifs (null : ne répond pas). */
+  appli?: { configure: boolean; appareils: number | null };
   horsListe?: { at: string; fin: string }[];
   jetonsEnDanger?: { resto: string; joursRestants: number | null; erreur?: string }[];
   erreurCanaux?: string;
@@ -270,7 +272,7 @@ function ServerCards({ data }: { data: SystemStatus }) {
       {/* Sur téléphone : juste après le bandeau d'alerte (notification de test, appareils). */}
       <Card title="Notifications push (iPhone, ordinateur)" className="order-first md:order-none lg:col-span-2">
         <p className="mb-2 text-xs text-muted">
-          Les alertes partent en notification sur les appareils abonnés (seule voie) ; toucher la notification ouvre la conversation. Sur iPhone : iOS 16.4 ou
+          Web Push, en plus de l&apos;appli PFlow : les alertes partent aussi sur les appareils abonnés ici ; toucher la notification ouvre la conversation. Sur iPhone : iOS 16.4 ou
           plus, depuis l&apos;app ajoutée à l&apos;écran d&apos;accueil.
         </p>
         <PushControls />
@@ -313,7 +315,8 @@ function ServerCards({ data }: { data: SystemStatus }) {
 
 /** Voie de l'alerte : push, ou rien. Les anciennes alertes (avant le push seul) gardent leur voie d'origine. */
 const VOIES: Record<string, string> = {
-  push: "notification push",
+  push: "Web Push",
+  appli: "appli PFlow",
   aucune: "NON REÇUE",
   texte: "WhatsApp (ancienne voie)",
   modele: "WhatsApp, modèle (ancienne voie)",
@@ -337,8 +340,18 @@ function AlertesBanner({ data }: { data: SystemStatus }) {
         (ouvertes ? ` : ${ouvertes} client${ouvertes > 1 ? "s attendent" : " attend"} peut-être encore une réponse.` : "."),
     );
   }
-  if (canaux && data.push && !data.push.configure) lignes.push("Notifications push non configurées (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY dans Vercel) : aucune alerte ne peut partir.");
-  else if (canaux && data.push && data.push.appareils === 0) lignes.push("Aucun appareil abonné aux notifications : aucune alerte ne peut vous joindre. Active-les ci-dessous (encadré « Notifications push »).");
+  // Aucune des deux voies ne peut joindre Jules : ni Web Push (clés ou appareil), ni l'appli (configurée, un iPhone actif).
+  const pushOk = Boolean(data.push?.configure && data.push.appareils > 0);
+  const appliOk = Boolean(data.appli?.configure && (data.appli.appareils ?? 0) > 0);
+  if (canaux && data.push && !pushOk && !appliOk) {
+    lignes.push(
+      "Aucune voie ne peut vous joindre : ni l'appli PFlow (aucun iPhone enregistré" +
+        (data.appli && !data.appli.configure ? ", appli non configurée" : data.appli?.appareils === null ? ", la base ne répond pas" : "") +
+        "), ni le Web Push (" +
+        (data.push.configure ? "aucun appareil abonné" : "clés VAPID absentes") +
+        "). Ouvre l'appli PFlow sur ton iPhone et autorise les notifications.",
+    );
+  }
   for (const j of data.jetonsEnDanger ?? []) {
     lignes.push(
       `Jeton Meta de ${j.resto} ${j.joursRestants !== null && j.joursRestants >= 0 ? `expire dans ${j.joursRestants} jour${j.joursRestants > 1 ? "s" : ""}` : "expiré"} : le renouvellement automatique échoue${j.erreur ? ` (${j.erreur})` : ""}. Envoie-lui un lien de reconnexion (encadré « Connecter le WhatsApp d'un resto »).`,
@@ -367,14 +380,63 @@ const PUSH: Record<string, { label: string; tone: "success" | "warning" | "neutr
 };
 
 /** Alertes au gérant (« un client attend une réponse ») : par où elles sont parties, et les échecs. */
+/** « Envoyer une alerte de test » : par l'appli PFlow et par le Web Push, et le résultat de chaque voie. */
+function AlerteTest() {
+  const [etat, setEtat] = useState<{ status: "idle" } | { status: "loading" } | { status: "error"; error: string } | { status: "ready"; data: AlerteTestResult }>({ status: "idle" });
+  async function envoyer() {
+    setEtat({ status: "loading" });
+    try {
+      const token = await accessToken();
+      const response = await fetch("/api/etat/alerte-test", { method: "POST", headers: token ? { authorization: `Bearer ${token}` } : {} });
+      const body = (await response.json().catch(() => ({}))) as AlerteTestResult & { error?: string };
+      if (!response.ok && !body.voie) throw new Error(body.error ?? `Erreur ${response.status}`);
+      setEtat({ status: "ready", data: body });
+    } catch (error) {
+      setEtat({ status: "error", error: errorText(error) });
+    }
+  }
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2" data-testid="alerte-test">
+      <Button variant="secondary" onClick={envoyer} disabled={etat.status === "loading"}>
+        {etat.status === "loading" ? "Envoi…" : "Envoyer une alerte de test"}
+      </Button>
+      {etat.status === "error" && <span className="text-xs text-alerte">{etat.error}</span>}
+      {etat.status === "ready" && (
+        <span className="flex flex-wrap items-center gap-1 text-xs">
+          <Badge tone={etat.data.appli === "posee" ? "success" : "warning"}>appli : {APPLI[etat.data.appli] ?? etat.data.appli}</Badge>
+          <Badge tone={etat.data.push === "envoyee" ? "success" : "warning"}>Web Push : {PUSH[etat.data.push]?.label ?? etat.data.push}</Badge>
+          {etat.data.voie === "aucune" && <span className="font-semibold text-alerte">reçue par aucune voie</span>}
+          {etat.data.voie !== "aucune" && <span className="text-muted">l&apos;appli la reçoit sous 2 minutes au plus</span>}
+        </span>
+      )}
+    </div>
+  );
+}
+
+interface AlerteTestResult {
+  voie: string;
+  push: string;
+  appli: string;
+  erreurs?: string[];
+}
+
+const APPLI: Record<string, string> = {
+  posee: "envoyée",
+  aucun_appareil: "aucun iPhone",
+  coupee: "notifications coupées dans le QG",
+  non_configure: "non configurée",
+  echec: "échec",
+};
+
 function AlertesCard({ alertes }: { alertes: NonNullable<SystemStatus["alertes"]> }) {
   const echecs = alertes.filter((a) => !a.prevenu);
   return (
     <Card title="Alertes au gérant (un client attend une réponse)" className="lg:col-span-2">
       <p className="mb-2 text-xs text-muted">
-        Une seule voie : la notification push sur les appareils abonnés. Sans appareil ou en cas d&apos;échec, l&apos;alerte reste visible
-        dans la boîte de réception (« 🔔 Attend l&apos;équipe ») et le bandeau rouge s&apos;affiche en haut de cette page. Ni WhatsApp, ni e-mail.
+        Deux voies en parallèle : l&apos;appli PFlow sur ton iPhone (via le CRM) et le Web Push. Si aucune des deux ne la prend, l&apos;alerte
+        reste visible dans la boîte de réception (« 🔔 Attend l&apos;équipe ») et le bandeau rouge s&apos;affiche en haut de cette page.
       </p>
+      <AlerteTest />
       {echecs.length > 0 && (
         <div className="mb-2" data-testid="alertes-echecs">
           <Notice tone="error">{echecs.length} alerte(s) non reçue(s) parmi les {alertes.length} dernières : voir la boîte de réception.</Notice>
