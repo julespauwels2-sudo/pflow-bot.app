@@ -268,6 +268,29 @@ describe("de bout en bout contre un faux serveur Meta", () => {
     expect((await fresh.store.listMessages(contact.id)).at(-1)).toMatchObject({ statut: "echec" });
   });
 
+  it("transfert d'un client de resto : l'alerte part sur l'appli PFlow (nom du resto), le transfert est « prévenu » même sans Web Push", async () => {
+    received.length = 0;
+    const { store, deps } = await setup({ triggerMode: "toujours" });
+    const file: Record<string, unknown>[] = [];
+    const crm = {
+      url: "https://crm.example",
+      serviceKey: "service",
+      fetch: (async (url: string, o: RequestInit) => {
+        if (url.includes("/app_appareils")) return Response.json([{ id: "iphone" }]);
+        file.push(JSON.parse(String(o.body)));
+        return Response.json(file.length);
+      }) as unknown as typeof fetch,
+    };
+    const avecAppli = { ...deps, alerts: { crm }, ai: async () => ({ decision: { action: "transfert_humain" as const, texte: "" }, usage: { inputTokens: 1, outputTokens: 1 } }) };
+    await processWebhookPayload(payload([text("salut")]), avecAppli);
+    await processWebhookPayload(payload([text("je voudrais parler à quelqu'un svp")]), avecAppli);
+    expect(file).toHaveLength(1);
+    expect(file[0]).toMatchObject({ p_titre: expect.stringContaining("Cookies An Nou"), p_corps: expect.stringContaining("je voudrais parler à quelqu'un svp"), p_url: "/crm#bots" });
+    const [t] = await store.listTransferts("canal1");
+    // Web Push non configuré dans ce test : l'appli seule suffit, pas de bandeau rouge.
+    expect(t).toMatchObject({ gerantPrevenu: true, alertePush: "non_configure" });
+  });
+
   it("statuts d'envoi : le message passe en « lu »", async () => {
     received.length = 0;
     const { store, deps } = await setup();
