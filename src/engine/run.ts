@@ -91,8 +91,11 @@ export const TEXTS = {
   } satisfies Record<QuestionValidation, string>,
 };
 
-/** Noms des variables tirées de la fiche du resto ({{horaires}}, {{infos_livraison}}, {{modes_paiement}}…). */
-const INFO_SHEET_VARIABLES = Object.keys(infoSheetVariables({ horaires: [] }, new Date(0), "UTC"));
+/**
+ * Noms des variables tirées de la fiche du resto ({{horaires}}, {{infos_livraison}}, {{modes_paiement}}…).
+ * Sans {{emoji_accueil}} : jamais vide (🍽️ par défaut), ce n'est pas une info pratique (l'Accueil en démo reste l'Accueil).
+ */
+const INFO_SHEET_VARIABLES = Object.keys(infoSheetVariables({ horaires: [] }, new Date(0), "UTC")).filter((v) => v !== "emoji_accueil");
 
 /** Le flux affiche des infos de la fiche du resto (un de ses messages utilise une de ces variables). */
 export function flowShowsInfoSheet(flow: Flow): boolean {
