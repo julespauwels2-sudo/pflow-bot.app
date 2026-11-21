@@ -47,7 +47,7 @@ const accueil: FlowGraph = {
         bubbles: [
           {
             id: "b1",
-            text: "👋 Hello {{prenom}} ! Bienvenue chez {{nom_resto}} 🍔 Une petite faim ? Composez votre commande en quelques clics 👇",
+            text: "👋 Hello {{prenom}} ! Bienvenue chez {{nom_resto}} {{emoji_accueil}} Une petite faim ? Composez votre commande en quelques clics 👇",
             buttons: [{ id: "cmd", kind: "link", title: "Commander", orderLink: true }],
           },
           {

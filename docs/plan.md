@@ -65,6 +65,9 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - **21 novembre, avant les bascules** : toutes les alertes (transferts de tous les canaux, questions sans réponse,
   alertes techniques) partent aussi sur l'appli mobile PFlow ; Web Push gardé ; bandeau de la page État sur les deux
   voies ; bouton « Envoyer une alerte de test ». PR à fusionner après validation de la Preview.
+- **21 novembre (soir)** : l'IA répond aux questions de tournée avec les tournées saisies ; emoji d'accueil par resto
+  (`{{emoji_accueil}}`). PR avec Preview ; après fusion : écritures en base de `docs/etape-c/tournees-emoji.md`
+  (fiche de Cookies, emojis, Accueil), puis saisir les tournées de Leslie dans la fiche de Cookies.
 - **Après les bascules** : lenteur des réponses manuelles dans la boîte de réception (mesure, cause, affichage
   immédiat) : PR séparée.
 
