@@ -1146,3 +1146,14 @@ mien » y arrivaient : les transferts des clients des restos ne partaient qu'en 
 - **Emoji d'accueil** : champ de la fiche + variable `{{emoji_accueil}}` (🍽️ si vide). Pré-remplissage 🍪 / 🌯 / 🍕
   et remplacement dans l'Accueil du modèle maître et la copie d'AG Pizza : SQL montré, à jouer après le déploiement.
 - Détails et SQL : `docs/etape-c/tournees-emoji.md`. 506 tests.
+
+## 21 novembre 2026 (nuit) — mise en ligne de l'emoji d'accueil, réglage des réponses de l'IA (PR)
+
+- **Fait en production (accord de Jules)** : fiche de Cookies (nouvelles règles de tournée) ; PR n° 38 fusionnée,
+  déploiement `dpl_FW4Jd4Ded5Zz7cPr8M2hAF8msuNt` (commit `a91fb75` ; précédent `dca51d6`) ; emojis 🍪 / 🌯 / 🍕 ;
+  Accueil du modèle maître en v4 avec `{{emoji_accueil}}` ; copie de l'Accueil d'AG Pizza supprimée (il suit le
+  modèle maître). Accueil des 3 restos vérifié avec le moteur sur les données de production.
+- **PR (sans fusion)** : réponses de l'IA des restos plus courtes, jour et heure jamais annoncés sauf demande ;
+  après une réponse sur la carte, le bouton « Commander » au lieu de « Besoin d'un petit coup de main ? » (nouveau
+  champ « sujet » de la réponse de l'IA). Démos et transferts inchangés. `docs/etape-c/ia-reponses-courtes.md`.
+  514 tests.

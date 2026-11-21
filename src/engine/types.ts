@@ -415,6 +415,11 @@ export interface AiDecision {
   fonction?: string;
   /** Réponse au client, ou texte passé au flux de la fonction. */
   texte?: string;
+  /**
+   * Sujet d'une réponse (action « repondre ») : « carte » pour la carte, un produit, une disponibilité ou un prix
+   * (le bouton « Commander » suit alors la réponse), « autre » sinon. Absent : « autre ».
+   */
+  sujet?: "carte" | "autre";
 }
 
 export interface AiRequest {

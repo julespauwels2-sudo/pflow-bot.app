@@ -84,9 +84,9 @@ describe("base de connaissances", () => {
 describe("prompt", () => {
   it("met les règles, la consigne et la base en cache, puis le contexte du message", () => {
     const prompt = buildPrompt(request);
-    expect(prompt.system.map((b) => b.title)).toEqual(["Règles PFlow", "Consigne de l'agent", "Base de connaissances", "Contexte"]);
-    expect(prompt.system.findIndex((b) => b.cache)).toBe(2);
-    const context = prompt.system[3].text;
+    expect(prompt.system.map((b) => b.title)).toEqual(["Règles PFlow", "Consigne de l'agent", "Style des réponses", "Base de connaissances", "Contexte"]);
+    expect(prompt.system.findIndex((b) => b.cache)).toBe(3);
+    const context = prompt.system[4].text;
     expect(context).toContain("mardi 3 novembre 2026, 12:00");
     expect(context).toContain("Prénom du client : Léa.");
     expect(context).toContain("- lancer_commande : Le client veut commander");
@@ -116,7 +116,7 @@ describe("prompt", () => {
     const schema = decisionJsonSchema([]) as { properties: { action: { enum: string[] } } };
     expect(schema.properties.action.enum).toEqual(["repondre", "transfert_humain"]);
     const prompt = buildPrompt({ ...request, functions: [] });
-    expect(prompt.system[3].text).toContain("Aucune");
+    expect(prompt.system[4].text).toContain("Aucune");
   });
 
   it("formate la date locale en français", () => {
@@ -152,8 +152,8 @@ describe("appel à Claude", () => {
     expect(params.thinking).toEqual({ type: "disabled" });
     expect(params).not.toHaveProperty("temperature");
     const system = params.system as Anthropic.TextBlockParam[];
-    expect(system[2].cache_control).toEqual({ type: "ephemeral" });
-    expect(system[3].cache_control).toBeUndefined();
+    expect(system[3].cache_control).toEqual({ type: "ephemeral" });
+    expect(system[4].cache_control).toBeUndefined();
     expect(params.output_config?.format?.type).toBe("json_schema");
 
     expect(result.decision).toEqual({ action: "fonction", fonction: "lancer_commande", texte: "" });
@@ -165,6 +165,13 @@ describe("appel à Claude", () => {
   it("tolère une réponse sans le champ « fonction »", async () => {
     const { client } = fakeClient({ text: JSON.stringify({ action: "repondre", texte: "Oui !" }) });
     expect((await askClaude(client, request)).decision).toEqual({ action: "repondre", texte: "Oui !" });
+  });
+
+  it("lit le sujet de la réponse (carte / autre) ; un sujet inconnu est refusé", async () => {
+    const { client } = fakeClient({ text: JSON.stringify({ action: "repondre", fonction: "", texte: "Oui !", sujet: "carte" }) });
+    expect((await askClaude(client, request)).decision).toEqual({ action: "repondre", texte: "Oui !", sujet: "carte" });
+    const bad = fakeClient({ text: JSON.stringify({ action: "repondre", texte: "Oui !", sujet: "météo" }) });
+    await expect(askClaude(bad.client, request)).rejects.toThrow("mauvais format");
   });
 
   it("utilise le modèle choisi dans l'agent", () => {
@@ -270,7 +277,7 @@ describe("questions de tournée (« Vous passez quand à Jarry ? »)", () => {
   const ask = (infoSheet: InfoSheet) => buildPrompt({ ...request, message: "Vous passez quand à Jarry ?", infoSheet });
 
   it("avec planning : les tournées et la consigne de répondre soi-même sont dans le contexte", () => {
-    const kb = ask({ ...cookies, tournees: [jarry] }).system[2].text;
+    const kb = ask({ ...cookies, tournees: [jarry] }).system[3].text;
     expect(kb).toContain("## Livraison sur planning (tournées à venir)");
     expect(kb).toContain("• *Mardi 24 novembre* (11h30 – 13h) : Jarry — Orange, EDF");
     expect(kb).toContain(ROUND_QUESTION_RULE);
@@ -281,14 +288,14 @@ describe("questions de tournée (« Vous passez quand à Jarry ? »)", () => {
   });
 
   it("sans planning (aucune tournée) : rien d'inventé, l'IA passe la main à l'équipe", () => {
-    const kb = ask(cookies).system[2].text;
+    const kb = ask(cookies).system[3].text;
     expect(kb).not.toContain("Jarry —");
     expect(kb).not.toContain(ROUND_QUESTION_RULE);
     expect(kb).toContain("## Zones de livraison");
     expect(kb).toContain("s'il n'y a aucune tournée");
     expect(kb).toContain("utilise parler_equipe");
     // Mode planning choisi sans tournée : « aucune tournée » + transfert.
-    const planning = ask({ ...cookies, livraisonMode: "planning" }).system[2].text;
+    const planning = ask({ ...cookies, livraisonMode: "planning" }).system[3].text;
     expect(planning).toContain(NO_ROUND_QUESTION_RULE);
   });
 
