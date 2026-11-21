@@ -62,6 +62,11 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - 19 : prérequis communs, puis **Cookies** (mode « toujours ») : 5 étapes du runbook.
 - 20 : **Mexico** et **ag pizza** (mots-clés uniquement).
 - 21 : clôture d'UChat (bots désactivés, contrôle des numéros).
+- **21 novembre, avant les bascules** : toutes les alertes (transferts de tous les canaux, questions sans réponse,
+  alertes techniques) partent aussi sur l'appli mobile PFlow ; Web Push gardé ; bandeau de la page État sur les deux
+  voies ; bouton « Envoyer une alerte de test ». PR à fusionner après validation de la Preview.
+- **Après les bascules** : lenteur des réponses manuelles dans la boîte de réception (mesure, cause, affichage
+  immédiat) : PR séparée.
 
 ### Après le 22 novembre
 - UChat résilié avant le renouvellement du 22 ; puis retrait de Smart Link et renouvellement de `PONT_CLE`.
