@@ -72,7 +72,7 @@ describe("répondre depuis la boîte de réception (route)", () => {
     expect(messages).toHaveLength(1);
     expect(messages[0]).toMatchObject({ id: body.message.id, sens: "sortant", auteur: "humain", statut: "envoye", wamid: "wamid.1" });
     expect(body.message).toMatchObject({ texte: "Bonjour, je regarde ça !", statut: "envoye" });
-    expect(body.pause.reason).toBe("manuel");
+    expect(body.pause.reason).toBe("echo_gerant");
     expect((await store.getContact(contactId))?.state.pause).toEqual(body.pause);
     // Contact et numéros lus une seule fois chacun (pas de relecture dans l'action).
     expect(reads.getContact).toBe(2); // 1 par la route + 1 ci-dessus

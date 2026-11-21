@@ -129,6 +129,10 @@ export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: 
       const m = messages.find((x) => x.wamid === wamid);
       if (m) Object.assign(m, { statut, ...(erreur ? { erreur } : {}) });
     },
+    async noteMessage(messageId, note) {
+      const m = messages.find((x) => x.id === messageId);
+      if (m) m.erreur = note;
+    },
     async addTransfert(t) {
       const stored: Transfert = { gerantPrevenu: false, ...clone(t), id: newId(), at: now() };
       transferts.push(stored);

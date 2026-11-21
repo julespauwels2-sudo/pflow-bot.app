@@ -2,17 +2,17 @@
 
 /**
  * Boîte de réception sur téléphone (< 768 px), inspirée de WhatsApp :
- * - liste en plein écran : nom, extrait, heure, « 🔔 Attend l'équipe » bien visible, non lus en gras ; celles qui
- *   attendent Jules en haut ;
+ * - liste en plein écran : nom, extrait (qui a écrit), heure, état unique (bot actif, en pause…, ignoré), non lus en
+ *   gras ; triée par dernier message ; filtre par resto ;
  * - conversation en plein écran, flèche retour, bulles lisibles, défilement jusqu'au dernier message, zone de
  *   réponse collée en bas et calée au-dessus du clavier iOS (visual viewport), boutons « Reprendre la main » /
  *   « Rendre au bot » de 44 px.
  */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { InboxCanal, InboxConversation } from "@/channels/core/inbox";
-import { mentionEnvoi, type LigneConversation } from "@/lib/inbox-envoi";
+import type { LigneConversation } from "@/lib/inbox-envoi";
+import { BarreEtat, EtatBadge, ListeMessages } from "./inbox-parts";
 import { isUnread, lastAt, plainExtract, shortTime, sortConversations, type SeenState } from "@/lib/inbox-view";
-import { MessageContent } from "./message-content";
 import { MobileHeader, useVisualViewport } from "./mobile";
 import { useAuth } from "./auth-gate";
 import { PushControls } from "./pwa";
@@ -27,12 +27,8 @@ const initials = (name: string) =>
     .slice(0, 2)
     .map((w) => w[0]!.toUpperCase())
     .join("") || "?";
-const clock = (iso: string) => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-
-function pauseLabel(conv: InboxConversation): string | null {
-  if (!conv.pause) return null;
-  return { transfert_humain: "Bot en pause : transfert", echo_gerant: "Bot en pause : le gérant a répondu", manuel: "Bot en pause : tu as la main" }[conv.pause.reason];
-}
+/** Qui a écrit le dernier message, pour l'extrait de la liste. */
+const prefixe = (d: NonNullable<InboxConversation["dernierMessage"]>) => (d.sens === "entrant" ? "" : d.sens === "echo" || d.auteur === "humain" ? "👩‍🍳 Équipe : " : "🤖 ");
 
 export function MobileInboxList({
   canaux,
@@ -41,8 +37,11 @@ export function MobileInboxList({
   onCloseNotice,
   onOpen,
   extra,
+  filtres,
 }: {
   canaux: InboxCanal[];
+  /** Filtre par resto, numéros de test. */
+  filtres?: ReactNode;
   seen: SeenState;
   notice: { tone: "error" | "success"; text: string } | null;
   onCloseNotice: () => void;
@@ -61,6 +60,7 @@ export function MobileInboxList({
         </p>
       </MobileHeader>
       {role === "admin" && <PushControls compact />}
+      {filtres}
       {notice && (
         <Notice tone={notice.tone} onClose={onCloseNotice}>
           {notice.text}
@@ -79,7 +79,6 @@ export function MobileInboxList({
           {rows.map(({ canal, conv }) => {
             const name = who(canal, conv);
             const unread = isUnread(conv, seen);
-            const pause = pauseLabel(conv);
             return (
               <li key={conv.contactId}>
                 <button type="button" onClick={() => onOpen(conv.contactId)} className="flex min-h-[4.5rem] w-full items-center gap-3 px-3.5 py-3 text-left active:bg-pink/5" data-testid="inbox-row">
@@ -96,13 +95,12 @@ export function MobileInboxList({
                     </span>
                     <span className="flex items-center gap-2">
                       <span className={`min-w-0 flex-1 truncate text-sm ${unread ? "font-semibold text-ink" : "text-muted"}`}>
-                        {conv.dernierMessage ? `${conv.dernierMessage.sens === "entrant" ? "" : "↪ "}${plainExtract(conv.dernierMessage.texte)}` : "—"}
+                        {conv.dernierMessage ? `${prefixe(conv.dernierMessage)}${plainExtract(conv.dernierMessage.texte)}` : "—"}
                       </span>
                       {unread && <span className="bg-brand size-2.5 shrink-0 rounded-full" aria-label="non lu" />}
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-1.5">
-                      {conv.transfertOuvert && <span className="bg-brand rounded-full px-2.5 py-0.5 text-xs font-bold text-nuit">🔔 Attend l&apos;équipe</span>}
-                      {pause && !conv.transfertOuvert && <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs font-semibold">⏸ {pause}</span>}
+                      <EtatBadge conv={conv} />
                       <span className="truncate text-xs text-muted">
                         {canal.plateforme === "instagram" ? "📸" : "💬"} {canal.nomResto}
                         {conv.demoEnCours ? ` · démo ${conv.demoEnCours}` : ""}
@@ -149,7 +147,6 @@ export function MobileConversation({
   const stick = useRef(true);
   const vv = useVisualViewport();
   const name = who(canal, conv);
-  const pause = pauseLabel(conv);
   const count = lignes?.length ?? 0;
   // Clavier ouvert : la partie visible est nettement plus petite que la fenêtre.
   const keyboard = vv.height !== null && typeof window !== "undefined" && window.innerHeight - vv.height > 120;
@@ -213,20 +210,8 @@ export function MobileConversation({
             </span>
           </span>
         </div>
-        <div className="flex items-center gap-2 px-3 pb-3">
-          {conv.pause ? (
-            <button type="button" onClick={() => void onRelease()} className="bg-brand shadow-bouton min-h-11 rounded-full px-4 text-sm font-bold text-nuit" data-testid="mobile-rendre">
-              Rendre au bot
-            </button>
-          ) : (
-            <button type="button" onClick={() => void onTakeOver()} className="min-h-11 rounded-full carte px-4 text-sm font-bold text-ink" data-testid="mobile-reprendre">
-              Reprendre la main
-            </button>
-          )}
-          <span className="min-w-0 flex-1 text-xs leading-tight text-white/70">
-            {conv.transfertOuvert && <span className="block font-bold text-rose">🔔 Attend l&apos;équipe</span>}
-            {pause ?? "Le bot répond"}
-          </span>
+        <div className="px-3 pb-3">
+          <BarreEtat conv={conv} onTakeOver={() => void onTakeOver()} onRelease={() => void onRelease()} sombre />
         </div>
       </header>
 
@@ -250,36 +235,7 @@ export function MobileConversation({
         {!lignes ? (
           <p className="py-10 text-center text-sm text-muted">Chargement…</p>
         ) : (
-          lignes.map((m) => (
-            <div key={m.cle} data-testid="inbox-message" data-etat={m.envoi?.etat} className={`flex ${m.sens === "entrant" ? "justify-start" : "justify-end"}`}>
-              <div
-                className={`max-w-[85%] overflow-hidden rounded-2xl px-3 py-1.5 text-base leading-snug break-words whitespace-pre-wrap ${
-                  m.sens === "entrant" ? "rounded-tl-sm carte" : m.auteur === "humain" || m.sens === "echo" ? "rounded-tr-sm aplat-rose" : "rounded-tr-sm aplat-bleu"
-                }`}
-              >
-                {m.sens !== "entrant" && (
-                  <span className="mb-0.5 block text-[11px] font-semibold text-muted">{m.sens === "echo" ? "Gérant (appli)" : m.auteur === "humain" ? "Toi" : "Bot"}</span>
-                )}
-                <MessageContent
-                  texte={m.texte}
-                  contenu={m.contenu}
-                  footer={
-                    <span className="mt-0.5 block text-right text-[11px] text-muted">
-                      {clock(m.at)}
-                      {mentionEnvoi(m) && <span data-testid="inbox-envoi-etat"> · {mentionEnvoi(m)}</span>}
-                      {m.statut === "lu" && " · lu"}
-                      {m.statut === "echec" && <span className="text-alerte"> · échec{m.erreur ? ` : ${m.erreur}` : ""}</span>}
-                      {m.envoi?.etat === "echec" && (
-                        <button type="button" className="ml-1 font-bold text-rose underline" onClick={() => onRetry(m.envoi!.tempId)}>
-                          Réessayer
-                        </button>
-                      )}
-                    </span>
-                  }
-                />
-              </div>
-            </div>
-          ))
+          <ListeMessages lignes={lignes} onRetry={onRetry} grand />
         )}
       </div>
 
@@ -298,7 +254,7 @@ export function MobileConversation({
               rows={1}
               value={texte}
               onChange={(e) => setTexte(e.target.value)}
-              placeholder={conv.pause ? "Message" : "Message (le bot se met en pause)"}
+              placeholder={conv.pause ? "Message" : "Message (le bot se met en pause 12 h)"}
               className="max-h-[132px] min-h-11 flex-1 resize-none rounded-3xl border border-line bg-ink/5 px-4 py-2.5 text-base leading-snug outline-none focus:border-pink focus:ring-4 focus:ring-pink/15"
               data-testid="mobile-reponse"
             />

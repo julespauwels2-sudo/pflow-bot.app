@@ -21,15 +21,38 @@ async function setup(lastInboundAt = "2026-11-05T14:00:00Z") {
 }
 
 describe("boîte de réception", () => {
-  it("liste les conversations par resto, transferts en premier", async () => {
+  it("liste : par dernier message, un état unique par conversation, pauses expirées ignorées, numéros de test Meta signalés", async () => {
     const { store, contactId } = await setup();
+    const lea = (await store.getContact(contactId))!;
+    await store.saveContact({ ...lea, state: { ...lea.state, pause: { reason: "transfert_humain", until: "2026-11-06T14:00:00Z" } } });
     await store.addTransfert({ canalId: "c1", contactId, source: "ia", dernierMessage: "?" });
-    const other = await store.getOrCreateContact("c1", "590690000002", "Max");
-    await store.addMessage({ canalId: "c1", contactId: other.id, sens: "entrant", type: "text", contenu: { texte: "salut" } });
+    const add = async (waId: string, nom: string, at: string, extra: Record<string, unknown> = {}) => {
+      const c = await store.getOrCreateContact("c1", waId, nom);
+      const m = await store.addMessage({ canalId: "c1", contactId: c.id, sens: "entrant", type: "text", contenu: { texte: "salut" }, at, ...extra });
+      return { c, m };
+    };
+    const max = await add("590690000002", "Max", "2026-11-05T14:50:00Z");
+    await store.noteMessage(max.m.id, "ignore:aucun_declencheur");
+    const ana = await add("590690000003", "Ana", "2026-11-05T14:55:00Z");
+    // Pause « l'équipe a répondu » terminée depuis 1 h : le bot répond de nouveau, la conversation n'est plus en pause.
+    await store.saveContact({ ...ana.c, state: { ...ana.c.state, pause: { reason: "echo_gerant", until: "2026-11-05T14:00:00Z" } } });
+    const tom = await add("590690000004", "Tom", "2026-11-05T14:40:00Z");
+    await store.saveContact({ ...tom.c, state: { ...tom.c.state, pause: { reason: "echo_gerant", until: "2026-11-06T02:40:00Z" } } });
     const [inbox] = await listInbox(store, workspace, NOW);
     expect(inbox.nomResto).toBe("Cookies An Nou");
-    expect(inbox.conversations.map((c) => [c.nom, c.transfertOuvert])).toEqual([["Léa", true], ["Max", false]]);
-    expect(inbox.conversations[0]).toMatchObject({ fenetreOuverte: true, dernierMessage: { texte: "je veux parler à quelqu'un" } });
+    expect(inbox.testMeta).toBe(false);
+    expect(inbox.conversations.map((c) => [c.nom, c.etat.code])).toEqual([
+      ["Léa", "transfert"], // dernier message à 15 h (NOW)
+      ["Ana", "actif"],
+      ["Max", "ignore"],
+      ["Tom", "equipe"],
+    ]);
+    expect(inbox.conversations[0]).toMatchObject({ transfertOuvert: true, fenetreOuverte: true, dernierMessage: { texte: "je veux parler à quelqu'un" } });
+    expect(inbox.conversations[1]!.pause).toBeNull();
+    expect(inbox.conversations[2]!.dernierMessage?.note).toBe("ignore:aucun_declencheur");
+
+    const test = createMemoryChannelStore([{ ...canal, numeroAffiche: "+1 555 186 2679 (numéro de test Meta)" }], { now: () => NOW });
+    expect((await listInbox(test, workspace, NOW))[0]!.testMeta).toBe(true);
   });
 
   it("reprendre la main : bot en pause sans fin ; rendre au bot : pause levée et transfert traité", async () => {
@@ -49,7 +72,7 @@ describe("boîte de réception", () => {
     await applyInboxAction({ store, senders: { whatsapp: graph }, now: NOW }, contactId, { type: "repondre", texte: "Bonjour, je regarde ça !" });
     expect(sent).toEqual([{ to: "590690000001", text: "Bonjour, je regarde ça !" }]);
     expect((await store.listMessages(contactId)).at(-1)).toMatchObject({ sens: "sortant", auteur: "humain", statut: "envoye" });
-    expect((await store.getContact(contactId))?.state.pause).toEqual({ reason: "manuel", until: "2026-11-06T03:00:00.000Z" });
+    expect((await store.getContact(contactId))?.state.pause).toEqual({ reason: "echo_gerant", until: "2026-11-06T03:00:00.000Z" });
 
     const closed = await setup("2026-11-03T10:00:00Z");
     await expect(applyInboxAction({ store: closed.store, senders: { whatsapp: closed.graph }, now: NOW }, closed.contactId, { type: "repondre", texte: "?" })).rejects.toThrow("Fenêtre de 24 h fermée");
@@ -75,7 +98,7 @@ describe("boîte de réception : rapidité de l'envoi et de la liste", () => {
     expect(sent).toHaveLength(1);
     expect(result.message).toMatchObject({ sens: "sortant", auteur: "humain", statut: "envoye", wamid: "wamid.x" });
     expect((await store.listMessages(contactId)).at(-1)?.id).toBe(result.message!.id);
-    expect(result.pause).toEqual({ reason: "manuel", until: "2026-11-06T03:00:00.000Z" });
+    expect(result.pause).toEqual({ reason: "echo_gerant", until: "2026-11-06T03:00:00.000Z" });
   });
 
   it("échec de Meta : InboxSendError avec la tentative enregistrée, bot pas mis en pause", async () => {

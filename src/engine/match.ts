@@ -46,7 +46,8 @@ export function findEventFlow(flows: Flow[], event: string): Flow | undefined {
 /**
  * Cherche le flux dont un mot-clé correspond au message.
  * En cas de plusieurs correspondances, le mot-clé le plus long gagne
- * (« carte du midi » l'emporte sur « carte »), puis l'ordre des flux.
+ * (« carte du midi » l'emporte sur « carte ») ; à longueur égale, le flux par défaut (Accueil : « commander » est
+ * aussi un mot-clé de « CTA - Commander »), puis l'ordre des flux.
  */
 export function matchFlowByKeyword(flows: Flow[], message: string): Flow | undefined {
   return matchKeyword(flows, message)?.flow;
@@ -62,7 +63,8 @@ export function matchKeyword(flows: Flow[], message: string): { flow: Flow; keyw
     for (const keyword of trigger.data.keywords) {
       if (!keywordMatches(message, keyword, trigger.data.matchMode)) continue;
       const length = normalize(keyword).length;
-      if (!best || length > best.length) best = { flow, length, keyword };
+      const tieForDefault = best && length === best.length && trigger.data.isDefault && !findTrigger(best.flow)?.data.isDefault;
+      if (!best || length > best.length || tieForDefault) best = { flow, length, keyword };
     }
   }
   return best && { flow: best.flow, keyword: best.keyword };

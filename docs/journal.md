@@ -1189,3 +1189,20 @@ mien » y arrivaient : les transferts des clients des restos ne partaient qu'en 
   après une réponse sur la carte, le bouton « Commander » au lieu de « Besoin d'un petit coup de main ? » (nouveau
   champ « sujet » de la réponse de l'IA). Démos et transferts inchangés. `docs/etape-c/ia-reponses-courtes.md`.
   514 tests.
+
+## 21 novembre 2026 (soir de bascule) — mots-clés des restos, transferts, accueil, boîte de réception (PR)
+
+Les 3 restos sont actifs (Cookies « toujours », Mexico et AG Pizza « mots-clés uniquement »). PR unique, partie de la
+PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/etape-c/restos-mots-cles-inbox.md`.
+- PR n° 35 et n° 37 : conflits avec la production résolus (journal et plan : toutes les entrées gardées). PR n° 34 : sans
+  conflit.
+- Accueil v5 (« commande », « commander ») vérifié en production pour Mexico et AG Pizza ; à égalité de mot-clé,
+  l'Accueil gagne sur « CTA - Commander » ; le seed suit.
+- Mode mots-clés : une phrase qui commence par un mot-clé, ou par une salutation suivie d'un vrai mot-clé, est
+  reconnue (20 mots au plus). Le 18 h 22 de Mexico était aussi une pause « l'équipe a répondu ».
+- Un mot-clé du client lève un transfert (transfert résolu) ; jamais la pause « l'équipe a répondu » (12 h).
+- Salutation ou mot-clé de l'Accueil : toujours l'accueil complet.
+- Messages ignorés : raison gardée sur le message et affichée.
+- Boîte de réception : état unique, « Rendre au bot » pour toutes les pauses, tri par dernier message, non-lus, filtre
+  par resto, numéros de test Meta masqués, bulles client / bot / équipe distinctes.
+- Numéro PFlow (démos) : inchangé. 538 tests.

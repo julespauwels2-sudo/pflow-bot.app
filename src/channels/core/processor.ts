@@ -3,7 +3,7 @@
  * réponses partent par l'API Graph. Aucune dépendance à Next.js (testable seul, déplaçable).
  */
 import { createHash } from "node:crypto";
-import { runEngine, type AiPort, type OrderBridge, type AiRequest, type AiResult, type EngineResult } from "@/engine";
+import { runEngine, type AiPort, type OrderBridge, type AiRequest, type AiResult, type EngineResult, type PauseReason } from "@/engine";
 import { createContactToken } from "@/channels/pflow-order/contact-token";
 import type { LoadedBot } from "./bot-loader";
 import { parseWebhook } from "../whatsapp/parse";
@@ -139,7 +139,7 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   const contact = await store.getOrCreateContact(canal.id, event.waId, event.profileName);
   event = await transcribeVoice(event, contact.id, deps, report);
   const echo = event.message.kind === "echo";
-  await store.addMessage({
+  const inbound = await store.addMessage({
     canalId: canal.id,
     contactId: contact.id,
     sens: echo ? "echo" : "entrant",
@@ -243,6 +243,7 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
         handoffPauseHours: canal.handoffPauseHours,
         sessionTimeoutMinutes: canal.sessionMinutes,
         aiDailyLimitPerContact: bot.aiDailyLimit,
+        ...(canal.role === "pflow" ? { numeroPflow: true } : {}),
       },
       flows: bot.flows,
       infoSheet: bot.infoSheet,
@@ -294,6 +295,13 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     }
   }
   await store.saveContact({ ...contact, state: result.contact });
+  // Le bot n'a pas répondu : la raison, visible dans la boîte de réception (« Ignoré : pas de mot-clé »…).
+  const note = !echo ? ignoredNote(result, contact.state.pause?.reason) : null;
+  if (note) await store.noteMessage(inbound.id, note).catch((error) => report.errors.push(`Note du message : ${message(error)}`));
+  // Le bot reprend (mot-clé du client pendant un transfert, ou fin de la pause) : le transfert est marqué résolu.
+  if (result.events.some((e) => e.type === "pause_lifted" || (e.type === "pause_expired" && e.reason === "transfert_humain"))) {
+    await store.resolveTransferts(contact.id).catch((error) => report.errors.push(`Transfert résolu : ${message(error)}`));
+  }
   if (!(await store.saveSession(contact.id, result.session, storedVersion))) {
     report.errors.push(`Conversation de ${event.waId} modifiée en parallèle : état gardé tel quel`);
   }
@@ -336,6 +344,15 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
 
   report.handled.push({ wamid: event.wamid, outgoing: sent });
   await store.finishEvent(event.plateforme, event.wamid);
+}
+
+/** Raison d'un message reçu laissé sans réponse (null si le bot a répondu). Codes lus par la boîte de réception. */
+export function ignoredNote(result: EngineResult, pauseBefore: PauseReason | undefined): string | null {
+  if (result.outgoing.some((m) => m.kind !== "typing")) return null;
+  const ignored = result.events.find((e): e is Extract<EngineResult["events"][number], { type: "ignored" }> => e.type === "ignored");
+  if (!ignored) return null;
+  if (ignored.reason === "pause") return `ignore:pause_${pauseBefore ?? "manuel"}`;
+  return `ignore:${ignored.reason}`;
 }
 
 /** Réponses du bot quand un vocal n'est pas transcrit (service configuré). */

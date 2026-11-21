@@ -202,6 +202,21 @@ describe("de bout en bout contre un faux serveur Meta", () => {
     await processWebhookPayload(payload([text("bonjour")]), deps);
     expect(sentMessages()).toEqual([]);
     expect((await store.listMessages(contact.id)).map((m) => m.sens)).toEqual(["echo", "entrant"]);
+    // Le « bonjour » laissé sans réponse est marqué dans la boîte de réception.
+    expect((await store.listMessages(contact.id)).at(-1)).toMatchObject({ sens: "entrant", erreur: "ignore:pause_echo_gerant" });
+  });
+
+  it("mots-clés uniquement : un message perso est ignoré et marqué ; « Commande » ouvre l'accueil ; l'écho n'est jamais marqué", async () => {
+    received.length = 0;
+    const { store, deps } = await setup({ triggerMode: "mots_cles_uniquement" });
+    await processWebhookPayload(payload([text("Salut tu viens ce soir ?")]), deps);
+    expect(sentMessages()).toEqual([]);
+    const contact = (await store.listContacts("canal1"))[0];
+    expect((await store.listMessages(contact.id)).at(-1)).toMatchObject({ sens: "entrant", erreur: "ignore:aucun_declencheur" });
+    await processWebhookPayload(payload([text("Bonjour, je viens de passer la commande")]), deps);
+    expect(sentMessages().length).toBeGreaterThan(0);
+    const messages = await store.listMessages(contact.id);
+    expect(messages.find((m) => m.sens === "entrant" && m.contenu && JSON.stringify(m.contenu).includes("passer la commande"))?.erreur).toBeUndefined();
   });
 
   it("canal en test : seuls les numéros de test reçoivent une réponse ; canal inconnu ignoré", async () => {
@@ -254,10 +269,16 @@ describe("de bout en bout contre un faux serveur Meta", () => {
     await processWebhookPayload(payload([text("j'ai un problème avec ma commande")]), withAi);
     expect((await store.listTransferts("canal1"))[0]).toMatchObject({ source: "ia", dernierMessage: "j'ai un problème avec ma commande" });
 
-    // Contact en pause après le transfert : le message suivant ne reçoit pas de réponse du bot.
+    // Contact en pause après le transfert : une question ne reçoit pas de réponse du bot (raison notée)…
     const sentBefore = sentMessages().length;
-    await processWebhookPayload(payload([text("bonjour")]), deps);
+    await processWebhookPayload(payload([text("vous êtes là ?")]), deps);
     expect(sentMessages().length).toBe(sentBefore);
+    const contactId = (await store.listContacts("canal1"))[0].id;
+    expect((await store.listMessages(contactId)).at(-1)).toMatchObject({ sens: "entrant", erreur: "ignore:pause_transfert_humain" });
+    // … mais un mot-clé (« bonjour ») rend la main au bot : il répond, le transfert est résolu.
+    await processWebhookPayload(payload([text("bonjour")]), deps);
+    expect(sentMessages().length).toBeGreaterThan(sentBefore);
+    expect((await store.listTransferts("canal1"))[0].resoluLe).toBeTruthy();
 
     const fresh = await setup();
     refuse = true;

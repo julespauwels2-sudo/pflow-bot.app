@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { MobileConversation, MobileInboxList } from "@/components/inbox-mobile";
-import { MessageContent } from "@/components/message-content";
 import { MobileHeader, useIsMobile } from "@/components/mobile";
 import { OPEN_CONVERSATION_EVENT, PushControls } from "@/components/pwa";
-import { markSeen, readSeen, type SeenState } from "@/lib/inbox-view";
-import { fusionnerConversation, majConversationListe, mentionEnvoi, nouvelEnvoi, reglerEnvoi, type EnvoiLocal, type LigneConversation, type MessageAffiche } from "@/lib/inbox-envoi";
-import { Badge, Button, Card, Loading, Notice, Textarea } from "@/components/ui";
+import { FILTRE_PAR_DEFAUT, filtrerCanaux, isUnread, lastAt, markSeen, plainExtract, readSeen, shortTime, sortConversations, type InboxFiltre, type SeenState } from "@/lib/inbox-view";
+import { BarreEtat, EtatBadge, FiltresInbox, ListeMessages } from "@/components/inbox-parts";
+import { fusionnerConversation, majConversationListe, nouvelEnvoi, reglerEnvoi, type EnvoiLocal, type LigneConversation, type MessageAffiche } from "@/lib/inbox-envoi";
+import { Button, Card, Loading, Notice, Textarea } from "@/components/ui";
 import type { InboxCanal, InboxConversation } from "@/channels/core/inbox";
 import { accessToken } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-gate";
@@ -42,7 +42,8 @@ type ActionResponse = { ok?: boolean; pause?: InboxConversation["pause"]; messag
 
 const REFRESH_MS = 5000;
 const who = (canal: InboxCanal, conv: InboxConversation) => conv.nom || (canal.plateforme === "instagram" ? `Instagram ${conv.waId.slice(-4)}` : `+${conv.waId}`);
-const time = (iso: string) => new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+/** Qui a écrit le dernier message, pour l'extrait de la liste. */
+const prefixe = (d: NonNullable<InboxConversation["dernierMessage"]>) => (d.sens === "entrant" ? "" : d.sens === "echo" || d.auteur === "humain" ? "👩‍🍳 Équipe : " : "🤖 ");
 
 export default function InboxPage() {
   const { role } = useAuth();
@@ -57,6 +58,8 @@ export default function InboxPage() {
   const file = useRef<Promise<void>>(Promise.resolve());
   const isMobile = useIsMobile();
   const [seen, setSeen] = useState<SeenState>({ initAt: new Date(0).toISOString(), seen: {} });
+  // Filtre par resto ; numéros de test de Meta (+1 555 …) masqués par défaut.
+  const [filtre, setFiltre] = useState<InboxFiltre>(FILTRE_PAR_DEFAUT);
   useEffect(() => {
     // Mémoire « déjà lu » de cet appareil (localStorage), lue une fois la page affichée.
     void Promise.resolve().then(() => setSeen(readSeen()));
@@ -202,6 +205,8 @@ export default function InboxPage() {
     repondre(contactId, envoi.texte);
   }
 
+  const visibles = state.status === "ready" ? filtrerCanaux(state.canaux, filtre) : [];
+  const rows = sortConversations(visibles);
   const conversations = state.status === "ready" ? state.canaux.flatMap((c) => c.conversations.map((v) => ({ canal: c, conv: v }))) : [];
   const current = conversations.find((x) => x.conv.contactId === selected);
   const lignes: LigneConversation[] | null =
@@ -217,7 +222,8 @@ export default function InboxPage() {
         {state.status === "ready" && (
           <>
             <MobileInboxList
-              canaux={state.canaux}
+              canaux={visibles}
+              filtres={<FiltresInbox canaux={state.canaux} filtre={filtre} onChange={setFiltre} sombre />}
               seen={seen}
               notice={current ? null : notice}
               onCloseNotice={() => setNotice(null)}
@@ -233,7 +239,7 @@ export default function InboxPage() {
                 onCloseNotice={() => setNotice(null)}
                 onBack={backToList}
                 onTakeOver={async () => void (await act({ type: "reprendre" }, "Tu as la main : le bot se tait pour ce client."))}
-                onRelease={async () => void (await act({ type: "relancer" }, "Le bot a repris la conversation."))}
+                onRelease={async () => void (await act({ type: "relancer" }, "Rendu au bot : il répond de nouveau à ce client."))}
                 onReply={(texte) => repondre(current.conv.contactId, texte)}
                 onRetry={(tempId) => reessayer(current.conv.contactId, tempId)}
               />
@@ -271,43 +277,44 @@ export default function InboxPage() {
             {state.mode === "memory" && role === "admin" && <SimulateForm plateformes={[...new Set(state.canaux.map((c) => c.plateforme))]} onSent={refresh} onError={(text) => setNotice({ tone: "error", text })} />}
             <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
               <Card title="Conversations">
-                {state.canaux.length === 0 && <p className="text-sm text-muted">Aucun compte WhatsApp ou Instagram relié.</p>}
-                <div className="space-y-4" data-testid="inbox-list">
-                  {state.canaux.map((canal) => (
-                    <div key={canal.canalId}>
-                      <p className="text-xs font-semibold tracking-wide text-muted uppercase">
-                        {canal.plateforme === "instagram" ? "📸 " : "💬 "}
-                        {canal.nomResto} {canal.numero && <span className="font-normal normal-case">· {canal.numero}</span>}
-                        {canal.etat !== "actif" && <span className="ml-1 normal-case">({canal.etat})</span>}
-                      </p>
-                      {canal.conversations.length === 0 && <p className="mt-1 text-sm text-muted">Aucune conversation.</p>}
-                      <ul className="mt-1 divide-y divide-rule">
-                        {canal.conversations.map((conv) => (
-                          <li key={conv.contactId}>
-                            <button
-                              type="button"
-                              className={`w-full rounded-xl px-2 py-2 text-left hover:bg-ink/5 ${selected === conv.contactId ? "bg-ink/5" : ""}`}
-                              onClick={() => show(conv.contactId)}
-                            >
-                              <span className="flex items-center gap-1.5">
-                                <span className="font-semibold">{who(canal, conv)}</span>
-                                {conv.transfertOuvert && <Badge tone="warning">🔔 Attend l&apos;équipe</Badge>}
-                                {conv.pause && <Badge>{pauseLabel(conv)}</Badge>}
-                                {conv.demoEnCours && <Badge tone="info">Démo {conv.demoEnCours}</Badge>}
-                              </span>
-                              {conv.dernierMessage && (
-                                <span className="block truncate text-xs text-muted">
-                                  {conv.dernierMessage.sens === "entrant" ? "" : "↪ "}
-                                  {conv.dernierMessage.texte} · {time(conv.dernierMessage.at)}
-                                </span>
-                              )}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
+                <FiltresInbox canaux={state.canaux} filtre={filtre} onChange={setFiltre} />
+                {rows.length === 0 && <p className="mt-3 text-sm text-muted">Aucune conversation.</p>}
+                <ul className="mt-3 divide-y divide-rule" data-testid="inbox-list">
+                  {rows.map(({ canal, conv }) => {
+                    const unread = isUnread(conv, seen);
+                    const d = conv.dernierMessage;
+                    return (
+                      <li key={conv.contactId}>
+                        <button
+                          type="button"
+                          className={`w-full rounded-xl px-2 py-2 text-left hover:bg-ink/5 ${selected === conv.contactId ? "bg-ink/5" : ""}`}
+                          onClick={() => show(conv.contactId)}
+                          data-testid="inbox-row"
+                        >
+                          <span className="flex items-baseline gap-2">
+                            <span className={`min-w-0 flex-1 truncate ${unread ? "font-extrabold" : "font-semibold"}`}>{who(canal, conv)}</span>
+                            {unread && <span className="bg-brand size-2.5 shrink-0 self-center rounded-full" aria-label="non lu" />}
+                            <span className={`shrink-0 text-xs ${unread ? "font-bold text-rose" : "text-muted"}`}>{shortTime(lastAt(conv))}</span>
+                          </span>
+                          {d && (
+                            <span className={`block truncate text-xs ${unread ? "font-semibold text-ink" : "text-muted"}`}>
+                              {prefixe(d)}
+                              {plainExtract(d.texte)}
+                            </span>
+                          )}
+                          <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <EtatBadge conv={conv} />
+                            <span className="truncate text-xs text-muted">
+                              {canal.plateforme === "instagram" ? "📸" : "💬"} {canal.nomResto}
+                              {canal.testMeta ? " · test Meta" : ""}
+                              {conv.demoEnCours ? ` · démo ${conv.demoEnCours}` : ""}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
               </Card>
               <Card title={current ? who(current.canal, current.conv) : "Conversation"} className="min-w-0">
                 {!current || !lignes ? (
@@ -317,7 +324,7 @@ export default function InboxPage() {
                     conv={current.conv}
                     lignes={lignes}
                     onTakeOver={() => void act({ type: "reprendre" }, "Tu as la main : le bot se tait pour ce client.")}
-                    onRelease={() => void act({ type: "relancer" }, "Le bot a repris la conversation.")}
+                    onRelease={() => void act({ type: "relancer" }, "Rendu au bot : il répond de nouveau à ce client.")}
                     onReply={(texte) => repondre(current.conv.contactId, texte)}
                     onRetry={(tempId) => reessayer(current.conv.contactId, tempId)}
                   />
@@ -329,12 +336,6 @@ export default function InboxPage() {
       </div>
     </AppShell>
   );
-}
-
-function pauseLabel(conv: InboxConversation): string {
-  if (!conv.pause) return "";
-  const who = { transfert_humain: "transfert", echo_gerant: "le gérant a répondu", manuel: "main reprise" }[conv.pause.reason];
-  return `⏸ Bot en pause (${who})`;
 }
 
 function ConversationView({
@@ -362,22 +363,8 @@ function ConversationView({
   }, [lignes.length]);
   return (
     <div className="space-y-3" data-testid="inbox-thread">
-      <div className="flex flex-wrap items-center gap-2">
-        {conv.pause ? (
-          <>
-            <span className="text-sm text-muted">
-              {pauseLabel(conv)}
-              {conv.pause.until ? ` jusqu'à ${time(conv.pause.until)}` : " (jusqu'à ce que tu le relances)"}
-            </span>
-            <Button onClick={onRelease}>Rendre au bot</Button>
-          </>
-        ) : (
-          <Button variant="secondary" onClick={onTakeOver}>
-            Reprendre la main
-          </Button>
-        )}
-        <span className="ml-auto text-xs text-muted">{conv.fenetreOuverte ? "Fenêtre de 24 h ouverte" : "Fenêtre de 24 h fermée"}</span>
-      </div>
+      <BarreEtat conv={conv} onTakeOver={onTakeOver} onRelease={onRelease} />
+      <p className="text-xs text-muted">{conv.fenetreOuverte ? "Fenêtre de 24 h ouverte : tu peux répondre." : "Fenêtre de 24 h fermée : tu pourras répondre quand le client réécrira."}</p>
       <div
         ref={zone}
         onScroll={(e) => {
@@ -386,28 +373,7 @@ function ConversationView({
         }}
         className="max-h-[60vh] space-y-1.5 overflow-y-auto rounded-2xl bg-chat-motif p-3 aplat-nuit"
       >
-        {lignes.map((m) => (
-          <div key={m.cle} data-testid="inbox-message" data-etat={m.envoi?.etat} className={`flex ${m.sens === "entrant" ? "justify-start" : "justify-end"}`}>
-            <div
-              className={`max-w-[80%] overflow-hidden rounded-2xl px-3 py-1.5 text-sm font-medium whitespace-pre-wrap ${
-                m.sens === "entrant" ? "carte" : m.auteur === "humain" ? "aplat-rose" : "aplat-bleu"
-              }`}
-            >
-              <span className="mb-0.5 block text-[10px] font-semibold text-muted">
-                {m.sens === "entrant" ? "Client" : m.sens === "echo" ? "Gérant (appli)" : m.auteur === "humain" ? "Équipe" : "Bot"} · {time(m.at)}
-                {mentionEnvoi(m) && <span data-testid="inbox-envoi-etat"> · {mentionEnvoi(m)}</span>}
-                {m.statut === "echec" && <span className="text-alerte"> · échec{m.erreur ? ` : ${m.erreur}` : ""}</span>}
-                {m.statut === "lu" && " · lu"}
-                {m.envoi?.etat === "echec" && (
-                  <button type="button" className="ml-1 font-bold text-rose underline" onClick={() => onRetry(m.envoi!.tempId)}>
-                    Réessayer
-                  </button>
-                )}
-              </span>
-              <MessageContent texte={m.texte} contenu={m.contenu} />
-            </div>
-          </div>
-        ))}
+        <ListeMessages lignes={lignes} onRetry={onRetry} />
       </div>
       <form
         className="flex gap-2"
@@ -424,7 +390,7 @@ function ConversationView({
           aria-label="Réponse"
           rows={2}
           disabled={!conv.fenetreOuverte}
-          placeholder={conv.fenetreOuverte ? "Répondre au client (le bot se met en pause)…" : "Fenêtre de 24 h fermée : le client doit réécrire"}
+          placeholder={conv.fenetreOuverte ? "Répondre au client (le bot se met en pause 12 h)…" : "Fenêtre de 24 h fermée : le client doit réécrire"}
           value={texte}
           onChange={(e) => setTexte(e.target.value)}
         />

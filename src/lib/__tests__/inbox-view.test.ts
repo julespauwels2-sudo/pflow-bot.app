@@ -7,21 +7,22 @@ const conv = (id: string, at: string, extra: Partial<InboxConversation> = {}): I
   contactId: id,
   waId: "590690000000",
   pause: null,
+  etat: { code: "actif" },
   fenetreOuverte: true,
   transfertOuvert: false,
   updatedAt: at,
   dernierMessage: { texte: "Bonjour", sens: "entrant", at },
   ...extra,
 });
-const canal = (conversations: InboxConversation[], id = "c"): InboxCanal => ({ canalId: id, restaurantId: "", plateforme: "whatsapp", nomResto: id, etat: "actif", conversations });
+const canal = (conversations: InboxConversation[], id = "c"): InboxCanal => ({ canalId: id, restaurantId: "", plateforme: "whatsapp", nomResto: id, etat: "actif", testMeta: false, conversations });
 
 describe("boîte de réception (téléphone)", () => {
-  it("celles qui attendent Jules d'abord, puis de la plus récente à la plus ancienne, tous canaux confondus", () => {
+  it("de la plus récente à la plus ancienne (dernier message), tous canaux confondus, transfert compris", () => {
     const rows = sortConversations([
       canal([conv("a", "2026-11-09T10:00:00Z"), conv("b", "2026-11-09T12:00:00Z")], "pflow"),
       canal([conv("c", "2026-11-09T08:00:00Z", { transfertOuvert: true }), conv("d", "2026-11-09T11:00:00Z")], "resto"),
     ]);
-    expect(rows.map((r) => r.conv.contactId)).toEqual(["c", "b", "d", "a"]);
+    expect(rows.map((r) => r.conv.contactId)).toEqual(["b", "d", "a", "c"]);
   });
 
   it("non lu : dernier message du client, arrivé après la dernière ouverture sur cet appareil", () => {

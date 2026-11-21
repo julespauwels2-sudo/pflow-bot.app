@@ -8,14 +8,55 @@ import type { Canal, ChannelContact, ChannelSender, ChannelStore, Plateforme, St
 import { sendOptions } from "./send-options";
 import { formatDuration } from "../voice/duration";
 
+/**
+ * État unique d'une conversation (boîte de réception) :
+ * - actif : le bot répond ;
+ * - transfert : en pause après un transfert vers l'équipe (un mot-clé du client ou « Rendre au bot » le relance) ;
+ * - equipe : en pause parce que l'équipe a répondu à la main (appli WhatsApp Business ou boîte de réception) ;
+ * - main : l'équipe a repris la main, sans limite de durée ;
+ * - ignore : le bot est actif mais a laissé passer le dernier message (pas de mot-clé).
+ */
+export type EtatConversation =
+  | { code: "actif" }
+  | { code: "transfert"; until: string | null }
+  | { code: "equipe"; until: string | null }
+  | { code: "main" }
+  | { code: "ignore"; raison: string };
+
+/** Pause encore en cours (une pause dont l'heure de fin est passée ne compte plus : le bot répondra). */
+export function pauseActive(pause: ContactState["pause"], now: Date): ContactState["pause"] {
+  return pause && (pause.until === null || Date.parse(pause.until) > now.getTime()) ? pause : null;
+}
+
+export function etatConversation(pause: ContactState["pause"], dernier: Pick<StoredMessage, "sens" | "erreur"> | undefined, now: Date): EtatConversation {
+  const active = pauseActive(pause, now);
+  if (active?.reason === "transfert_humain") return { code: "transfert", until: active.until };
+  if (active?.reason === "echo_gerant") return { code: "equipe", until: active.until };
+  // « manuel » avec une fin : ancienne réponse depuis la boîte de réception (avant le 22 novembre 2026).
+  if (active?.reason === "manuel") return active.until ? { code: "equipe", until: active.until } : { code: "main" };
+  if (dernier?.sens === "entrant" && dernier.erreur?.startsWith("ignore:")) return { code: "ignore", raison: dernier.erreur.slice("ignore:".length) };
+  return { code: "actif" };
+}
+
+/** Ce qu'il faut d'un message pour dire qui l'a écrit. */
+export type StoredMessageLike = Pick<StoredMessage, "sens" | "auteur">;
+
+/** Numéro de test fourni par Meta (+1 555 …) : masqué par défaut dans la boîte de réception. */
+export function estNumeroTestMeta(numero: string | undefined): boolean {
+  return (numero ?? "").replace(/\D/g, "").startsWith("1555");
+}
+
 export interface InboxConversation {
   contactId: string;
   waId: string;
   nom?: string;
   pause: ContactState["pause"];
+  /** État lisible (pause encore en cours, ou dernier message ignoré). */
+  etat: EtatConversation;
   /** Le client peut encore recevoir un message libre (fenêtre de 24 h). */
   fenetreOuverte: boolean;
-  dernierMessage?: { texte: string; sens: StoredMessage["sens"]; at: string };
+  dernierMessage?: { texte: string; sens: StoredMessage["sens"]; auteur?: StoredMessage["auteur"]; at: string; note?: string };
+  /** Transfert ouvert ET bot encore en pause : la conversation attend vraiment l'équipe. */
   transfertOuvert: boolean;
   updatedAt: string;
   /** Numéro PFlow : nom de la démo en cours (absent = bot PFlow de base). */
@@ -29,6 +70,8 @@ export interface InboxCanal {
   nomResto: string;
   numero?: string;
   etat: string;
+  /** Numéro de test de Meta (+1 555 …). */
+  testMeta: boolean;
   conversations: InboxConversation[];
 }
 
@@ -54,6 +97,13 @@ export function messageText(m: Pick<StoredMessage, "type" | "contenu">): string 
   if (out.kind === "link") return `${out.text}\n[🔗 ${out.buttonLabel}]`;
   if (m.type === "audio") return typeof c.erreur === "string" ? `🎤 Message vocal (non transcrit : ${c.erreur})` : "🎤 Message vocal";
   if (m.type === "image") return "📷 Photo";
+  // Bruit des échos de l'appli WhatsApp Business : réaction, message modifié, type non pris en charge.
+  if (m.type === "reaction") return "👍 Réaction";
+  if (m.type === "edit") return "✏️ Message modifié";
+  if (m.type === "unsupported") return "📎 Contenu non affichable ici (voir l'appli WhatsApp)";
+  if (m.type === "sticker") return "🏷️ Autocollant";
+  if (m.type === "video") return "🎬 Vidéo";
+  if (m.type === "document") return "📄 Document";
   return `(${m.type})`;
 }
 
@@ -92,19 +142,31 @@ export async function listInbox(store: ChannelStore, workspace: WorkspaceData | 
     const open = new Set(transferts.filter((t) => !t.resoluLe).map((t) => t.contactId));
     const conversations: InboxConversation[] = list.map((contact) => {
       const last = lastById.get(contact.id);
+      const etat = etatConversation(contact.state.pause, last, now);
       return {
         contactId: contact.id,
         waId: contact.waId,
         nom: contact.state.profileName,
-        pause: contact.state.pause,
+        pause: pauseActive(contact.state.pause, now),
+        etat,
         fenetreOuverte: canSendFreeform(contact.state, now),
-        ...(last ? { dernierMessage: { texte: messageText(last), sens: last.sens, at: last.at } } : {}),
-        transfertOuvert: open.has(contact.id),
+        ...(last
+          ? {
+              dernierMessage: {
+                texte: messageText(last),
+                sens: last.sens,
+                ...(last.auteur ? { auteur: last.auteur } : {}),
+                at: last.at,
+                ...(last.erreur?.startsWith("ignore:") ? { note: last.erreur } : {}),
+              },
+            }
+          : {}),
+        transfertOuvert: open.has(contact.id) && etat.code === "transfert",
         updatedAt: last?.at ?? contact.updatedAt,
         ...(contact.demo?.clientId ? { demoEnCours: names.get(contact.demo.clientId) ?? "démo supprimée" } : {}),
       };
     });
-    conversations.sort((a, b) => Number(b.transfertOuvert) - Number(a.transfertOuvert) || b.updatedAt.localeCompare(a.updatedAt));
+    conversations.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     return {
       canalId: canal.id,
       restaurantId: canal.restaurantId,
@@ -112,6 +174,7 @@ export async function listInbox(store: ChannelStore, workspace: WorkspaceData | 
       nomResto: canal.role === "pflow" ? "Numéro PFlow (démos)" : (names.get(canal.restaurantId) ?? "Resto inconnu"),
       ...(canal.numeroAffiche ? { numero: canal.numeroAffiche } : {}),
       etat: canal.etat,
+      testMeta: estNumeroTestMeta(canal.numeroAffiche),
       conversations,
     };
   });
@@ -142,8 +205,8 @@ export interface InboxActionResult {
 /**
  * - reprendre : le bot se tait pour ce contact, sans limite de durée, jusqu'à « Rendre au bot » ;
  * - relancer : le bot reprend (pause levée, transferts marqués traités, conversation repartie de zéro) ;
- * - repondre : message libre envoyé par une personne ; le bot se met en pause (comme quand le gérant
- *   répond depuis son appli) pour ne pas lui couper la parole.
+ * - repondre : message libre envoyé par une personne ; le bot se met en pause « l'équipe a répondu » (comme quand
+ *   l'équipe répond depuis l'appli WhatsApp Business) pour ne pas lui couper la parole.
  *
  * `deps.contact`, `deps.canaux` : déjà lus par l'appelant (la route les lit pour vérifier l'accès), pour ne pas les relire.
  */
@@ -197,7 +260,8 @@ export async function applyInboxAction(
   const until = new Date(now.getTime() + (deps.echoPauseHours ?? canal.echoPauseHours) * 3_600_000).toISOString();
   const current = contact.state.pause;
   const pauser = !current || (current.until !== null && Date.parse(current.until) < Date.parse(until));
-  if (pauser) contact.state.pause = { reason: "manuel", until };
+  // Même pause que quand l'équipe répond depuis l'appli WhatsApp Business : « l'équipe a répondu ».
+  if (pauser) contact.state.pause = { reason: "echo_gerant", until };
   // Message et pause : deux écritures indépendantes, faites en même temps, toutes deux AVANT la réponse (rien ne se
   // perd si la fonction s'arrête juste après).
   const [message] = await Promise.all([

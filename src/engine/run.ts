@@ -14,7 +14,7 @@ import { infoSheetVariables, withUpcomingRounds } from "./info-vars";
 import { fixedDelayMs, smartDelayMs, textOf } from "./delay";
 import { findDefaultFlow, findEventFlow, findTrigger, matchKeyword, normalize } from "./match";
 import { canSendFreeform } from "./window";
-import { isGreeting, isNewConversation, isShortMessage } from "./intent";
+import { isGreeting, isGreetingKeyword, isNewConversation, isQuestion, isShortMessage, keywordInSentence } from "./intent";
 import { decodeReplyId, encodeReplyId } from "./reply-id";
 import { firstName, renderTemplate } from "./template";
 import { localTime } from "./time";
@@ -255,6 +255,8 @@ class EngineRun {
 
     // Le gérant a répondu lui-même depuis l'appli : le bot se tait pour ce contact.
     if (message.kind === "echo") {
+      // Pendant un transfert : la pause « l'équipe a répondu » la remplace (12 h à partir de cette réponse).
+      if (this.contact.pause?.reason === "transfert_humain") this.contact.pause = null;
       this.pause("echo_gerant", this.input.channel.echoPauseHours);
       this.session = null;
       return;
@@ -268,15 +270,23 @@ class EngineRun {
 
     this.contact.lastInboundAt = now.toISOString();
 
-    // 1. Contact en pause : on ne fait rien.
+    // 1. Contact en pause : on ne fait rien. Exception (bots des restos) : pendant un transfert, un mot-clé du client
+    //    (bonjour, commande, menu…) rend la main au bot. Jamais si l'équipe a répondu (pause « l'équipe a répondu »)
+    //    ni si elle a repris la main.
     if (this.contact.pause) {
-      const until = this.contact.pause.until;
+      const { until, reason } = this.contact.pause;
       if (until === null || Date.parse(until) > now.getTime()) {
-        this.events.push({ type: "ignored", reason: "pause" });
-        return;
+        const keyword = reason === "transfert_humain" && !this.input.channel.numeroPflow && message.kind === "text" ? this.findKeyword(message.text) : undefined;
+        if (!keyword) {
+          this.events.push({ type: "ignored", reason: "pause" });
+          return;
+        }
+        this.contact.pause = null;
+        this.events.push({ type: "pause_lifted", by: "mot_cle", keyword: keyword.keyword });
+      } else {
+        this.contact.pause = null;
+        this.events.push({ type: "pause_expired", reason });
       }
-      this.contact.pause = null;
-      this.events.push({ type: "pause_expired" });
     }
 
     if (this.session && Date.parse(this.session.expiresAt) <= now.getTime()) {
@@ -345,9 +355,11 @@ class EngineRun {
     if (this.input.channel.triggerMode === "toujours") {
       const defaultFlow = findDefaultFlow(this.input.flows);
       const firstContact = !this.previousInboundAt;
-      const welcome = isGreeting(text) || (firstContact && isShortMessage(text, 2));
+      const greeting = isGreeting(text);
+      const welcome = greeting || (firstContact && isShortMessage(text, 2));
       if (defaultFlow && (welcome || !this.deps.ai)) {
-        this.startFlow(defaultFlow, "defaut");
+        // Salutation : toujours l'accueil complet (bots des restos), même si le contact vient d'écrire.
+        this.startFlow(defaultFlow, "defaut", greeting && !this.input.channel.numeroPflow ? { nouvelle_conversation: "oui" } : {});
         return;
       }
       await this.callAi(text, {});
@@ -518,16 +530,44 @@ class EngineRun {
    * son flux, « c'est quoi vos horaires de livraison à Jarry ? » va à l'IA (qui peut lancer le flux).
    * Les mots-clés en mode « exact » ne sont pas concernés (le message entier doit déjà correspondre).
    */
+  /**
+   * Mot-clé qui lance un flux :
+   * - message court (4 mots au plus) qui contient un mot-clé, ou mot-clé « exact » ;
+   * - mode « mots-clés uniquement » (bots des restos) : aussi une phrase qui commence par un mot-clé, ou par une
+   *   salutation suivie d'un vrai mot-clé (voir keywordInSentence). En mode « toujours », l'IA répond aux phrases.
+   * Accents, majuscules, ponctuation et emojis sont ignorés (normalize).
+   */
+  private findKeyword(text: string): { flow: Flow; keyword: string; skipped?: boolean } | undefined {
+    const { flows, channel } = this.input;
+    const match = matchKeyword(flows, text);
+    // Mode « toujours » avec l'IA : une question qui contient un mot-clé de l'Accueil (« ma commande est où ? ») va à
+    // l'IA (suivi de commande…), pas à l'accueil. Une salutation reste une salutation.
+    const question =
+      match && !channel.numeroPflow && channel.triggerMode === "toujours" && this.deps.ai && findTrigger(match.flow)?.data.isDefault && !isGreetingKeyword(match.keyword) && isQuestion(text);
+    if (match && question) return { ...match, skipped: true };
+    if (match && (findTrigger(match.flow)?.data.matchMode === "exact" || isShortMessage(text))) return match;
+    if (!channel.numeroPflow && channel.triggerMode !== "toujours") {
+      const found = keywordInSentence(
+        flows.map((f) => ({ id: f.id, trigger: findTrigger(f)?.data })),
+        text,
+      );
+      const flow = found && this.flow(found.id);
+      if (found && flow) return { flow, keyword: found.keyword };
+    }
+    return match ? { ...match, skipped: true } : undefined;
+  }
+
   private tryKeyword(text: string): boolean {
-    const match = matchKeyword(this.input.flows, text);
+    const match = this.findKeyword(text);
     if (!match) return false;
-    const exact = findTrigger(match.flow)?.data.matchMode === "exact";
-    if (!exact && !isShortMessage(text)) {
+    if (match.skipped) {
       this.events.push({ type: "keyword_skipped", flowId: match.flow.id, keyword: match.keyword });
       return false;
     }
     this.events.push({ type: "keyword_matched", flowId: match.flow.id, keyword: match.keyword });
-    this.startFlow(match.flow, "mot_cle");
+    // Accueil lancé par un mot-clé (bonjour, commande, menu…) : toujours l'accueil complet sur les bots des restos.
+    const full = !this.input.channel.numeroPflow && findTrigger(match.flow)?.data.isDefault;
+    this.startFlow(match.flow, "mot_cle", full ? { nouvelle_conversation: "oui" } : {});
     return true;
   }
 

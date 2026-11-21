@@ -46,7 +46,7 @@ export const SHORT_WELCOME_TEXT = "Que puis-je faire pour vous ? 👇";
 const accueil: FlowGraph = {
   nodes: [
     // « commander » lance « CTA - Commander », plus l'Accueil. Flux par défaut : salutations et premier contact.
-    trigger(["bonjour", "bonsoir", "salut", "hello", "coucou", "menu"], { isDefault: true }),
+    trigger(["bonjour", "bonsoir", "salut", "hello", "coucou", "menu", "commander", "commande"], { isDefault: true }),
     // Accueil complet une fois par conversation (rien reçu du contact depuis 12 h), sinon version courte.
     ifVariable("c_nouv", 240, 80, "nouvelle_conversation", "oui"),
     message("m", 560, -40, [
