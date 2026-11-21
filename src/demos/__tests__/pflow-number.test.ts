@@ -314,9 +314,9 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(msgs[0].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.step1 }, action: { parameters: { display_text: "Je commande", url: DEMO_PERMANENTE.commandeUrl } } });
     expect(await step()).toBe(1);
 
-    // Filet de sécurité : autre chose → rappel de l'étape 1 avec son bouton ; un retour plus tard (« Bonjour ») : un
-    // bonjour en retour, puis le même rappel.
-    for (const [autre, politesse] of [["euh je comprends pas", null], ["Bonjour", "Bonjour 👋"]] as const) {
+    // Filet de sécurité : autre chose → rappel de l'étape 1 avec son bouton ; une politesse (« re ») : un bonjour en
+    // retour, puis le même rappel. (« Bonjour » seul relance la démo : demo-auto.test.ts.)
+    for (const [autre, politesse] of [["euh je comprends pas", null], ["re", "Bonjour 👋"]] as const) {
       msgs = await say(autre);
       if (politesse) expect(msgs.shift()?.text?.body).toBe(politesse);
       expect(msgs[0].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.remind1 }, action: { parameters: { url: DEMO_PERMANENTE.commandeUrl } } });
@@ -337,7 +337,7 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.remind2);
     msgs = await press(msgs[1], 0);
     expect(msgs[0].interactive?.body.text).toBe(PFLOW_TEXTS.step3);
-    expect(titles(msgs[0])).toEqual(["🙋 Je veux le mien", "Comment ça marche ?"]);
+    expect(titles(msgs[0])).toEqual(["🙋 Je veux le mien", "Comment ça marche ?", "Recommencer la démo"]);
     expect(await step()).toBe(3);
 
     // « Comment ça marche ? » : 3 lignes, puis [Je veux le mien].
@@ -396,7 +396,10 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(await step()).toBe(3);
     // Plus tard, un autre message : rappel de l'étape 3 (ses boutons).
     clock.now = new Date("2026-11-10T09:00:00Z");
-    expect(await say("bonjour")).toContain("Étape 3/3");
+    expect(await say("hmm")).toContain("Étape 3/3");
+    // « bonjour » seul : la démo repart de zéro (accueil puis étape 1/3).
+    expect(await say("bonjour")).toContain("Bienvenue chez PFlow");
+    expect(await step()).toBe(1);
     // Nom d'une démo personnalisée : toujours prioritaire.
     expect(await say("gwada food")).toContain("Gwada food");
     // 7 jours sans rien : on repart de l'accueil.
@@ -423,7 +426,8 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(g("ok", 1)).toBe(PFLOW_FLOWS.etape2);
     expect(g("ok", 2)).toBe(PFLOW_FLOWS.etape3);
     expect(g("ok", 3)).toBe(`${PFLOW_FLOWS.question}3`); // politesse « Super 👍 », puis le rappel de l'étape 3
-    expect(g("bonjour", 1)).toBe(`${PFLOW_FLOWS.question}1`); // « Bonjour 👋 », puis le rappel de l'étape 1
+    expect(g("re", 1)).toBe(`${PFLOW_FLOWS.question}1`); // « Bonjour 👋 », puis le rappel de l'étape 1
+    for (const etape of [0, 1, 2, 3] as const) expect(g("Bonjour !", etape)).toBe(PFLOW_FLOWS.recommencer); // démo relancée
     expect(g("hmm", 1)).toBe(PFLOW_FLOWS.rappel1);
     expect(g("hein", 2)).toBe(PFLOW_FLOWS.rappel2);
     expect(g("hein ?", 2)).toBe(`${PFLOW_FLOWS.question}2`); // un « ? » : question pour Jules

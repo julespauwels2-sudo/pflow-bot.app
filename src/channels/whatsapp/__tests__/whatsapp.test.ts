@@ -193,6 +193,17 @@ describe("de bout en bout contre un faux serveur Meta", () => {
     expect(messages.map((m) => m.sens)).toEqual(["entrant", "sortant", "sortant", "entrant", "sortant"]);
   });
 
+  it("canal d'un resto (role resto) : un second « Bonjour » renvoie l'accueil du resto, jamais la relance de la démo PFlow", async () => {
+    received.length = 0;
+    const { deps } = await setup();
+    await processWebhookPayload(payload([text("Bonjour !")]), deps);
+    await processWebhookPayload(payload([{ from: CLIENT_WA, id: "wamid.autre", type: "text", text: { body: "Bonjour" } }]), deps);
+    const bodies = JSON.stringify(sentMessages().map((r) => r.body));
+    expect(bodies).toContain("https://order.pflow.fr/c/cookies-an-nou?via=wa");
+    expect(bodies).not.toContain("Bienvenue chez PFlow");
+    expect(bodies).not.toContain("Étape 1/3");
+  });
+
   it("coexistence : le gérant répond depuis son appli → le bot se tait 12 h", async () => {
     received.length = 0;
     const { store, deps } = await setup();
