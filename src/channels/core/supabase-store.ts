@@ -323,6 +323,15 @@ export function createSupabaseChannelStore(db: Db, newId: () => string = () => c
     async listContacts(canalId) {
       return (await db.select("bot_contacts", "*", { ...eq("canal_id", canalId), order: { column: "maj_le", ascending: false } })).map(rowToContact);
     },
+    async listPausesEcheues(after, before) {
+      const rows = await db.select("bot_contacts", "*", { range: { column: "pause_jusqu_a", gte: after, lte: before }, limit: 200 });
+      return rows
+        .map(rowToContact)
+        .filter((c) => {
+          const p = c.state.pause;
+          return p?.reason === "echo_gerant" && p.until !== null && Date.parse(p.until) >= Date.parse(after) && Date.parse(p.until) <= Date.parse(before);
+        });
+    },
     async listMessages(contactId, limit = 200) {
       const rows = await db.select("bot_messages", "*", { ...eq("contact_id", contactId), order: { column: "cree_le", ascending: false }, limit });
       return rows.map(rowToMessage).reverse();

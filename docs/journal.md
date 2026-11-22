@@ -1231,3 +1231,18 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
 - Boîte de réception : état unique, « Rendre au bot » pour toutes les pauses, tri par dernier message, non-lus, filtre
   par resto, numéros de test Meta masqués, bulles client / bot / équipe distinctes.
 - Numéro PFlow (démos) : inchangé. 538 tests.
+
+## 22 novembre 2026 — pause intelligente après une réponse de l'équipe (PR, par-dessus la n° 40)
+
+- PR n° 34 et n° 35 fusionnées par Jules ; conflit de la n° 40 avec la production (journal) résolu.
+- Numéros des restos : après une réponse manuelle de l'équipe, le bot se tait. Si le client réécrit et que personne ne
+  répond en 10 min (réglable dans la fiche), le bot répond, avec la conversation récente (jamais contre l'équipe).
+  Puis bot actif. Mots-clés uniquement : seulement pour un client à qui le bot a déjà parlé (jamais un ami du gérant).
+  Transfert et numéro PFlow inchangés.
+- Tâche planifiée à la minute `/api/cron/reprise` (Vercel Cron) ; aucune migration ; coût négligeable (détails :
+  `docs/etape-c/pause-intelligente.md`). Boîte de réception : « le bot reprend à HH:MM si personne ne répond ».
+  553 tests.
+- **Bug de Mexico** (après la fusion de la n° 40) : « Je veux parler à quelqu'un » ignoré juste après le lien
+  « Je commande » (la session n'existe que si un bloc attend une réponse ; le CTA n'attend rien). Ajouté à la PR n° 41 :
+  en mode mots-clés, la conversation reste ouverte 30 min après chaque réponse du bot (réglable dans la fiche) ; pauses
+  prioritaires ; un ami du gérant jamais servi par le bot reste ignoré. 560 tests.

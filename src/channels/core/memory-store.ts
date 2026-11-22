@@ -141,6 +141,14 @@ export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: 
     async listContacts(canalId) {
       return clone([...contacts.values()].filter((c) => c.canalId === canalId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
     },
+    async listPausesEcheues(after, before) {
+      return clone(
+        [...contacts.values()].filter((c) => {
+          const p = c.state.pause;
+          return p?.reason === "echo_gerant" && p.until !== null && Date.parse(p.until) >= Date.parse(after) && Date.parse(p.until) <= Date.parse(before);
+        }),
+      );
+    },
     async listMessages(contactId, limit = 200) {
       return clone(messages.filter((m) => m.contactId === contactId).slice(-limit));
     },

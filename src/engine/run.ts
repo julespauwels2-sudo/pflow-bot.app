@@ -37,6 +37,7 @@ import {
   type OutgoingMessage,
   type PauseReason,
   type QuestionValidation,
+  type RecentTurn,
   type Session,
 } from "./types";
 
@@ -158,7 +159,10 @@ class EngineRun {
   }
 
   result(): EngineResult {
-    return { contact: this.contact, session: this.session, outgoing: resolveDelays(this.outgoing), events: this.events };
+    // Le bot a répondu : la conversation reste ouverte (mode mots-clés, conversationOuverteMinutes).
+    const replied = this.outgoing.some((m) => m.kind !== "typing");
+    const contact = replied ? { ...this.contact, lastBotReplyAt: this.input.now.toISOString() } : this.contact;
+    return { contact, session: this.session, outgoing: resolveDelays(this.outgoing), events: this.events };
   }
 
   // -------------------------------------------------------------------------
@@ -268,6 +272,13 @@ class EngineRun {
       return;
     }
 
+    // Reprise (tâche planifiée) : pause « l'équipe a répondu » échue, personne n'a répondu au client. Pas un message du
+    // client : la fenêtre de 24 h ne bouge pas.
+    if (message.kind === "reprise") {
+      await this.processReprise(message);
+      return;
+    }
+
     this.contact.lastInboundAt = now.toISOString();
 
     // 1. Contact en pause : on ne fait rien. Exception (bots des restos) : pendant un transfert, un mot-clé du client
@@ -278,6 +289,14 @@ class EngineRun {
       if (until === null || Date.parse(until) > now.getTime()) {
         const keyword = reason === "transfert_humain" && !this.input.channel.numeroPflow && message.kind === "text" ? this.findKeyword(message.text) : undefined;
         if (!keyword) {
+          // Pause intelligente : le client attend ; le bot reprendra dans le délai si personne ne répond (jamais plus tard
+          // que la fin de pause déjà prévue ; un 2e message ne repousse pas l'heure).
+          const minutes = this.input.channel.echoResumeMinutes;
+          if (reason === "echo_gerant" && minutes && until) {
+            const at = new Date(Math.min(Date.parse(until), now.getTime() + minutes * 60_000)).toISOString();
+            this.contact.pause = { reason, until: at };
+            this.events.push({ type: "reprise_programmee", at });
+          }
           this.events.push({ type: "ignored", reason: "pause" });
           return;
         }
@@ -347,12 +366,12 @@ class EngineRun {
     // 3. Mot-clé d'un déclencheur (message court : l'intention est claire) : on lance le flux.
     if (this.tryKeyword(text)) return;
 
-    // 4. Canal en mode « toujours » :
+    // 4. Canal en mode « toujours », ou conversation ouverte en mode mots-clés (le bot a répondu il y a peu) :
     //    - salutation (« bonjour », « salut ça va ») ou premier contact très court → flux par défaut (Accueil) ;
     //    - tout autre message (vraie question, demande libre) → l'IA répond (et peut lancer un flux) ;
     //    - sans IA disponible → flux par défaut, comme avant.
     //    (Jamais sur un canal « mots-clés uniquement » : numéros perso des gérants.)
-    if (this.input.channel.triggerMode === "toujours") {
+    if (this.modeToujours()) {
       const defaultFlow = findDefaultFlow(this.input.flows);
       const firstContact = !this.previousInboundAt;
       const greeting = isGreeting(text);
@@ -531,6 +550,46 @@ class EngineRun {
    * Les mots-clés en mode « exact » ne sont pas concernés (le message entier doit déjà correspondre).
    */
   /**
+   * Reprise après la pause « l'équipe a répondu » (pause intelligente) : seulement si la pause est encore celle-là et
+   * échue (sinon l'équipe a répondu entre-temps, ou un transfert est en cours : rien). Puis comme un message normal :
+   * mot-clé → son flux ; sinon l'IA, qui lit la conversation récente (réponses de l'équipe comprises) ; sans IA,
+   * l'accueil complet.
+   */
+  private async processReprise(message: Extract<EngineInput["message"], { kind: "reprise" }>): Promise<void> {
+    const pause = this.contact.pause;
+    const now = this.input.now.getTime();
+    if (pause?.reason !== "echo_gerant" || pause.until === null || Date.parse(pause.until) > now) {
+      this.events.push({ type: "ignored", reason: "pause" });
+      return;
+    }
+    this.contact.pause = null;
+    this.session = null;
+    this.events.push({ type: "reprise" });
+    if (message.kind === "reprise" && this.tryKeyword(message.text)) return;
+    if (this.deps.ai) {
+      await this.callAi(message.text, { conversation: message.conversation });
+      return;
+    }
+    const defaultFlow = findDefaultFlow(this.input.flows);
+    if (defaultFlow) this.startFlow(defaultFlow, "defaut", { nouvelle_conversation: "oui" });
+  }
+
+  /**
+   * Le bot répond à tout message libre : canal en mode « toujours », ou mode mots-clés avec une conversation ouverte
+   * (le bot a répondu à ce contact il y a moins de conversationOuverteMinutes : un client qui vient de recevoir le lien
+   * « Je commande » et pose une question a une réponse). Les pauses passent avant (vérifiées plus haut).
+   */
+  private modeToujours(): boolean {
+    const { channel, now } = this.input;
+    if (channel.triggerMode === "toujours") return true;
+    const minutes = channel.conversationOuverteMinutes;
+    const last = this.input.contact.lastBotReplyAt;
+    if (!minutes || !last || channel.numeroPflow) return false;
+    const age = now.getTime() - Date.parse(last);
+    return Number.isFinite(age) && age >= 0 && age < minutes * 60_000;
+  }
+
+  /**
    * Mot-clé qui lance un flux :
    * - message court (4 mots au plus) qui contient un mot-clé, ou mot-clé « exact » ;
    * - mode « mots-clés uniquement » (bots des restos) : aussi une phrase qui commence par un mot-clé, ou par une
@@ -543,10 +602,10 @@ class EngineRun {
     // Mode « toujours » avec l'IA : une question qui contient un mot-clé de l'Accueil (« ma commande est où ? ») va à
     // l'IA (suivi de commande…), pas à l'accueil. Une salutation reste une salutation.
     const question =
-      match && !channel.numeroPflow && channel.triggerMode === "toujours" && this.deps.ai && findTrigger(match.flow)?.data.isDefault && !isGreetingKeyword(match.keyword) && isQuestion(text);
+      match && !channel.numeroPflow && this.modeToujours() && this.deps.ai && findTrigger(match.flow)?.data.isDefault && !isGreetingKeyword(match.keyword) && isQuestion(text);
     if (match && question) return { ...match, skipped: true };
     if (match && (findTrigger(match.flow)?.data.matchMode === "exact" || isShortMessage(text))) return match;
-    if (!channel.numeroPflow && channel.triggerMode !== "toujours") {
+    if (!channel.numeroPflow && !this.modeToujours()) {
       const found = keywordInSentence(
         flows.map((f) => ({ id: f.id, trigger: findTrigger(f)?.data })),
         text,
@@ -587,7 +646,10 @@ class EngineRun {
     });
   }
 
-  private async callAi(text: string, opts: { repromptNode?: WaitingNode; aiNode?: FlowNodeOf<"ai">; conseil?: ConseilChoix }): Promise<void> {
+  private async callAi(
+    text: string,
+    opts: { repromptNode?: WaitingNode; aiNode?: FlowNodeOf<"ai">; conseil?: ConseilChoix; conversation?: RecentTurn[] },
+  ): Promise<void> {
     const { ai } = this.deps;
     const { client, channel, now, infoSheet, agent } = this.input;
     const { repromptNode, aiNode, conseil } = opts;
@@ -646,6 +708,7 @@ class EngineRun {
           : aiNode?.data.instructions?.trim()
             ? this.render(aiNode.data.instructions)
             : undefined,
+        ...(opts.conversation?.length ? { conversation: opts.conversation } : {}),
       });
     } catch (error) {
       this.events.push({ type: "error", message: `IA : ${errorMessage(error)}` });

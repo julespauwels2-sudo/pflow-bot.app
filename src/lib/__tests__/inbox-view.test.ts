@@ -1,7 +1,7 @@
 /** Boîte de réception sur téléphone : ordre, non lus, mise en forme WhatsApp, heure. */
 import { describe, expect, it } from "vitest";
 import type { InboxCanal, InboxConversation } from "@/channels/core/inbox";
-import { isUnread, markSeen, plainExtract, shortTime, sortConversations, waSegments, type SeenState } from "../inbox-view";
+import { etatLabel, isUnread, markSeen, plainExtract, shortTime, sortConversations, waSegments, type SeenState } from "../inbox-view";
 
 const conv = (id: string, at: string, extra: Partial<InboxConversation> = {}): InboxConversation => ({
   contactId: id,
@@ -67,5 +67,15 @@ describe("boîte de réception : messages du bot avec boutons", () => {
     expect(interactiveContent({ kind: "text", text: "Bonjour" })).toBeNull();
     expect(interactiveContent({ texte: "Tester la démo", reponse: "demo" })).toBeNull(); // réponse du client à un bouton : sa bulle
     expect(interactiveContent(null)).toBeNull();
+  });
+
+  it("pause intelligente : « le bot reprend à HH:MM si personne ne répond » quand le client attend", () => {
+    const now = new Date("2026-11-22T22:00:00Z");
+    const until = "2026-11-22T22:10:00Z";
+    const hh = new Date(until).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    expect(etatLabel({ code: "equipe", until, attente: true, repriseMinutes: 10 }, now).texte).toBe(`⏸ En pause : l'équipe a répondu (le bot reprend à ${hh} si personne ne répond)`);
+    expect(etatLabel({ code: "equipe", until: "2026-11-23T10:00:00Z", attente: false, repriseMinutes: 10 }, now).texte).toBe(
+      "⏸ En pause : l'équipe a répondu (si le client réécrit, le bot reprend après 10 min sans réponse)",
+    );
   });
 });

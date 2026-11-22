@@ -63,6 +63,17 @@ export interface ChannelConfig {
    * complet sur un mot-clé, mots-clés dans une phrase) ne s'y appliquent pas.
    */
   numeroPflow?: boolean;
+  /**
+   * Pause intelligente (bots des restos) : après une réponse de l'équipe, si le client écrit et que personne ne répond
+   * dans ce délai (minutes), le bot reprend. Absent : la pause dure echoPauseHours, comme avant (numéro PFlow).
+   */
+  echoResumeMinutes?: number;
+  /**
+   * Mode « mots-clés uniquement » (bots des restos) : après une réponse du bot, la conversation reste ouverte ce nombre
+   * de minutes (depuis la dernière réponse du bot) : tous les messages du client vont au bot ou à l'IA, comme en mode
+   * « toujours ». Absent : un mot-clé est toujours nécessaire (numéro PFlow, anciens réglages).
+   */
+  conversationOuverteMinutes?: number;
 }
 
 export const DEFAULT_CHANNEL_SETTINGS = {
@@ -145,6 +156,13 @@ export interface InfoSheet {
   pointsDeVente?: string;
   /** Emoji du message d'accueil (variable {{emoji_accueil}}), ex. « 🍪 ». Vide : 🍽️. */
   emojiAccueil?: string;
+  /**
+   * Pause intelligente : après une réponse de l'équipe, si le client écrit et que personne ne répond dans ce délai
+   * (minutes), le bot reprend. Vide : 10 min.
+   */
+  repriseMinutes?: number;
+  /** Mode mots-clés : la conversation reste ouverte ce nombre de minutes après une réponse du bot. Vide : 30 min. */
+  conversationOuverteMinutes?: number;
   /** Carte complète pour l'IA (produits, prix, allergènes). Étape B : lue dans PFlow Order. */
   resumeCarte?: string;
   /** Questions fréquentes, en texte libre (pour l'IA). */
@@ -329,6 +347,11 @@ export interface ContactState {
   profileName?: string;
   pause: { reason: PauseReason; until: string | null } | null;
   lastInboundAt?: string;
+  /**
+   * Dernière réponse du bot à ce contact (flux, IA ou notification de commande). Fenêtre de conversation ouverte en
+   * mode mots-clés (ChannelConfig.conversationOuverteMinutes). Côté WhatsApp, relue dans les messages enregistrés.
+   */
+  lastBotReplyAt?: string;
   /** Compteur d'appels IA, remis à zéro chaque jour (jour du fuseau du client). */
   aiUsage: { day: string; calls: number };
 }
@@ -370,7 +393,19 @@ export type IncomingMessage =
   /** Événement envoyé par PFlow Order (pas un message du contact). */
   | { kind: "event"; event: OrderEvent; data: Record<string, string> }
   /** Simulateur : lance directement un flux (ex. un sous-flux sans mot-clé), comme si le contact écrivait. */
-  | { kind: "start_flow"; flowId: string };
+  | { kind: "start_flow"; flowId: string }
+  /**
+   * Pause intelligente (bots des restos) : le client a écrit pendant la pause « l'équipe a répondu » et personne n'a
+   * répondu dans le délai. Le bot répond à ses derniers messages (`text`), en lisant la conversation récente.
+   * Envoyé par la tâche planifiée, jamais par le client.
+   */
+  | { kind: "reprise"; text: string; conversation: RecentTurn[] };
+
+/** Un message de la conversation récente (client, équipe à la main, ou bot), pour l'IA. */
+export interface RecentTurn {
+  role: "client" | "equipe" | "bot";
+  text: string;
+}
 
 export type OutgoingMessage =
   /** Pause avant le message suivant, avec l'indicateur « en train d'écrire ». */
@@ -448,6 +483,8 @@ export interface AiRequest {
   functions: { name: string; description: string }[];
   /** Consigne du bloc IA, le cas échéant. */
   instructions?: string;
+  /** Reprise après la pause « l'équipe a répondu » : conversation récente, réponses de l'équipe comprises. */
+  conversation?: RecentTurn[];
 }
 
 export interface AiUsage {
@@ -537,6 +574,10 @@ export type EngineEvent =
   | { type: "pause_expired"; reason?: PauseReason }
   /** Transfert levé par un mot-clé du client (bonjour, commande, menu…) : le bot reprend, le transfert est résolu. */
   | { type: "pause_lifted"; by: "mot_cle"; keyword: string }
+  /** Le client attend une réponse pendant la pause « l'équipe a répondu » : le bot reprendra à `at` si personne ne répond. */
+  | { type: "reprise_programmee"; at: string }
+  /** Reprise : personne n'a répondu dans le délai, le bot répond au client (la pause est levée). */
+  | { type: "reprise" }
   | { type: "session_expired"; flowId: string }
   | { type: "flow_started"; flowId: string; via: "mot_cle" | "defaut" | "ia" | "aller_au_flux" | "bouton" | "evenement" | "manuel" }
   /** Mot-clé reconnu (avant le lancement du flux). */

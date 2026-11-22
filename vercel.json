@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/jetons",
       "schedule": "43 6 * * *"
+    },
+    {
+      "path": "/api/cron/reprise",
+      "schedule": "* * * * *"
     }
   ]
 }

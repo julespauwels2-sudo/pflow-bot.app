@@ -3,11 +3,11 @@
  * réponses partent par l'API Graph. Aucune dépendance à Next.js (testable seul, déplaçable).
  */
 import { createHash } from "node:crypto";
-import { runEngine, type AiPort, type OrderBridge, type AiRequest, type AiResult, type EngineResult, type PauseReason } from "@/engine";
+import { conversationOuverteMinutes, repriseMinutes, runEngine, type AiPort, type OrderBridge, type AiRequest, type AiResult, type EngineResult, type PauseReason, type RecentTurn } from "@/engine";
 import { createContactToken } from "@/channels/pflow-order/contact-token";
 import type { LoadedBot } from "./bot-loader";
 import { parseWebhook } from "../whatsapp/parse";
-import type { ChannelSender, ChannelStore, InboundEvent, StatusEvent } from "./types";
+import type { Canal, ChannelSender, ChannelStore, InboundEvent, StatusEvent, StoredMessage } from "./types";
 import { sendOptions } from "./send-options";
 import { DEFAULT_VOICE_LIMITS, type Transcriber, type VoiceLimits } from "../voice/transcriber";
 import { audioDurationSeconds } from "../voice/duration";
@@ -139,7 +139,8 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   const contact = await store.getOrCreateContact(canal.id, event.waId, event.profileName);
   event = await transcribeVoice(event, contact.id, deps, report);
   const echo = event.message.kind === "echo";
-  const inbound = await store.addMessage({
+  // Reprise programmée : les messages du client sont déjà enregistrés (rien de nouveau à noter).
+  const inbound = event.reprise ? null : await store.addMessage({
     canalId: canal.id,
     contactId: contact.id,
     sens: echo ? "echo" : "entrant",
@@ -230,6 +231,12 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     if (reponse) bot.client.vars = { ...bot.client.vars, reponse_demo: reponse };
   }
 
+  // Mode mots-clés : dernière réponse du bot à ce contact (conversation ouverte), relue dans les messages enregistrés
+  // (aucune colonne à ajouter). Le numéro PFlow et le mode « toujours » n'en ont pas besoin.
+  const lastBotReplyAt =
+    canal.role !== "pflow" && canal.triggerMode === "mots_cles_uniquement"
+      ? (await store.listMessages(contact.id, 30)).filter((m) => m.sens === "sortant" && m.auteur === "bot" && m.statut !== "echec").at(-1)?.at
+      : undefined;
   const result: EngineResult = await runEngine(
     {
       now,
@@ -243,13 +250,16 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
         handoffPauseHours: canal.handoffPauseHours,
         sessionTimeoutMinutes: canal.sessionMinutes,
         aiDailyLimitPerContact: bot.aiDailyLimit,
-        ...(canal.role === "pflow" ? { numeroPflow: true } : {}),
+        // Pause intelligente sur les numéros des restos (délai de la fiche, 10 min par défaut) ; numéro PFlow : 12 h.
+        ...(canal.role === "pflow"
+          ? { numeroPflow: true }
+          : { echoResumeMinutes: repriseMinutes(bot.infoSheet), conversationOuverteMinutes: conversationOuverteMinutes(bot.infoSheet) }),
       },
       flows: bot.flows,
       infoSheet: bot.infoSheet,
       // Autre bot qu'au message précédent (démo ouverte par son mot-clé…) : nouvelle conversation pour lui
       // (accueil complet), même si le contact vient d'écrire.
-      contact: resetSession ? { ...contact.state, lastInboundAt: undefined } : contact.state,
+      contact: resetSession ? { ...contact.state, lastInboundAt: undefined } : { ...contact.state, ...(lastBotReplyAt ? { lastBotReplyAt } : {}) },
       session: stored?.session ?? null,
       message: engineMessage,
       agent: bot.agent,
@@ -263,7 +273,8 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
 
   // Accusé de lecture + « en train d'écrire », seulement si le bot répond : un message laissé au gérant
   // (pause, mots-clés uniquement sur son numéro perso) ne doit jamais apparaître « lu » au client.
-  if (!echo && result.outgoing.length > 0) await graph.markRead(canal.accountId, event.wamid, true, event.waId).catch(() => undefined);
+  const lu = event.reprise ? event.reprise.messageWamid : event.wamid;
+  if (!echo && lu && result.outgoing.length > 0) await graph.markRead(canal.accountId, lu, true, event.waId).catch(() => undefined);
 
   let sent = 0;
   const sleep = deps.sleep ?? defaultSleep;
@@ -296,8 +307,8 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   }
   await store.saveContact({ ...contact, state: result.contact });
   // Le bot n'a pas répondu : la raison, visible dans la boîte de réception (« Ignoré : pas de mot-clé »…).
-  const note = !echo ? ignoredNote(result, contact.state.pause?.reason) : null;
-  if (note) await store.noteMessage(inbound.id, note).catch((error) => report.errors.push(`Note du message : ${message(error)}`));
+  const note = !echo && inbound ? ignoredNote(result, contact.state.pause?.reason) : null;
+  if (note && inbound) await store.noteMessage(inbound.id, note).catch((error) => report.errors.push(`Note du message : ${message(error)}`));
   // Le bot reprend (mot-clé du client pendant un transfert, ou fin de la pause) : le transfert est marqué résolu.
   if (result.events.some((e) => e.type === "pause_lifted" || (e.type === "pause_expired" && e.reason === "transfert_humain"))) {
     await store.resolveTransferts(contact.id).catch((error) => report.errors.push(`Transfert résolu : ${message(error)}`));
@@ -459,3 +470,96 @@ function handoffMotif(source: "bloc" | "ia" | "limite_ia" | "erreur_ia", flows: 
   if (source === "erreur_ia") return "Erreur de l'assistant";
   return "Le client demande une personne";
 }
+
+// ---------------------------------------------------------------------------
+// Pause intelligente : reprise programmée (tâche planifiée à la minute, /api/cron/reprise)
+// ---------------------------------------------------------------------------
+
+/** Les fins de pause plus anciennes ne sont plus reprises (tâche arrêtée longtemps : on ne répond pas des heures après). */
+export const REPRISE_FENETRE_MINUTES = 60;
+/** Conversation récente donnée à l'IA : les messages des 12 dernières heures, 30 au plus. */
+const REPRISE_HISTORIQUE_HEURES = 12;
+
+export interface RepriseReport {
+  reprises: number;
+  ignorees: number;
+  erreurs: string[];
+}
+
+/** Texte d'un message enregistré, pour l'IA (sans import circulaire : même logique que la boîte de réception). */
+type MessageText = (m: Pick<StoredMessage, "type" | "contenu">) => string;
+
+/**
+ * Pour chaque contact dont la pause « l'équipe a répondu » vient d'échoir ET dont le dernier message est celui du
+ * client (laissé sans réponse pendant la pause) : le bot répond, avec la conversation récente. L'identifiant de la
+ * reprise (contact + heure de fin de pause) est réservé comme un message : jamais deux réponses, même si la tâche
+ * tourne deux fois en même temps.
+ */
+export async function processReprises(
+  store: ChannelStore,
+  depsFor: (plateforme: Canal["plateforme"]) => ProcessorDeps | null,
+  now: Date,
+  messageText: MessageText,
+): Promise<RepriseReport> {
+  const report: RepriseReport = { reprises: 0, ignorees: 0, erreurs: [] };
+  const after = new Date(now.getTime() - REPRISE_FENETRE_MINUTES * 60_000).toISOString();
+  const [contacts, canaux] = await Promise.all([store.listPausesEcheues(after, now.toISOString()), store.listCanaux()]);
+  for (const contact of contacts) {
+    const canal = canaux.find((c) => c.id === contact.canalId);
+    if (!canal || canal.role === "pflow" || canal.etat === "coupe") continue;
+    try {
+      const messages = await store.listMessages(contact.id, 40);
+      const last = messages.at(-1);
+      // Quelqu'un a répondu après le client (équipe, bot), ou le client n'a rien écrit pendant la pause : rien à faire.
+      if (!last || last.sens !== "entrant" || !last.erreur?.startsWith("ignore:pause_echo_gerant")) {
+        report.ignorees += 1;
+        continue;
+      }
+      // Numéro « mots-clés uniquement » (aussi utilisé par le gérant pour ses conversations perso) : reprise seulement
+      // pour un client à qui le bot a déjà parlé. Un ami qui répond au gérant n'aura jamais de réponse du bot.
+      if (canal.triggerMode === "mots_cles_uniquement" && !messages.some((m) => m.sens === "sortant" && m.auteur === "bot")) {
+        report.ignorees += 1;
+        continue;
+      }
+      let i = messages.length;
+      while (i > 0 && messages[i - 1]!.sens === "entrant") i -= 1;
+      const attente = messages.slice(i).map(messageText).filter(Boolean);
+      const depuis = now.getTime() - REPRISE_HISTORIQUE_HEURES * 3_600_000;
+      const conversation: RecentTurn[] = messages
+        .filter((m) => Date.parse(m.at) >= depuis && m.statut !== "echec")
+        .map((m) => ({ role: m.sens === "entrant" ? "client" : m.sens === "echo" || m.auteur === "humain" ? "equipe" : "bot", text: messageText(m) }));
+      const deps = depsFor(canal.plateforme);
+      if (!deps) {
+        report.erreurs.push(`${canal.plateforme} non configuré`);
+        continue;
+      }
+      const result = await processEvents(
+        {
+          inbound: [
+            {
+              plateforme: canal.plateforme,
+              accountId: canal.accountId,
+              waId: contact.waId,
+              ...(contact.state.profileName ? { profileName: contact.state.profileName } : {}),
+              wamid: `reprise:${contact.id}:${contact.state.pause?.until ?? ""}`,
+              timestamp: String(Math.floor(now.getTime() / 1000)),
+              message: { kind: "reprise", text: attente.join("\n"), conversation },
+              type: "reprise",
+              contenu: {},
+              reprise: { ...(last.wamid ? { messageWamid: last.wamid } : {}) },
+            },
+          ],
+          statuses: [],
+        },
+        { ...deps, now: () => now },
+      );
+      report.erreurs.push(...result.errors);
+      if (result.handled.some((h) => h.outgoing > 0)) report.reprises += 1;
+      else report.ignorees += 1;
+    } catch (error) {
+      report.erreurs.push(`Reprise ${contact.id} : ${message(error)}`);
+    }
+  }
+  return report;
+}
+

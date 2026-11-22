@@ -205,6 +205,36 @@ export function InfoSheetForm({
           <Field label="Emoji d'accueil" hint="Affiché dans le message d'accueil après le nom du resto ({{emoji_accueil}}). Vide : 🍽️.">
             <Input className="max-w-32" placeholder="🍽️" maxLength={16} {...text("emojiAccueil")} data-testid="emoji-accueil" />
           </Field>
+          <Field
+            label="Reprise du bot après une réponse de l'équipe (minutes)"
+            hint="Quand l'équipe répond à la main, le bot se tait. Si le client réécrit et que personne ne lui répond dans ce délai, le bot reprend. Vide : 10 min."
+          >
+            <Input
+              type="number"
+              min={2}
+              max={240}
+              className="max-w-32"
+              placeholder="10"
+              value={sheet.repriseMinutes ?? ""}
+              onChange={(e) => change({ ...sheet, repriseMinutes: e.target.value ? Number(e.target.value) : undefined })}
+              data-testid="reprise-minutes"
+            />
+          </Field>
+          <Field
+            label="Conversation ouverte après une réponse du bot (minutes)"
+            hint="Mode mots-clés : après une réponse du bot, le client peut écrire librement (le bot ou l'IA répond) pendant ce délai, sans mot-clé. Vide : 30 min."
+          >
+            <Input
+              type="number"
+              min={1}
+              max={720}
+              className="max-w-32"
+              placeholder="30"
+              value={sheet.conversationOuverteMinutes ?? ""}
+              onChange={(e) => change({ ...sheet, conversationOuverteMinutes: e.target.value ? Number(e.target.value) : undefined })}
+              data-testid="conversation-ouverte-minutes"
+            />
+          </Field>
           <Field label="Points de vente">
             <Textarea placeholder="Restaurant, food truck le samedi au marché…" {...text("pointsDeVente")} />
           </Field>
