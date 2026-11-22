@@ -15,7 +15,9 @@ import { processWebhookPayload } from "@/channels/core/processor";
 import type { Canal } from "@/channels/core/types";
 import { createGraphClient } from "@/channels/whatsapp/graph";
 import { demoDirectory } from "../lifecycle";
-import { DEMO_PERMANENTE, PFLOW_TEXTS } from "../pflow-bot";
+import { DEMO_PERMANENTE, PFLOW_FLOWS, PFLOW_TEXTS, RESTART_BUTTON } from "../pflow-bot";
+import { guide, isRestartGreeting, type ParcoursState } from "../parcours";
+
 import { createDemoToken, readDemoToken } from "../demo-token";
 import { dashboardUrlWithOrder, etape3Seconds, formatDemoRecap, handleDemoDashboard, handleDemoOrder, runDemoDue, sendEtape3WhenDue, type DemoAutoDeps } from "../demo-auto";
 
@@ -107,7 +109,10 @@ async function setup(etat: Canal["etat"] = "actif") {
     const url = msgs[0].interactive!.action.parameters!.url;
     return { url, token: new URL(url).searchParams.get("j")! };
   };
-  return { store, clock, auto, say, out, start, contactOf };
+  const reply = async (who: string, id: string, title: string) => {
+    await processWebhookPayload(notif(who, { type: "interactive", interactive: { type: "button_reply", button_reply: { id, title } } }), deps);
+  };
+  return { store, clock, auto, say, out, start, contactOf, reply };
 }
 
 describe("démo permanente automatique (faux Meta)", () => {
@@ -180,7 +185,7 @@ describe("démo permanente automatique (faux Meta)", () => {
     const step3 = t.out(from);
     expect(step3).toHaveLength(1);
     expect(step3[0].interactive?.body.text).toBe(PFLOW_TEXTS.step3);
-    expect((step3[0].interactive?.action.buttons ?? []).map((b) => b.reply.title)).toEqual(["🙋 Je veux le mien", "Comment ça marche ?"]);
+    expect((step3[0].interactive?.action.buttons ?? []).map((b) => b.reply.title)).toEqual(["🙋 Je veux le mien", "Comment ça marche ?", "Recommencer la démo"]);
     parcours = (await t.contactOf("590690111111")).demo!.parcours!;
     expect(parcours.etape).toBe(3);
     expect(parcours.etape3EnvoyeeAt).toBeTruthy();
@@ -380,3 +385,100 @@ describe("étape 3/3 à ≈ 20 s (depuis la route du dashboard), tâche à la mi
     expect(report).toMatchObject({ envoyees: 0, ignorees: [{ raison: "échéance lointaine : tâche à la minute" }] });
   });
 });
+
+describe("démo physique : « Bonjour » relance la démo depuis le début (canal PFlow Démo seulement)", () => {
+  const MOI = "590690111111";
+  /** Accueil Mint Bun, puis étape 1/3 avec le bouton « Je commande ». */
+  const expectRestart = (msgs: Out[]) => {
+    expect(msgs).toHaveLength(2);
+    expect(msgs[0].text?.body).toBe(PFLOW_TEXTS.welcome);
+    expect(msgs[1].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.step1 }, action: { parameters: { display_text: "Je commande" } } });
+  };
+
+  it("salutation seule : reconnue avec ou sans ponctuation, emoji, accents ; jamais avec une vraie question", () => {
+    for (const t of ["Bonjour", "bonjour !", "Bonsoir 👋", "SALUT", "slt", "Hello!!", "coucou 😊", "yo", "Démo", "demo", "recommencer", "Bonjour bonjour", "salut, démo"]) {
+      expect(isRestartGreeting(t), t).toBe(true);
+    }
+    for (const t of ["bonjour vous livrez ?", "salut ça va", "c'est combien", "bonjour je voudrais commander", "", "👋", "merci"]) {
+      expect(isRestartGreeting(t), t).toBe(false);
+    }
+  });
+
+  it("à chaque étape (0, 1, 2, 3), « Bonjour » renvoie l'accueil puis l'étape 1 ; le parcours repart à l'étape 1", async () => {
+    const t = await setup();
+    // étape 0 (accueil vu)
+    await t.say(MOI, "Bonjour");
+    expect((await t.contactOf(MOI)).demo!.parcours!.etape).toBe(0);
+    expectRestart(await t.say(MOI, "Bonjour !"));
+    expect((await t.contactOf(MOI)).demo!.parcours!.etape).toBe(1);
+    // étape 1
+    expectRestart(await t.say(MOI, "salut"));
+    // étape 2 (commande validée)
+    const { token } = await t.start(MOI);
+    await handleDemoOrder(t.auto, { jeton: token, commande: order(11) });
+    expect((await t.contactOf(MOI)).demo!.parcours!.etape).toBe(2);
+    expectRestart(await t.say(MOI, "Bonsoir 👋"));
+    let p = (await t.contactOf(MOI)).demo!.parcours!;
+    expect(p.etape).toBe(1);
+    expect(p.derniereCommande).toBeUndefined();
+    // étape 3 (« J'ai vu le dashboard » écrit à la main)
+    await t.say(MOI, "Tester la démo");
+    await t.say(MOI, DEMO_PERMANENTE.retourCommande);
+    await t.say(MOI, DEMO_PERMANENTE.retourDashboard);
+    expect((await t.contactOf(MOI)).demo!.parcours!.etape).toBe(3);
+    expectRestart(await t.say(MOI, "démo"));
+    p = (await t.contactOf(MOI)).demo!.parcours!;
+    expect(p.etape).toBe(1);
+    expect(p.etape3EnvoyeeAt).toBeUndefined(); // la nouvelle démo pourra de nouveau recevoir l'étape 3
+  });
+
+  it("salutation + vraie question : pas de relance, la question est traitée comme avant (rappel de l'étape)", async () => {
+    const t = await setup();
+    await t.start(MOI);
+    const msgs = await t.say(MOI, "bonjour vous livrez ?");
+    expect(msgs.map((m) => m.text?.body ?? m.interactive?.body.text)).not.toContain(PFLOW_TEXTS.welcome);
+    expect((await t.contactOf(MOI)).demo!.parcours!.etape).toBe(1);
+    const parcours: ParcoursState = { etape: 2, at: "2026-11-09T15:00:00Z" };
+    const g = guide({ kind: "text", text: "bonjour vous livrez ?" }, [], parcours, new Date("2026-11-09T15:01:00Z"));
+    expect(g.restart).toBeUndefined();
+    expect(g.question).toBe("bonjour vous livrez ?");
+    // Premier contact (aucun parcours) : l'accueil habituel, avec son bouton « Tester la démo ».
+    expect(guide({ kind: "text", text: "Bonjour" }, [], undefined, new Date()).message).toEqual({ kind: "start_flow", flowId: PFLOW_FLOWS.accueil });
+  });
+
+  it("étape 3 programmée (dashboard ouvert) puis « Bonjour » : l'envoi programmé est annulé", async () => {
+    const t = await setup();
+    const { token } = await t.start(MOI);
+    let from = sent.length;
+    await handleDemoOrder(t.auto, { jeton: token, commande: order(12) });
+    const dashLink = t.out(from)[1].interactive!.action.parameters!.url;
+    expect((await handleDemoDashboard(t.auto, dashLink.split("/").pop()!)).programmee).toBe(true);
+    expect((await t.contactOf(MOI)).demo!.parcours!.etape3Due).toBeTruthy();
+
+    expectRestart(await t.say(MOI, "Bonjour"));
+    expect((await t.contactOf(MOI)).demo!.parcours!.etape3Due).toBeUndefined();
+    t.clock.now = new Date("2026-11-09T15:05:00Z");
+    from = sent.length;
+    expect((await runDemoDue(t.auto)).envoyees).toBe(0);
+    expect(t.out(from)).toHaveLength(0);
+  });
+
+  it("bouton « Recommencer la démo » de l'étape 3 : accueil puis étape 1", async () => {
+    const t = await setup();
+    await t.say(MOI, "Tester la démo");
+    await t.say(MOI, DEMO_PERMANENTE.retourCommande);
+    const step3 = await t.say(MOI, DEMO_PERMANENTE.retourDashboard);
+    const bouton = step3[0].interactive!.action.buttons!.find((b) => b.reply.title === RESTART_BUTTON)!;
+    expect(RESTART_BUTTON.length).toBeLessThanOrEqual(20);
+    const from = sent.length;
+    await processWebhookPayloadReply(t, MOI, bouton.reply.id, bouton.reply.title);
+    expectRestart(t.out(from));
+    expect((await t.contactOf(MOI)).demo!.parcours!.etape).toBe(1);
+  });
+
+});
+
+/** Clic sur un bouton de réponse, comme Meta l'envoie. */
+async function processWebhookPayloadReply(t: Awaited<ReturnType<typeof setup>>, who: string, id: string, title: string) {
+  await t.reply(who, id, title);
+}

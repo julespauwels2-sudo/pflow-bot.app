@@ -104,6 +104,8 @@ export const PFLOW_FLOWS = {
   rappel3: "pflow-rappel-3",
   jules: "pflow-jules",
   commandeDemo: "pflow-commande-demo",
+  /** Remise à zéro (salutation seule en plein parcours, ou bouton « Recommencer la démo ») : accueil, puis étape 1/3. */
+  recommencer: "pflow-recommencer",
   /** Réponse en plein parcours (politesse, IA, ou Jules), puis rappel de l'étape N (pflow-question-0 … -3). */
   question: "pflow-question-",
   /** Réponse de l'IA avant le début de la démo, avec [Tester la démo] [💬 Parler à Jules]. */
@@ -129,6 +131,8 @@ export const STEP3_KEYWORDS = ["j ai vu le dashboard", "dashboard vu", "j ai vu 
 export const WANT_MINE_KEYWORDS = ["je veux le mien", "obtenir ma demo", "je veux une demo", "rappelez moi", "etre rappele"];
 export const TALK_TO_JULES_KEYWORDS = ["parler a jules", "parler a quelqu un", "un humain", "une personne"];
 const TALK_TO_JULES = "💬 Parler à Jules";
+/** Bouton de l'étape 3 qui relance la démo (20 caractères au plus pour WhatsApp). */
+export const RESTART_BUTTON = "Recommencer la démo";
 
 const welcome: Flow = {
   id: PFLOW_FLOWS.accueil,
@@ -168,14 +172,35 @@ const step3: Flow = {
   name: "PFlow — étape 3/3 : et pour votre resto ?",
   nodes: [
     trigger(STEP3_KEYWORDS),
-    message("m", [{ text: PFLOW_TEXTS.step3, buttons: [reply("mien", "🙋 Je veux le mien"), reply("comment", "Comment ça marche ?")] }]),
+    message("m", [
+      {
+        text: PFLOW_TEXTS.step3,
+        buttons: [reply("mien", "🙋 Je veux le mien"), reply("comment", "Comment ça marche ?"), reply("recommencer", RESTART_BUTTON)],
+      },
+    ]),
     goto("g_mien", PFLOW_FLOWS.mien, 0),
     goto("g_comment", PFLOW_FLOWS.commentCaMarche, 200),
+    goto("g_recommencer", PFLOW_FLOWS.recommencer, 400),
   ],
   edges: [
     { id: "e1", source: "t", target: "m" },
     { id: "e2", source: "m", sourceHandle: "mien", target: "g_mien" },
     { id: "e3", source: "m", sourceHandle: "comment", target: "g_comment" },
+    { id: "e4", source: "m", sourceHandle: "recommencer", target: "g_recommencer" },
+  ],
+};
+
+/**
+ * Remise à zéro de la démo : l'accueil Mint Bun (sans son bouton), puis directement l'étape 1/3 avec « Je commande ».
+ * Lancé par le parcours (src/demos/parcours.ts) sur une salutation seule, ou par le bouton de l'étape 3.
+ */
+const restart: Flow = {
+  id: PFLOW_FLOWS.recommencer,
+  name: "PFlow — recommencer la démo",
+  nodes: [trigger([]), message("m", [{ text: PFLOW_TEXTS.welcome }]), goto("g", PFLOW_FLOWS.etape1, 0)],
+  edges: [
+    { id: "e1", source: "t", target: "m" },
+    { id: "e2", source: "m", target: "g" },
   ],
 };
 
@@ -316,7 +341,7 @@ const wantMine: Flow = {
 export function pflowBaseBot(): LoadedBot {
   return {
     client: { id: PFLOW_BOT_ID, nomResto: "PFlow", orderSlug: "", timezone: DEFAULT_TIMEZONE, vars: { ...DEFAULT_DEMO_VARS } },
-    flows: structuredClone([welcome, step1, step2, step3, remind1, remind2, remind3, howItWorks, wantMine, talkToJules, ...questionFlows, answerBeforeDemo, orderConfirmed]),
+    flows: structuredClone([welcome, restart, step1, step2, step3, remind1, remind2, remind3, howItWorks, wantMine, talkToJules, ...questionFlows, answerBeforeDemo, orderConfirmed]),
     infoSheet: { horaires: [] },
     aiDailyLimit: 0,
   };
