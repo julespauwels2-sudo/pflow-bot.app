@@ -1246,3 +1246,14 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
   « Je commande » (la session n'existe que si un bloc attend une réponse ; le CTA n'attend rien). Ajouté à la PR n° 41 :
   en mode mots-clés, la conversation reste ouverte 30 min après chaque réponse du bot (réglable dans la fiche) ; pauses
   prioritaires ; un ami du gérant jamais servi par le bot reste ignoré. 560 tests.
+
+## 22 novembre 2026 — démo Mint Bun : présentation PFlow, puis accueil comme un vrai resto (PR)
+
+- Premier contact ET redémarrage (salutation seule en plein parcours, bouton « Recommencer la démo ») : la présentation
+  PFlow et son bouton [Tester la démo]. Avant, le redémarrage enchaînait présentation (sans bouton) et étape 1.
+- [Tester la démo] : l'accueil de Mint Bun sur la même trame que le modèle maître des restos (« 👋 Hello … ! Bienvenue
+  chez Mint Bun 🍔 Une petite faim ?… » [Je commande], puis « ✨ Besoin d'un petit coup de main ? » [⭐ Me conseiller]
+  [ℹ️ Infos pratiques]). Ces deux boutons expliquent ce que ferait le bot du resto (aucune carte inventée), puis
+  [Je commande].
+- Étapes 2/3 et 3/3, dashboard, « Je veux le mien », rappels : inchangés. Restos : inchangés (seul le bot PFlow de base
+  change). Captures du simulateur : `docs/etape-c/captures-demo-ordre/`. 560 tests.

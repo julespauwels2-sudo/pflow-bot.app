@@ -308,10 +308,18 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(titles(msgs[0])).toEqual(["Tester la démo"]);
     expect(await step()).toBe(0);
 
-    // 2. Étape 1/3 : un message, un bouton lien « Je commande ».
+    // 2. Étape 1/3 : l'accueil de Mint Bun, comme celui d'un vrai resto (bouton lien « Je commande »), puis « Besoin
+    //    d'un petit coup de main ? » [⭐ Me conseiller] [ℹ️ Infos pratiques].
     msgs = await press(msgs[0], 0);
-    expect(msgs).toHaveLength(1);
-    expect(msgs[0].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.step1 }, action: { parameters: { display_text: "Je commande", url: DEMO_PERMANENTE.commandeUrl } } });
+    expect(msgs).toHaveLength(2);
+    expect(msgs[0].interactive).toMatchObject({ type: "cta_url", action: { parameters: { display_text: "Je commande", url: DEMO_PERMANENTE.commandeUrl } } });
+    expect(msgs[0].interactive?.body.text).toMatch(/^👋 Hello .*! Bienvenue chez Mint Bun 🍔 Une petite faim \? Composez votre commande en quelques clics 👇$/);
+    expect(msgs[1].interactive?.body.text).toBe(PFLOW_TEXTS.step1Aide);
+    expect(titles(msgs[1])).toEqual(["⭐ Me conseiller", "ℹ️ Infos pratiques"]);
+    expect(await step()).toBe(1);
+    // « Me conseiller » : ce que ferait le bot du resto, puis [Je commande] (aucune carte inventée) ; toujours l'étape 1.
+    const conseil = await press(msgs[1], 0);
+    expect(conseil[0].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.conseilDemo }, action: { parameters: { display_text: "Je commande" } } });
     expect(await step()).toBe(1);
 
     // Filet de sécurité : autre chose → rappel de l'étape 1 avec son bouton ; une politesse (« re ») : un bonjour en
@@ -397,9 +405,9 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     // Plus tard, un autre message : rappel de l'étape 3 (ses boutons).
     clock.now = new Date("2026-11-10T09:00:00Z");
     expect(await say("hmm")).toContain("Étape 3/3");
-    // « bonjour » seul : la démo repart de zéro (accueil puis étape 1/3).
+    // « bonjour » seul : la démo repart de zéro (la présentation PFlow et son bouton).
     expect(await say("bonjour")).toContain("Bienvenue chez PFlow");
-    expect(await step()).toBe(1);
+    expect(await step()).toBe(0);
     // Nom d'une démo personnalisée : toujours prioritaire.
     expect(await say("gwada food")).toContain("Gwada food");
     // 7 jours sans rien : on repart de l'accueil.
