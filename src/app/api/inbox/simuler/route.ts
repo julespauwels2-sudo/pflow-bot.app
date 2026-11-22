@@ -17,6 +17,8 @@ const schema = z.object({
   nom: z.string().max(60).default("Client test"),
   /** Canal visé (par défaut : le premier de la plateforme), par exemple le numéro PFlow « canal-pflow ». */
   canal: z.string().max(60).optional(),
+  /** Réponse de l'équipe depuis l'appli WhatsApp Business (écho de coexistence) plutôt qu'un message du client. */
+  echo: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {
@@ -41,7 +43,7 @@ export async function POST(request: Request) {
           profileName: nom,
           wamid: `simu-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           timestamp: String(Math.floor(Date.now() / 1000)),
-          message: { kind: "text", text: texte },
+          message: parsed.data.echo ? { kind: "echo", text: texte } : { kind: "text", text: texte },
           type: "text",
           contenu: { texte },
         },

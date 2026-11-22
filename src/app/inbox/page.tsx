@@ -1,15 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { MobileConversation, MobileInboxList } from "@/components/inbox-mobile";
-import { MessageContent } from "@/components/message-content";
 import { MobileHeader, useIsMobile } from "@/components/mobile";
 import { OPEN_CONVERSATION_EVENT, PushControls } from "@/components/pwa";
-import { markSeen, readSeen, type SeenState } from "@/lib/inbox-view";
-import { Badge, Button, Card, Loading, Notice, Textarea } from "@/components/ui";
+import { FILTRE_PAR_DEFAUT, filtrerCanaux, isUnread, lastAt, markSeen, plainExtract, readSeen, shortTime, sortConversations, type InboxFiltre, type SeenState } from "@/lib/inbox-view";
+import { BarreEtat, EtatBadge, FiltresInbox, ListeMessages } from "@/components/inbox-parts";
+import { fusionnerConversation, majConversationListe, nouvelEnvoi, reglerEnvoi, type EnvoiLocal, type LigneConversation, type MessageAffiche } from "@/lib/inbox-envoi";
+import { Button, Card, Loading, Notice, Textarea } from "@/components/ui";
 import type { InboxCanal, InboxConversation } from "@/channels/core/inbox";
-import type { StoredMessage } from "@/channels/core/types";
 import { accessToken } from "@/lib/supabase";
 import { useAuth } from "@/components/auth-gate";
 
@@ -19,22 +19,31 @@ type InboxState =
   | { status: "off"; missing: string[] }
   | { status: "ready"; mode: "supabase" | "memory"; canaux: InboxCanal[] };
 
-type Thread = { messages: (StoredMessage & { texte: string })[] };
+type Thread = { messages: MessageAffiche[] };
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
+async function call<T>(path: string, init?: RequestInit): Promise<{ ok: boolean; status: number; body: T & { error?: string } }> {
   const token = await accessToken();
   const response = await fetch(path, {
     ...init,
     headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}), ...(init?.headers ?? {}) },
   });
   const body = (await response.json().catch(() => ({}))) as T & { error?: string };
-  if (!response.ok) throw new Error(body.error ?? `Erreur ${response.status}`);
+  return { ok: response.ok, status: response.status, body };
+}
+
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const { ok, status, body } = await call<T>(path, init);
+  if (!ok) throw new Error(body.error ?? `Erreur ${status}`);
   return body;
 }
 
+/** Réponse de POST /api/inbox/[contactId]. */
+type ActionResponse = { ok?: boolean; pause?: InboxConversation["pause"]; message?: MessageAffiche };
+
 const REFRESH_MS = 5000;
 const who = (canal: InboxCanal, conv: InboxConversation) => conv.nom || (canal.plateforme === "instagram" ? `Instagram ${conv.waId.slice(-4)}` : `+${conv.waId}`);
-const time = (iso: string) => new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+/** Qui a écrit le dernier message, pour l'extrait de la liste. */
+const prefixe = (d: NonNullable<InboxConversation["dernierMessage"]>) => (d.sens === "entrant" ? "" : d.sens === "echo" || d.auteur === "humain" ? "👩‍🍳 Équipe : " : "🤖 ");
 
 export default function InboxPage() {
   const { role } = useAuth();
@@ -42,8 +51,15 @@ export default function InboxPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [thread, setThread] = useState<Thread | null>(null);
   const [notice, setNotice] = useState<{ tone: "error" | "success"; text: string } | null>(null);
+  // Réponses envoyées depuis cet écran, par conversation (affichées tout de suite, puis confirmées).
+  const [envois, setEnvois] = useState<Record<string, EnvoiLocal[]>>({});
+  const selectedRef = useRef<string | null>(null);
+  // Les réponses partent l'une après l'autre (même ordre chez le client), sans bloquer l'écran.
+  const file = useRef<Promise<void>>(Promise.resolve());
   const isMobile = useIsMobile();
   const [seen, setSeen] = useState<SeenState>({ initAt: new Date(0).toISOString(), seen: {} });
+  // Filtre par resto ; numéros de test de Meta (+1 555 …) masqués par défaut.
+  const [filtre, setFiltre] = useState<InboxFiltre>(FILTRE_PAR_DEFAUT);
   useEffect(() => {
     // Mémoire « déjà lu » de cet appareil (localStorage), lue une fois la page affichée.
     void Promise.resolve().then(() => setSeen(readSeen()));
@@ -61,7 +77,9 @@ export default function InboxPage() {
 
   const loadThread = useCallback(async (contactId: string) => {
     try {
-      setThread(await api<Thread>(`/api/inbox/${encodeURIComponent(contactId)}`));
+      const data = await api<Thread>(`/api/inbox/${encodeURIComponent(contactId)}`);
+      // Réponse arrivée après un changement de conversation : on l'ignore.
+      if (selectedRef.current === contactId) setThread(data);
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
     }
@@ -78,6 +96,7 @@ export default function InboxPage() {
   }, [thread]);
   const show = useCallback(
     (contactId: string | null) => {
+      selectedRef.current = contactId;
       setSelected(contactId);
       setThread(null);
       if (!contactId) return;
@@ -124,8 +143,8 @@ export default function InboxPage() {
     let cancelled = false;
     const tick = async () => {
       if (cancelled) return;
-      await refresh();
-      if (selected) await loadThread(selected);
+      // Liste et conversation en même temps : la conversation n'attend plus la liste (plus lente).
+      await Promise.all([refresh(), selected ? loadThread(selected) : null]);
     };
     void tick();
     const timer = setInterval(tick, REFRESH_MS);
@@ -135,22 +154,63 @@ export default function InboxPage() {
     };
   }, [refresh, loadThread, selected]);
 
-  async function act(action: Record<string, unknown>, success: string | null): Promise<boolean> {
-    if (!selected) return false;
+  /** Reprendre la main / rendre au bot : la pause s'affiche dès la réponse, la liste se recharge ensuite. */
+  async function act(action: { type: "reprendre" | "relancer" }, success: string): Promise<void> {
+    const contactId = selected;
+    if (!contactId) return;
     try {
-      await api(`/api/inbox/${encodeURIComponent(selected)}`, { method: "POST", body: JSON.stringify(action) });
-      setNotice(success ? { tone: "success", text: success } : null);
-      await refresh();
-      await loadThread(selected);
-      return true;
+      const result = await api<ActionResponse>(`/api/inbox/${encodeURIComponent(contactId)}`, { method: "POST", body: JSON.stringify(action) });
+      setNotice({ tone: "success", text: success });
+      setState((s) => (s.status === "ready" ? { ...s, canaux: majConversationListe(s.canaux, contactId, { pause: result.pause ?? null }) } : s));
+      void Promise.all([refresh(), loadThread(contactId)]);
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
-      return false;
     }
   }
 
+  /** Répondre : le message s'affiche tout de suite (« envoi… »), part dans l'ordre, puis « envoyé ✓ » ou « échec ». */
+  function repondre(contactId: string, texte: string) {
+    const envoi = nouvelEnvoi(texte);
+    setEnvois((all) => ({ ...all, [contactId]: [...(all[contactId] ?? []), envoi] }));
+    file.current = file.current.then(() => envoyer(contactId, envoi));
+  }
+
+  async function envoyer(contactId: string, envoi: EnvoiLocal) {
+    let resultat: Parameters<typeof reglerEnvoi>[2];
+    try {
+      const { ok, status, body } = await call<ActionResponse>(`/api/inbox/${encodeURIComponent(contactId)}`, {
+        method: "POST",
+        body: JSON.stringify({ type: "repondre", texte: envoi.texte }),
+      });
+      resultat = ok ? { ok: true, ...(body.message ? { message: body.message } : {}) } : { ok: false, erreur: body.error ?? `Erreur ${status}`, ...(body.message ? { message: body.message } : {}) };
+      if (ok) {
+        const at = body.message?.at ?? envoi.at;
+        setState((s) =>
+          s.status === "ready"
+            ? { ...s, canaux: majConversationListe(s.canaux, contactId, { ...("pause" in body ? { pause: body.pause ?? null } : {}), dernierMessage: { texte: envoi.texte, sens: "sortant", at } }) }
+            : s,
+        );
+      }
+    } catch (error) {
+      // Réseau coupé : rien n'est parti (ou on ne le sait pas) ; « Réessayer » reste possible.
+      resultat = { ok: false, erreur: error instanceof Error ? error.message : String(error) };
+    }
+    setEnvois((all) => ({ ...all, [contactId]: reglerEnvoi(all[contactId] ?? [], envoi.tempId, resultat) }));
+  }
+
+  function reessayer(contactId: string, tempId: string) {
+    const envoi = (envois[contactId] ?? []).find((e) => e.tempId === tempId);
+    if (!envoi) return;
+    setEnvois((all) => ({ ...all, [contactId]: (all[contactId] ?? []).filter((e) => e.tempId !== tempId) }));
+    repondre(contactId, envoi.texte);
+  }
+
+  const visibles = state.status === "ready" ? filtrerCanaux(state.canaux, filtre) : [];
+  const rows = sortConversations(visibles);
   const conversations = state.status === "ready" ? state.canaux.flatMap((c) => c.conversations.map((v) => ({ canal: c, conv: v }))) : [];
   const current = conversations.find((x) => x.conv.contactId === selected);
+  const lignes: LigneConversation[] | null =
+    thread && current ? fusionnerConversation(thread.messages, envois[current.conv.contactId] ?? [], { canalId: current.canal.canalId, contactId: current.conv.contactId }) : null;
 
   if (isMobile) {
     return (
@@ -162,7 +222,8 @@ export default function InboxPage() {
         {state.status === "ready" && (
           <>
             <MobileInboxList
-              canaux={state.canaux}
+              canaux={visibles}
+              filtres={<FiltresInbox canaux={state.canaux} filtre={filtre} onChange={setFiltre} sombre />}
               seen={seen}
               notice={current ? null : notice}
               onCloseNotice={() => setNotice(null)}
@@ -173,13 +234,14 @@ export default function InboxPage() {
               <MobileConversation
                 canal={current.canal}
                 conv={current.conv}
-                thread={thread}
+                lignes={lignes}
                 notice={notice}
                 onCloseNotice={() => setNotice(null)}
                 onBack={backToList}
                 onTakeOver={async () => void (await act({ type: "reprendre" }, "Tu as la main : le bot se tait pour ce client."))}
-                onRelease={async () => void (await act({ type: "relancer" }, "Le bot a repris la conversation."))}
-                onReply={(texte) => act({ type: "repondre", texte }, null)}
+                onRelease={async () => void (await act({ type: "relancer" }, "Rendu au bot : il répond de nouveau à ce client."))}
+                onReply={(texte) => repondre(current.conv.contactId, texte)}
+                onRetry={(tempId) => reessayer(current.conv.contactId, tempId)}
               />
             )}
           </>
@@ -215,54 +277,56 @@ export default function InboxPage() {
             {state.mode === "memory" && role === "admin" && <SimulateForm plateformes={[...new Set(state.canaux.map((c) => c.plateforme))]} onSent={refresh} onError={(text) => setNotice({ tone: "error", text })} />}
             <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
               <Card title="Conversations">
-                {state.canaux.length === 0 && <p className="text-sm text-muted">Aucun compte WhatsApp ou Instagram relié.</p>}
-                <div className="space-y-4" data-testid="inbox-list">
-                  {state.canaux.map((canal) => (
-                    <div key={canal.canalId}>
-                      <p className="text-xs font-semibold tracking-wide text-muted uppercase">
-                        {canal.plateforme === "instagram" ? "📸 " : "💬 "}
-                        {canal.nomResto} {canal.numero && <span className="font-normal normal-case">· {canal.numero}</span>}
-                        {canal.etat !== "actif" && <span className="ml-1 normal-case">({canal.etat})</span>}
-                      </p>
-                      {canal.conversations.length === 0 && <p className="mt-1 text-sm text-muted">Aucune conversation.</p>}
-                      <ul className="mt-1 divide-y divide-rule">
-                        {canal.conversations.map((conv) => (
-                          <li key={conv.contactId}>
-                            <button
-                              type="button"
-                              className={`w-full rounded-xl px-2 py-2 text-left hover:bg-ink/5 ${selected === conv.contactId ? "bg-ink/5" : ""}`}
-                              onClick={() => show(conv.contactId)}
-                            >
-                              <span className="flex items-center gap-1.5">
-                                <span className="font-semibold">{who(canal, conv)}</span>
-                                {conv.transfertOuvert && <Badge tone="warning">🔔 Attend l&apos;équipe</Badge>}
-                                {conv.pause && <Badge>{pauseLabel(conv)}</Badge>}
-                                {conv.demoEnCours && <Badge tone="info">Démo {conv.demoEnCours}</Badge>}
-                              </span>
-                              {conv.dernierMessage && (
-                                <span className="block truncate text-xs text-muted">
-                                  {conv.dernierMessage.sens === "entrant" ? "" : "↪ "}
-                                  {conv.dernierMessage.texte} · {time(conv.dernierMessage.at)}
-                                </span>
-                              )}
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
+                <FiltresInbox canaux={state.canaux} filtre={filtre} onChange={setFiltre} />
+                {rows.length === 0 && <p className="mt-3 text-sm text-muted">Aucune conversation.</p>}
+                <ul className="mt-3 divide-y divide-rule" data-testid="inbox-list">
+                  {rows.map(({ canal, conv }) => {
+                    const unread = isUnread(conv, seen);
+                    const d = conv.dernierMessage;
+                    return (
+                      <li key={conv.contactId}>
+                        <button
+                          type="button"
+                          className={`w-full rounded-xl px-2 py-2 text-left hover:bg-ink/5 ${selected === conv.contactId ? "bg-ink/5" : ""}`}
+                          onClick={() => show(conv.contactId)}
+                          data-testid="inbox-row"
+                        >
+                          <span className="flex items-baseline gap-2">
+                            <span className={`min-w-0 flex-1 truncate ${unread ? "font-extrabold" : "font-semibold"}`}>{who(canal, conv)}</span>
+                            {unread && <span className="bg-brand size-2.5 shrink-0 self-center rounded-full" aria-label="non lu" />}
+                            <span className={`shrink-0 text-xs ${unread ? "font-bold text-rose" : "text-muted"}`}>{shortTime(lastAt(conv))}</span>
+                          </span>
+                          {d && (
+                            <span className={`block truncate text-xs ${unread ? "font-semibold text-ink" : "text-muted"}`}>
+                              {prefixe(d)}
+                              {plainExtract(d.texte)}
+                            </span>
+                          )}
+                          <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <EtatBadge conv={conv} />
+                            <span className="truncate text-xs text-muted">
+                              {canal.plateforme === "instagram" ? "📸" : "💬"} {canal.nomResto}
+                              {canal.testMeta ? " · test Meta" : ""}
+                              {conv.demoEnCours ? ` · démo ${conv.demoEnCours}` : ""}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
               </Card>
               <Card title={current ? who(current.canal, current.conv) : "Conversation"} className="min-w-0">
-                {!current || !thread ? (
+                {!current || !lignes ? (
                   <p className="text-sm text-muted">Choisis une conversation.</p>
                 ) : (
                   <ConversationView
                     conv={current.conv}
-                    thread={thread}
-                    onTakeOver={() => act({ type: "reprendre" }, "Tu as la main : le bot se tait pour ce client.")}
-                    onRelease={() => act({ type: "relancer" }, "Le bot a repris la conversation.")}
-                    onReply={async (texte) => void (await act({ type: "repondre", texte }, "Message envoyé."))}
+                    lignes={lignes}
+                    onTakeOver={() => void act({ type: "reprendre" }, "Tu as la main : le bot se tait pour ce client.")}
+                    onRelease={() => void act({ type: "relancer" }, "Rendu au bot : il répond de nouveau à ce client.")}
+                    onReply={(texte) => repondre(current.conv.contactId, texte)}
+                    onRetry={(tempId) => reessayer(current.conv.contactId, tempId)}
                   />
                 )}
               </Card>
@@ -274,68 +338,51 @@ export default function InboxPage() {
   );
 }
 
-function pauseLabel(conv: InboxConversation): string {
-  if (!conv.pause) return "";
-  const who = { transfert_humain: "transfert", echo_gerant: "le gérant a répondu", manuel: "main reprise" }[conv.pause.reason];
-  return `⏸ Bot en pause (${who})`;
-}
-
 function ConversationView({
   conv,
-  thread,
+  lignes,
   onTakeOver,
   onRelease,
   onReply,
+  onRetry,
 }: {
   conv: InboxConversation;
-  thread: Thread;
+  lignes: LigneConversation[];
   onTakeOver: () => void;
   onRelease: () => void;
-  onReply: (texte: string) => Promise<void> | void;
+  onReply: (texte: string) => void;
+  onRetry: (tempId: string) => void;
 }) {
   const [texte, setTexte] = useState("");
+  // Dernier message visible : à l'ouverture et à chaque nouveau message (si on était déjà en bas, ou après un envoi).
+  const zone = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+  useLayoutEffect(() => {
+    const el = zone.current;
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
+  }, [lignes.length]);
   return (
     <div className="space-y-3" data-testid="inbox-thread">
-      <div className="flex flex-wrap items-center gap-2">
-        {conv.pause ? (
-          <>
-            <span className="text-sm text-muted">
-              {pauseLabel(conv)}
-              {conv.pause.until ? ` jusqu'à ${time(conv.pause.until)}` : " (jusqu'à ce que tu le relances)"}
-            </span>
-            <Button onClick={onRelease}>Rendre au bot</Button>
-          </>
-        ) : (
-          <Button variant="secondary" onClick={onTakeOver}>
-            Reprendre la main
-          </Button>
-        )}
-        <span className="ml-auto text-xs text-muted">{conv.fenetreOuverte ? "Fenêtre de 24 h ouverte" : "Fenêtre de 24 h fermée"}</span>
-      </div>
-      <div className="max-h-[60vh] space-y-1.5 overflow-y-auto rounded-2xl bg-chat-motif p-3 aplat-nuit">
-        {thread.messages.map((m) => (
-          <div key={m.id} className={`flex ${m.sens === "entrant" ? "justify-start" : "justify-end"}`}>
-            <div
-              className={`max-w-[80%] overflow-hidden rounded-2xl px-3 py-1.5 text-sm font-medium whitespace-pre-wrap ${
-                m.sens === "entrant" ? "carte" : m.auteur === "humain" ? "aplat-rose" : "aplat-bleu"
-              }`}
-            >
-              <span className="mb-0.5 block text-[10px] font-semibold text-muted">
-                {m.sens === "entrant" ? "Client" : m.sens === "echo" ? "Gérant (appli)" : m.auteur === "humain" ? "Équipe" : "Bot"} · {time(m.at)}
-                {m.statut === "echec" && <span className="text-alerte"> · échec{m.erreur ? ` : ${m.erreur}` : ""}</span>}
-                {m.statut === "lu" && " · lu"}
-              </span>
-              <MessageContent texte={m.texte} contenu={m.contenu} />
-            </div>
-          </div>
-        ))}
+      <BarreEtat conv={conv} onTakeOver={onTakeOver} onRelease={onRelease} />
+      <p className="text-xs text-muted">{conv.fenetreOuverte ? "Fenêtre de 24 h ouverte : tu peux répondre." : "Fenêtre de 24 h fermée : tu pourras répondre quand le client réécrira."}</p>
+      <div
+        ref={zone}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+        }}
+        className="max-h-[60vh] space-y-1.5 overflow-y-auto rounded-2xl bg-chat-motif p-3 aplat-nuit"
+      >
+        <ListeMessages lignes={lignes} onRetry={onRetry} />
       </div>
       <form
         className="flex gap-2"
-        onSubmit={async (e) => {
+        onSubmit={(e) => {
           e.preventDefault();
           if (!texte.trim()) return;
-          await onReply(texte);
+          // Affiché tout de suite dans la conversation : la zone se vide sans attendre Meta.
+          stick.current = true;
+          onReply(texte);
           setTexte("");
         }}
       >
@@ -343,7 +390,7 @@ function ConversationView({
           aria-label="Réponse"
           rows={2}
           disabled={!conv.fenetreOuverte}
-          placeholder={conv.fenetreOuverte ? "Répondre au client (le bot se met en pause)…" : "Fenêtre de 24 h fermée : le client doit réécrire"}
+          placeholder={conv.fenetreOuverte ? "Répondre au client (le bot se met en pause 12 h)…" : "Fenêtre de 24 h fermée : le client doit réécrire"}
           value={texte}
           onChange={(e) => setTexte(e.target.value)}
         />

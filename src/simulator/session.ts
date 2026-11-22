@@ -56,6 +56,8 @@ export interface Bot {
   agent?: AgentConfig;
   /** Appels IA maximum par contact et par jour. */
   aiDailyLimit?: number;
+  /** Numéro PFlow (démos) : voir ChannelConfig.numeroPflow. */
+  numeroPflow?: boolean;
 }
 
 let counter = 0;
@@ -78,6 +80,7 @@ export function channelFor(bot: Bot): ChannelConfig {
     triggerMode: bot.triggerMode,
     ...DEFAULT_CHANNEL_SETTINGS,
     aiDailyLimitPerContact: bot.aiDailyLimit ?? DEFAULT_CHANNEL_SETTINGS.aiDailyLimitPerContact,
+    ...(bot.numeroPflow ? { numeroPflow: true } : {}),
   };
 }
 

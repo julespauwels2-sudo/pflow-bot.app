@@ -177,6 +177,11 @@ export interface ChannelStore {
   saveSession(contactId: string, session: Session | null, expectedVersion: number | null): Promise<boolean>;
   addMessage(message: Omit<StoredMessage, "id" | "at"> & { at?: string }): Promise<StoredMessage>;
   updateMessageStatus(wamid: string, statut: NonNullable<StoredMessage["statut"]>, erreur?: string): Promise<void>;
+  /**
+   * Raison pour laquelle le bot n'a pas répondu à un message reçu (« ignore:aucun_declencheur »…), gardée dans la
+   * colonne erreur du message (aucune migration) : affichée dans la boîte de réception.
+   */
+  noteMessage(messageId: string, note: string): Promise<void>;
   addTransfert(transfert: Omit<Transfert, "id" | "at" | "gerantPrevenu"> & { gerantPrevenu?: boolean }): Promise<Transfert>;
   listContacts(canalId: string): Promise<ChannelContact[]>;
   listMessages(contactId: string, limit?: number): Promise<StoredMessage[]>;

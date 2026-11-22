@@ -80,6 +80,7 @@ export function PflowSimulator({ data }: { data: WorkspaceData }) {
         flows: loaded.flows,
         infoSheet: loaded.infoSheet,
         triggerMode: "toujours",
+        numeroPflow: true,
         agent: loaded.agent,
         aiDailyLimit: loaded.aiDailyLimit,
       };

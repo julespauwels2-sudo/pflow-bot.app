@@ -175,7 +175,7 @@ describe("modèle maître", () => {
     expect(r3.outgoing[1]).toMatchObject({ kind: "link", buttonLabel: "😋 Je commande" });
   });
 
-  it("scénarios de Jules (7 novembre) : IA pour les questions, accueil complet une fois, « commander » → CTA", async () => {
+  it("scénarios de Jules (7 novembre, revus le 21) : IA pour les questions, accueil complet, « je commande » → CTA", async () => {
     const repos = setup();
     const template = await createMasterTemplate(repos);
     const flows = (await repos.flows.listByOwner(template.id)).map(toEngineFlow).filter((f): f is Flow => f !== null);
@@ -207,21 +207,17 @@ describe("modèle maître", () => {
     const first = await say("bonjour", contact("Pauwels Jules"));
     expect(textOf(first.outgoing[0])).toBe("👋 Hello ! Bienvenue chez Cookies An Nou 🍽️ Une petite faim ? Composez votre commande en quelques clics 👇");
 
-    // 2. Re-« bonjour » 5 min plus tard : version courte (une bulle, 3 boutons), pas le grand accueil.
+    // 2. Re-« bonjour » 5 min plus tard : accueil complet de nouveau (décision de Jules, 21 novembre 2026).
     const again = await say("Bonjour");
-    expect(again.outgoing.filter((m) => m.kind !== "typing")).toHaveLength(1);
-    expect(again.outgoing[0]).toMatchObject({ kind: "buttons", text: "Que puis-je faire pour vous ? 👇" });
-    const short = again.outgoing[0];
-    if (short.kind !== "buttons") throw new Error("boutons attendus");
-    expect(short.buttons.map((b) => b.title)).toEqual(["🛒 Commander", "⭐ Me conseiller", "ℹ️ Infos pratiques"]);
-    // … et son bouton « Commander » mène au bouton de commande.
-    const clicked = await runEngine({ ...base, contact: again.contact, session: again.session, message: { kind: "button_reply", id: short.buttons[0].id, title: "🛒 Commander" } }, { ai });
-    expect(clicked.outgoing[0]).toMatchObject({ kind: "link", buttonLabel: "😋 Je commande" });
+    expect(textOf(again.outgoing[0])).toMatch(/^👋 Hello ! Bienvenue chez Cookies An Nou/);
+    expect(textOf(again.outgoing.filter((m) => m.kind !== "typing").at(-1)!)).toMatch(/^✨ Besoin d'un petit coup de main/);
 
-    // 2. « je veux commander » : CTA - Commander, pas l'Accueil.
+    // 2. « je veux commander » : l'accueil complet et son bouton Commander (« commander » est un mot-clé de l'Accueil
+    //    depuis le 21 novembre 2026) ; « je commande » reste au CTA.
     const order = await say("je veux commander");
-    expect(order.outgoing).toHaveLength(1);
-    expect(order.outgoing[0]).toMatchObject({ kind: "link", buttonLabel: "😋 Je commande", url: "https://order.pflow.fr/c/cookies-an-nou" });
+    expect(order.outgoing[0]).toMatchObject({ kind: "link", buttonLabel: "Commander", url: "https://order.pflow.fr/c/cookies-an-nou" });
+    const cta = await say("je commande");
+    expect(cta.outgoing[0]).toMatchObject({ kind: "link", buttonLabel: "😋 Je commande", url: "https://order.pflow.fr/c/cookies-an-nou" });
 
     // 1. Une vraie question : l'IA répond (pas l'Accueil).
     const question = await say("c'est quoi votre meilleur cookie ?");

@@ -281,6 +281,10 @@ export function createSupabaseChannelStore(db: Db, newId: () => string = () => c
       const [row] = await db.select("bot_messages", "*", eq("wamid", wamid));
       if (row) await db.upsert("bot_messages", [{ ...row, statut, erreur: erreur ?? row.erreur ?? null, maj_le: new Date().toISOString() }], "id");
     },
+    async noteMessage(messageId, note) {
+      const [row] = await db.select("bot_messages", "*", eq("id", messageId));
+      if (row) await db.upsert("bot_messages", [{ ...row, erreur: note.slice(0, 200), maj_le: new Date().toISOString() }], "id");
+    },
     async addTransfert(t) {
       const row: Row = {
         id: newId(),

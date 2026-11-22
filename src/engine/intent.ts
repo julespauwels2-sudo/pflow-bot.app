@@ -39,3 +39,55 @@ export function isNewConversation(previousInboundAt: string | undefined, now: Da
   const last = Date.parse(previousInboundAt);
   return !Number.isFinite(last) || now.getTime() - last >= hours * 3_600_000;
 }
+
+/** Au-delà, même une phrase qui commence par un mot-clé reste ignorée en mode mots-clés (vrai texte perso). */
+export const SENTENCE_MAX_WORDS = 20;
+
+/**
+ * Mot-clé dans une phrase (mode « mots-clés uniquement », numéro aussi utilisé par le gérant pour ses conversations) :
+ * - la phrase COMMENCE par un mot-clé (« Commande pour ce soir svp », « Menu ? ») ;
+ * - ou elle commence par une salutation ET contient un mot-clé qui n'est pas une salutation (« Bonjour, je viens de
+ *   passer la commande », « Bonsoir c'est quoi vos horaires »).
+ * Jamais pour une simple conversation (« Salut tu viens ce soir ? » : aucun mot-clé hors salutation). 20 mots au plus.
+ * Le mot-clé le plus long gagne, puis le flux par défaut.
+ */
+export function keywordInSentence(
+  flows: { trigger: { keywords: string[]; isDefault?: boolean; event?: string; matchMode?: "contient" | "exact" } | undefined; id: string }[],
+  text: string,
+): { id: string; keyword: string } | undefined {
+  const list = words(text);
+  if (!list.length || list.length > SENTENCE_MAX_WORDS) return undefined;
+  const msg = list.join(" ");
+  const greetingLed = GREETING_CORE.has(list[0]!);
+  let best: { id: string; keyword: string; length: number; isDefault: boolean } | undefined;
+  for (const flow of flows) {
+    const t = flow.trigger;
+    if (!t || t.event || t.matchMode === "exact") continue;
+    for (const keyword of t.keywords) {
+      const kw = normalize(keyword);
+      if (!kw) continue;
+      const starts = msg === kw || msg.startsWith(`${kw} `);
+      const isGreetingKeyword = kw.split(" ").every((w) => GREETING_WORDS.has(w));
+      const inside = greetingLed && !isGreetingKeyword && ` ${msg} `.includes(` ${kw} `);
+      if (!starts && !inside) continue;
+      // Une salutation seule en tête ne suffit pas : il faut un vrai mot-clé (« commande », « horaires »…).
+      if (starts && isGreetingKeyword && list.length > KEYWORD_MAX_WORDS) continue;
+      const isDefault = Boolean(t.isDefault);
+      if (!best || kw.length > best.length || (kw.length === best.length && isDefault && !best.isDefault)) best = { id: flow.id, keyword, length: kw.length, isDefault };
+    }
+  }
+  return best && { id: best.id, keyword: best.keyword };
+}
+
+const QUESTION_WORDS = new Set(["ou", "quand", "comment", "combien", "quoi", "quel", "quelle", "quels", "quelles", "pourquoi", "est"]);
+
+/** « ma commande est où ? », « c'est quand la commande ? » : une question (point d'interrogation ou mot interrogatif). */
+export function isQuestion(text: string): boolean {
+  return text.includes("?") || words(text).some((w) => QUESTION_WORDS.has(w));
+}
+
+/** Mot-clé fait uniquement de salutations (« bonjour », « coucou ») : jamais une question à confier à l'IA. */
+export function isGreetingKeyword(keyword: string): boolean {
+  const list = words(keyword);
+  return list.length > 0 && list.every((w) => GREETING_WORDS.has(w));
+}

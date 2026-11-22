@@ -1113,6 +1113,38 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
 - Tâches de la configuration : suffisantes pour tout ce que fait PFlow Bots (tableau dans
   `docs/etape-c/embedded-signup.md`, 2 quinquies). Migration `20261112000000_bot_jetons_expiration.sql` à valider.
 
+
+
+## 21 novembre 2026 — boîte de réception : la réponse s'affiche tout de suite (PR séparée, sans fusion)
+
+Constat de Jules : quand il répond lui-même depuis la boîte de réception, le message met longtemps à partir.
+
+- **Cause** : après « Envoyer », l'écran attendait (1) l'envoi complet (auth, lectures, Meta, écritures), (2) le
+  rechargement de **toute la liste** des conversations, (3) le rechargement de la conversation, avant d'afficher
+  le message. La liste fait une requête « dernier message » **par conversation, à la file** : ~200 ms chacune
+  (Supabase depuis Vercel), donc de plus en plus lente avec les clients basculés d'UChat. Production (journaux
+  Vercel, lecture seule, 7–21 novembre) : envoi p50 1,4 s (p95 2,4 s), liste p50 3,4 s (p95 5,3 s), conversation
+  p50 0,5 s ; Supabase p50 202 ms par requête, Meta p50 312 ms.
+- **Correction** :
+  - écran : le message apparaît **au clic** avec « envoi… », puis « envoyé ✓ » (ou « échec » + « Réessayer ») ;
+    clé provisoire gardée quand le message réel revient (ni doublon ni saut, même si un rechargement arrive entre
+    deux) ; envois l'un après l'autre (même ordre chez le client) ; la zone se vide tout de suite ; plus de
+    rechargement de la liste ni de la conversation après l'envoi (dernier message et pause mis à jour sur place) ;
+    sur ordinateur, la conversation descend au dernier message ; liste et conversation rechargées en parallèle ;
+  - serveur : contact et numéros lus une seule fois et en même temps ; message et pause du bot écrits en même temps,
+    **avant** la réponse (pas d'`after()` : un message ou une pause perdus en silence coûteraient plus que 200 ms) ;
+    la réponse ne renvoie que le message enregistré et la pause ; échec de Meta : 502 avec la tentative
+    enregistrée ; liste : données des bots, numéros et derniers messages lus en parallèle (8 à la fois).
+  - Côté client WhatsApp : rien ne change (un seul envoi, même texte, même pause du bot).
+- **Mesures** (simulées : faux Meta 600–1200 ms, base 150–250 ms par requête, auth 2 requêtes ; rien envoyé chez
+  Meta ni écrit en base) — clic → message visible / clic → confirmation :
+  - serveur, 12 conversations : 7,7 s / 7,7 s → **0 s / 1,6 s** (liste 4,5 s → 1,5 s ; envoi hors Meta 1,46 s → 0,88 s) ;
+  - serveur, 60 conversations : 17,2 s / 17,2 s → **0 s / 1,7 s** (liste 14,3 s → 2,6 s) ;
+  - navigateur (Chromium, `next dev`, 14 conversations) : 3,3 s / 3,3 s (3,0–6,6 s) → **12 ms / 1,75 s**.
+  Script : `SCENARIO=avant|apres CONTACTS=12 npx vitest run --config scripts/mesures/vitest.config.ts`.
+- Tests : route (un seul envoi, message enregistré, pause posée, échec → 502 + « échec »), action, fusion optimiste,
+  liste en parallèle ; script e2e `scripts/e2e/inbox.js` mis à jour (« envoyé ✓ », deux attentes périmées).
+
 ## 21 novembre 2026 — démo PFlow qui redémarre, modèles de la livraison sur les comptes des restos
 
 Jour de bascule des 3 clients (Cookies An Nou, Mexico, AG Pizza) d'UChat vers PFlow Bots : **rien n'est fusionné
@@ -1182,3 +1214,20 @@ mien » y arrivaient : les transferts des clients des restos ne partaient qu'en 
   après une réponse sur la carte, le bouton « Commander » au lieu de « Besoin d'un petit coup de main ? » (nouveau
   champ « sujet » de la réponse de l'IA). Démos et transferts inchangés. `docs/etape-c/ia-reponses-courtes.md`.
   514 tests.
+
+## 21 novembre 2026 (soir de bascule) — mots-clés des restos, transferts, accueil, boîte de réception (PR)
+
+Les 3 restos sont actifs (Cookies « toujours », Mexico et AG Pizza « mots-clés uniquement »). PR unique, partie de la
+PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/etape-c/restos-mots-cles-inbox.md`.
+- PR n° 35 et n° 37 : conflits avec la production résolus (journal et plan : toutes les entrées gardées). PR n° 34 : sans
+  conflit.
+- Accueil v5 (« commande », « commander ») vérifié en production pour Mexico et AG Pizza ; à égalité de mot-clé,
+  l'Accueil gagne sur « CTA - Commander » ; le seed suit.
+- Mode mots-clés : une phrase qui commence par un mot-clé, ou par une salutation suivie d'un vrai mot-clé, est
+  reconnue (20 mots au plus). Le 18 h 22 de Mexico était aussi une pause « l'équipe a répondu ».
+- Un mot-clé du client lève un transfert (transfert résolu) ; jamais la pause « l'équipe a répondu » (12 h).
+- Salutation ou mot-clé de l'Accueil : toujours l'accueil complet.
+- Messages ignorés : raison gardée sur le message et affichée.
+- Boîte de réception : état unique, « Rendre au bot » pour toutes les pauses, tri par dernier message, non-lus, filtre
+  par resto, numéros de test Meta masqués, bulles client / bot / équipe distinctes.
+- Numéro PFlow (démos) : inchangé. 538 tests.

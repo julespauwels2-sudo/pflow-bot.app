@@ -58,6 +58,11 @@ export interface ChannelConfig {
   sessionTimeoutMinutes: number;
   /** Nombre maximum d'appels IA par contact et par jour (jour du fuseau du client). */
   aiDailyLimitPerContact: number;
+  /**
+   * Numéro PFlow (démos, bot PFlow de base) : les règles des bots de restos (mot-clé qui lève un transfert, accueil
+   * complet sur un mot-clé, mots-clés dans une phrase) ne s'y appliquent pas.
+   */
+  numeroPflow?: boolean;
 }
 
 export const DEFAULT_CHANNEL_SETTINGS = {
@@ -529,7 +534,9 @@ export type EngineEvent =
       type: "ignored";
       reason: "pause" | "aucun_declencheur" | "media_non_gere" | "echo" | "fenetre_fermee" | "aucun_flux_evenement" | "retour_commande";
     }
-  | { type: "pause_expired" }
+  | { type: "pause_expired"; reason?: PauseReason }
+  /** Transfert levé par un mot-clé du client (bonjour, commande, menu…) : le bot reprend, le transfert est résolu. */
+  | { type: "pause_lifted"; by: "mot_cle"; keyword: string }
   | { type: "session_expired"; flowId: string }
   | { type: "flow_started"; flowId: string; via: "mot_cle" | "defaut" | "ia" | "aller_au_flux" | "bouton" | "evenement" | "manuel" }
   /** Mot-clé reconnu (avant le lancement du flux). */

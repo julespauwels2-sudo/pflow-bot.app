@@ -77,7 +77,12 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - **Après les bascules** : lenteur des réponses manuelles dans la boîte de réception (mesure, cause, affichage
   immédiat) : PR séparée.
 
+- **21 novembre (soir de bascule)** : PR « mots-clés des restos, transferts, accueil, boîte de réception » (contient
+  la PR n° 37) : à fusionner avec l'accord de Jules, après la Preview. Fusionner d'abord n° 34 et n° 35 (sans conflit).
+
 ### Après le 22 novembre
+- PR « Envoi rapide depuis la boîte de réception » (21 novembre) : réponse affichée tout de suite puis confirmée,
+  liste 3 fois plus rapide ; **à ne fusionner qu'après « bascules terminées »** (accord de Jules).
 - UChat résilié avant le renouvellement du 22 ; puis retrait de Smart Link et renouvellement de `PONT_CLE`.
 - Embedded Signup pour les nouveaux restos, dès la validation de Meta (examen + Tech Provider) ; au premier resto
   connecté : vérifier l'étape « jeton_droits » et « Renouveler maintenant ».

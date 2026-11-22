@@ -290,7 +290,7 @@ describe("pause, coexistence et transfert humain", () => {
       }),
     );
     expect(r.contact.pause).toBeNull();
-    expect(r.events[0]).toEqual({ type: "pause_expired" });
+    expect(r.events[0]).toEqual({ type: "pause_expired", reason: "echo_gerant" });
     expect(r.outgoing.length).toBeGreaterThan(0);
   });
 
