@@ -159,7 +159,10 @@ class EngineRun {
   }
 
   result(): EngineResult {
-    return { contact: this.contact, session: this.session, outgoing: resolveDelays(this.outgoing), events: this.events };
+    // Le bot a répondu : la conversation reste ouverte (mode mots-clés, conversationOuverteMinutes).
+    const replied = this.outgoing.some((m) => m.kind !== "typing");
+    const contact = replied ? { ...this.contact, lastBotReplyAt: this.input.now.toISOString() } : this.contact;
+    return { contact, session: this.session, outgoing: resolveDelays(this.outgoing), events: this.events };
   }
 
   // -------------------------------------------------------------------------
@@ -363,12 +366,12 @@ class EngineRun {
     // 3. Mot-clé d'un déclencheur (message court : l'intention est claire) : on lance le flux.
     if (this.tryKeyword(text)) return;
 
-    // 4. Canal en mode « toujours » :
+    // 4. Canal en mode « toujours », ou conversation ouverte en mode mots-clés (le bot a répondu il y a peu) :
     //    - salutation (« bonjour », « salut ça va ») ou premier contact très court → flux par défaut (Accueil) ;
     //    - tout autre message (vraie question, demande libre) → l'IA répond (et peut lancer un flux) ;
     //    - sans IA disponible → flux par défaut, comme avant.
     //    (Jamais sur un canal « mots-clés uniquement » : numéros perso des gérants.)
-    if (this.input.channel.triggerMode === "toujours") {
+    if (this.modeToujours()) {
       const defaultFlow = findDefaultFlow(this.input.flows);
       const firstContact = !this.previousInboundAt;
       const greeting = isGreeting(text);
@@ -572,6 +575,21 @@ class EngineRun {
   }
 
   /**
+   * Le bot répond à tout message libre : canal en mode « toujours », ou mode mots-clés avec une conversation ouverte
+   * (le bot a répondu à ce contact il y a moins de conversationOuverteMinutes : un client qui vient de recevoir le lien
+   * « Je commande » et pose une question a une réponse). Les pauses passent avant (vérifiées plus haut).
+   */
+  private modeToujours(): boolean {
+    const { channel, now } = this.input;
+    if (channel.triggerMode === "toujours") return true;
+    const minutes = channel.conversationOuverteMinutes;
+    const last = this.input.contact.lastBotReplyAt;
+    if (!minutes || !last || channel.numeroPflow) return false;
+    const age = now.getTime() - Date.parse(last);
+    return Number.isFinite(age) && age >= 0 && age < minutes * 60_000;
+  }
+
+  /**
    * Mot-clé qui lance un flux :
    * - message court (4 mots au plus) qui contient un mot-clé, ou mot-clé « exact » ;
    * - mode « mots-clés uniquement » (bots des restos) : aussi une phrase qui commence par un mot-clé, ou par une
@@ -584,10 +602,10 @@ class EngineRun {
     // Mode « toujours » avec l'IA : une question qui contient un mot-clé de l'Accueil (« ma commande est où ? ») va à
     // l'IA (suivi de commande…), pas à l'accueil. Une salutation reste une salutation.
     const question =
-      match && !channel.numeroPflow && channel.triggerMode === "toujours" && this.deps.ai && findTrigger(match.flow)?.data.isDefault && !isGreetingKeyword(match.keyword) && isQuestion(text);
+      match && !channel.numeroPflow && this.modeToujours() && this.deps.ai && findTrigger(match.flow)?.data.isDefault && !isGreetingKeyword(match.keyword) && isQuestion(text);
     if (match && question) return { ...match, skipped: true };
     if (match && (findTrigger(match.flow)?.data.matchMode === "exact" || isShortMessage(text))) return match;
-    if (!channel.numeroPflow && channel.triggerMode !== "toujours") {
+    if (!channel.numeroPflow && !this.modeToujours()) {
       const found = keywordInSentence(
         flows.map((f) => ({ id: f.id, trigger: findTrigger(f)?.data })),
         text,

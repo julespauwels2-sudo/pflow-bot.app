@@ -29,6 +29,8 @@ export {
   welcomeEmoji,
   DEFAULT_REPRISE_MINUTES,
   repriseMinutes,
+  DEFAULT_CONVERSATION_OUVERTE_MINUTES,
+  conversationOuverteMinutes,
   type InfoVariables,
 } from "./info-vars";
 export {

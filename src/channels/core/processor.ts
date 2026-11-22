@@ -3,7 +3,7 @@
  * réponses partent par l'API Graph. Aucune dépendance à Next.js (testable seul, déplaçable).
  */
 import { createHash } from "node:crypto";
-import { repriseMinutes, runEngine, type AiPort, type OrderBridge, type AiRequest, type AiResult, type EngineResult, type PauseReason, type RecentTurn } from "@/engine";
+import { conversationOuverteMinutes, repriseMinutes, runEngine, type AiPort, type OrderBridge, type AiRequest, type AiResult, type EngineResult, type PauseReason, type RecentTurn } from "@/engine";
 import { createContactToken } from "@/channels/pflow-order/contact-token";
 import type { LoadedBot } from "./bot-loader";
 import { parseWebhook } from "../whatsapp/parse";
@@ -231,6 +231,12 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     if (reponse) bot.client.vars = { ...bot.client.vars, reponse_demo: reponse };
   }
 
+  // Mode mots-clés : dernière réponse du bot à ce contact (conversation ouverte), relue dans les messages enregistrés
+  // (aucune colonne à ajouter). Le numéro PFlow et le mode « toujours » n'en ont pas besoin.
+  const lastBotReplyAt =
+    canal.role !== "pflow" && canal.triggerMode === "mots_cles_uniquement"
+      ? (await store.listMessages(contact.id, 30)).filter((m) => m.sens === "sortant" && m.auteur === "bot" && m.statut !== "echec").at(-1)?.at
+      : undefined;
   const result: EngineResult = await runEngine(
     {
       now,
@@ -245,13 +251,15 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
         sessionTimeoutMinutes: canal.sessionMinutes,
         aiDailyLimitPerContact: bot.aiDailyLimit,
         // Pause intelligente sur les numéros des restos (délai de la fiche, 10 min par défaut) ; numéro PFlow : 12 h.
-        ...(canal.role === "pflow" ? { numeroPflow: true } : { echoResumeMinutes: repriseMinutes(bot.infoSheet) }),
+        ...(canal.role === "pflow"
+          ? { numeroPflow: true }
+          : { echoResumeMinutes: repriseMinutes(bot.infoSheet), conversationOuverteMinutes: conversationOuverteMinutes(bot.infoSheet) }),
       },
       flows: bot.flows,
       infoSheet: bot.infoSheet,
       // Autre bot qu'au message précédent (démo ouverte par son mot-clé…) : nouvelle conversation pour lui
       // (accueil complet), même si le contact vient d'écrire.
-      contact: resetSession ? { ...contact.state, lastInboundAt: undefined } : contact.state,
+      contact: resetSession ? { ...contact.state, lastInboundAt: undefined } : { ...contact.state, ...(lastBotReplyAt ? { lastBotReplyAt } : {}) },
       session: stored?.session ?? null,
       message: engineMessage,
       agent: bot.agent,

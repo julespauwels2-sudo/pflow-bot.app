@@ -1242,3 +1242,7 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
 - Tâche planifiée à la minute `/api/cron/reprise` (Vercel Cron) ; aucune migration ; coût négligeable (détails :
   `docs/etape-c/pause-intelligente.md`). Boîte de réception : « le bot reprend à HH:MM si personne ne répond ».
   553 tests.
+- **Bug de Mexico** (après la fusion de la n° 40) : « Je veux parler à quelqu'un » ignoré juste après le lien
+  « Je commande » (la session n'existe que si un bloc attend une réponse ; le CTA n'attend rien). Ajouté à la PR n° 41 :
+  en mode mots-clés, la conversation reste ouverte 30 min après chaque réponse du bot (réglable dans la fiche) ; pauses
+  prioritaires ; un ami du gérant jamais servi par le bot reste ignoré. 560 tests.

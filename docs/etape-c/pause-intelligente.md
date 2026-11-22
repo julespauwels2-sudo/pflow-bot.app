@@ -57,3 +57,42 @@ sur les numéros des restos. Le numéro PFlow (démos) garde la pause de 12 h.
 - **Le simulateur ne simule pas la reprise** : pas de tâche planifiée, la pause y reste comme avant.
 - **Une reprise manquée plus d'1 h** (tâche Vercel arrêtée) n'est pas rattrapée. C'est voulu : on ne répond pas des
   heures après.
+
+## Ajout : conversation ouverte en mode mots-clés (bug de Mexico, 22 novembre)
+
+### Le bug
+- 21 h 39 : « Bonjour je souhaite passer commande » ouvre « CTA - Commander » (« passer commande » est le mot-clé le plus
+  long).
+- 21 h 40 : « Je veux parler à quelqu'un » est ignoré (« ignore:aucun_declencheur »).
+
+### Ce qui existait déjà dans le moteur
+- **La session** (`bot_sessions`, 30 min d'inactivité, réglage `session_minutes` du canal) n'existe que tant qu'un bloc
+  attend une réponse. Après l'Accueil, qui attend un clic, une question allait donc déjà à l'IA. Le CTA n'attend rien :
+  le flux se termine, la session est effacée, et le message suivant demande de nouveau un mot-clé.
+- **« Nouvelle conversation »** (12 h) ne sert qu'à choisir entre accueil complet et menu court.
+- **La fenêtre de 24 h de Meta** sert aux messages libres.
+
+Aucune ne couvrait le cas « le bot vient de répondre, sans rien attendre ». J'ai repris le principe et la durée de la
+session (30 min d'inactivité) sous forme d'une fenêtre qui repart à chaque réponse du bot, plutôt qu'une fausse session
+vide.
+
+### La règle
+- **Mode « mots-clés uniquement »** : après une réponse du bot (n'importe quel flux, l'IA ou une notification de
+  commande), la conversation reste ouverte **30 min** (« Conversation ouverte après une réponse du bot » dans la fiche,
+  de 1 à 720 min). Tous les messages du client vont alors au bot ou à l'IA, comme en mode « toujours ». La fenêtre
+  repart à chaque réponse du bot.
+- **Les pauses passent avant** : transfert, pause « l'équipe a répondu » et sa reprise de 10 min, main reprise.
+- **Hors fenêtre** : comme avant, un mot-clé est nécessaire. Un ami du gérant à qui le bot n'a jamais parlé reste
+  ignoré.
+- **Technique** : la dernière réponse du bot est relue dans les messages enregistrés (aucune colonne ajoutée). Le
+  simulateur applique la même règle.
+- **Inchangé** : le mode « toujours » (Cookies) et le numéro PFlow (démos).
+
+### Tests (`conversation-ouverte.test.ts`)
+- le scénario exact de Mexico : le transfert part, et le transfert est enregistré ;
+- une question 20 min après le lien : l'IA répond, et la fenêtre repart ;
+- un message 40 min après : ignoré sans mot-clé, alors qu'un mot-clé marche toujours ;
+- un délai de 5 min réglé dans la fiche ;
+- un ami du gérant : ignoré ;
+- une réponse de l'équipe pendant la fenêtre : silence, puis reprise au bout de 10 min ;
+- Cookies : inchangé.

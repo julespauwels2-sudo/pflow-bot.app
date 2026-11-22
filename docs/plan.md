@@ -80,8 +80,8 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - **21 novembre (soir de bascule)** : PR « mots-clés des restos, transferts, accueil, boîte de réception » (contient
   la PR n° 37) : à fusionner avec l'accord de Jules, après la Preview. Fusionner d'abord n° 34 et n° 35 (sans conflit).
 
-- **22 novembre** : PR « pause intelligente » (par-dessus la n° 40) : à fusionner après la n° 40, avec l'accord de
-  Jules. Après fusion : vérifier dans Vercel que la tâche `/api/cron/reprise` tourne (Settings → Cron Jobs).
+- **22 novembre** : PR n° 41 « pause intelligente » + conversation ouverte 30 min en mode mots-clés (bug de Mexico) :
+  à fusionner après la n° 40, avec l'accord de Jules. Après fusion : vérifier dans Vercel que la tâche `/api/cron/reprise` tourne (Settings → Cron Jobs).
 
 ### Après le 22 novembre
 - PR « Envoi rapide depuis la boîte de réception » (21 novembre) : réponse affichée tout de suite puis confirmée,

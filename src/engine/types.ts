@@ -68,6 +68,12 @@ export interface ChannelConfig {
    * dans ce délai (minutes), le bot reprend. Absent : la pause dure echoPauseHours, comme avant (numéro PFlow).
    */
   echoResumeMinutes?: number;
+  /**
+   * Mode « mots-clés uniquement » (bots des restos) : après une réponse du bot, la conversation reste ouverte ce nombre
+   * de minutes (depuis la dernière réponse du bot) : tous les messages du client vont au bot ou à l'IA, comme en mode
+   * « toujours ». Absent : un mot-clé est toujours nécessaire (numéro PFlow, anciens réglages).
+   */
+  conversationOuverteMinutes?: number;
 }
 
 export const DEFAULT_CHANNEL_SETTINGS = {
@@ -155,6 +161,8 @@ export interface InfoSheet {
    * (minutes), le bot reprend. Vide : 10 min.
    */
   repriseMinutes?: number;
+  /** Mode mots-clés : la conversation reste ouverte ce nombre de minutes après une réponse du bot. Vide : 30 min. */
+  conversationOuverteMinutes?: number;
   /** Carte complète pour l'IA (produits, prix, allergènes). Étape B : lue dans PFlow Order. */
   resumeCarte?: string;
   /** Questions fréquentes, en texte libre (pour l'IA). */
@@ -339,6 +347,11 @@ export interface ContactState {
   profileName?: string;
   pause: { reason: PauseReason; until: string | null } | null;
   lastInboundAt?: string;
+  /**
+   * Dernière réponse du bot à ce contact (flux, IA ou notification de commande). Fenêtre de conversation ouverte en
+   * mode mots-clés (ChannelConfig.conversationOuverteMinutes). Côté WhatsApp, relue dans les messages enregistrés.
+   */
+  lastBotReplyAt?: string;
   /** Compteur d'appels IA, remis à zéro chaque jour (jour du fuseau du client). */
   aiUsage: { day: string; calls: number };
 }

@@ -1,6 +1,7 @@
 /** État d'une simulation : un contact fictif face au vrai moteur. */
 import {
   DEFAULT_CHANNEL_SETTINGS,
+  conversationOuverteMinutes,
   runEngine,
   type AgentConfig,
   type ChannelConfig,
@@ -80,7 +81,8 @@ export function channelFor(bot: Bot): ChannelConfig {
     triggerMode: bot.triggerMode,
     ...DEFAULT_CHANNEL_SETTINGS,
     aiDailyLimitPerContact: bot.aiDailyLimit ?? DEFAULT_CHANNEL_SETTINGS.aiDailyLimitPerContact,
-    ...(bot.numeroPflow ? { numeroPflow: true } : {}),
+    // Mode mots-clés : conversation ouverte après une réponse du bot (délai de la fiche), comme sur WhatsApp.
+    ...(bot.numeroPflow ? { numeroPflow: true } : { conversationOuverteMinutes: conversationOuverteMinutes(bot.infoSheet) }),
   };
 }
 

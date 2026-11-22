@@ -220,6 +220,21 @@ export function InfoSheetForm({
               data-testid="reprise-minutes"
             />
           </Field>
+          <Field
+            label="Conversation ouverte après une réponse du bot (minutes)"
+            hint="Mode mots-clés : après une réponse du bot, le client peut écrire librement (le bot ou l'IA répond) pendant ce délai, sans mot-clé. Vide : 30 min."
+          >
+            <Input
+              type="number"
+              min={1}
+              max={720}
+              className="max-w-32"
+              placeholder="30"
+              value={sheet.conversationOuverteMinutes ?? ""}
+              onChange={(e) => change({ ...sheet, conversationOuverteMinutes: e.target.value ? Number(e.target.value) : undefined })}
+              data-testid="conversation-ouverte-minutes"
+            />
+          </Field>
           <Field label="Points de vente">
             <Textarea placeholder="Restaurant, food truck le samedi au marché…" {...text("pointsDeVente")} />
           </Field>
