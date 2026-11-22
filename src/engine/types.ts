@@ -165,6 +165,11 @@ export interface InfoSheet {
   conversationOuverteMinutes?: number;
   /** Carte complète pour l'IA (produits, prix, allergènes). Étape B : lue dans PFlow Order. */
   resumeCarte?: string;
+  /**
+   * Produits disponibles (lus dans le CRM) : nom → id, pour le lien direct vers le produit recommandé (paramètre
+   * « produit » du lien de commande). Jamais montré à l'IA.
+   */
+  produits?: { id: string; nom: string }[];
   /** Questions fréquentes, en texte libre (pour l'IA). */
   faq?: string;
   /**
@@ -460,6 +465,8 @@ export interface AiDecision {
    * (le bouton « Commander » suit alors la réponse), « autre » sinon. Absent : « autre ».
    */
   sujet?: "carte" | "autre";
+  /** Nom exact (tel qu'écrit dans la carte) du produit recommandé, le premier s'il y en a plusieurs ; vide sinon. */
+  produit?: string;
 }
 
 export interface AiRequest {

@@ -139,6 +139,8 @@ class EngineRun {
   private outgoing: OutgoingMessage[] = [];
   private events: EngineEvent[] = [];
   private steps = 0;
+  /** Produit recommandé par l'IA dans ce message : ajouté au lien des boutons « Commander » (paramètre produit). */
+  private produitRecommande: string | undefined;
   /** Bloc IA atteint avec un texte d'entrée : l'IA est appelée à la fin du traitement. */
   private pendingAiInput: { flowId: string; nodeId: string; text: string } | null = null;
   /** Clic sur un choix de « Me conseiller » : l'IA est appelée à la fin du traitement. */
@@ -718,6 +720,7 @@ class EngineRun {
 
     const { usage } = result;
     this.events.push({ type: "ai_called", decision: result.decision, usage, model: result.model, costUsd: result.costUsd, message: text });
+    this.produitRecommande = this.resolveProduit(result.decision.produit) ?? this.produitRecommande;
 
     // Garde-fous : jamais de lien dans le texte de l'IA (le client reçoit toujours le bouton),
     // et pas de nouvelle salutation en cours de conversation.
@@ -1087,11 +1090,24 @@ class EngineRun {
     return flow.edges.find((e) => e.source === nodeId && (e.sourceHandle ?? "next") === handle)?.target;
   }
 
-  /** Lien des boutons « Commander » : avec les paramètres du canal (via=wa, jeton), s'il y en a. */
+  /**
+   * Lien des boutons « Commander » : avec les paramètres du canal (via=wa, jeton), s'il y en a, et le produit recommandé
+   * par l'IA dans ce même message (produit=<id du produit>, la page de commande l'ouvre directement).
+   */
   private orderButtonUrl(): string | undefined {
     const url = this.orderUrl();
-    const query = this.input.orderLinkQuery?.replace(/^[?&]/, "");
-    return url && query ? `${url}${url.includes("?") ? "&" : "?"}${query}` : url;
+    if (!url) return url;
+    const params = [this.input.orderLinkQuery?.replace(/^[?&]/, ""), this.produitRecommande ? `produit=${encodeURIComponent(this.produitRecommande)}` : ""].filter(Boolean);
+    return params.length ? `${url}${url.includes("?") ? "&" : "?"}${params.join("&")}` : url;
+  }
+
+  /** Id du produit recommandé (nom exact de la carte, accents et majuscules ignorés) ; rien pour une démo ou un nom inconnu. */
+  private resolveProduit(nom: string | undefined): string | undefined {
+    if (!nom?.trim() || this.input.client.demo) return undefined;
+    // « œ » / « æ » ne se décomposent pas en NFD : écrits « oe » / « ae » avant la comparaison (Bœuf = boeuf).
+    const fold = (t: string) => normalize(t.replace(/œ/gi, "oe").replace(/æ/gi, "ae"));
+    const key = fold(nom);
+    return this.input.infoSheet.produits?.find((p) => fold(p.nom) === key)?.id;
   }
 
   private orderUrl(): string | undefined {

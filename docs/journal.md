@@ -1246,3 +1246,12 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
   « Je commande » (la session n'existe que si un bloc attend une réponse ; le CTA n'attend rien). Ajouté à la PR n° 41 :
   en mode mots-clés, la conversation reste ouverte 30 min après chaque réponse du bot (réglable dans la fiche) ; pauses
   prioritaires ; un ami du gérant jamais servi par le bot reste ignoré. 560 tests.
+
+## 22 novembre 2026 — lien direct vers le produit recommandé (PR, après celle du CRM)
+
+- L'IA indique le nom exact du produit qu'elle recommande (nouveau champ « produit » de sa réponse) ; le bot le traduit
+  en id avec les produits disponibles du CRM (jamais montrés à l'IA) et ajoute `produit=<id>` au lien « Commander »
+  (via=wa et wa=… gardés) : proposer_commande, réponse sur la carte, « Me conseiller ».
+- Nom inconnu, aucun produit, démo : lien inchangé. Accents, majuscules et « œ » ignorés dans la comparaison.
+- Spécification CRM : `docs/etape-c/spec-crm-lien-produit.md`. À fusionner seulement après la PR du CRM en
+  production. 565 tests.

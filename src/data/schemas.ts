@@ -147,6 +147,7 @@ export const infoSheetSchema = z.object({
   repriseMinutes: z.number().int().min(2, "2 minutes au moins").max(240, "4 heures au plus").optional(),
   conversationOuverteMinutes: z.number().int().min(1, "1 minute au moins").max(720, "12 heures au plus").optional(),
   resumeCarte: z.string().optional(),
+  produits: z.array(z.object({ id: z.string().max(100), nom: z.string().max(200) })).max(500).optional(),
   faq: z.string().optional(),
   reglesSpeciales: z.string().optional(),
   familles: z.array(z.object({ titre: z.string(), precision: z.string().optional(), jours: z.array(weekday).optional() })).optional(),
