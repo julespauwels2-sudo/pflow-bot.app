@@ -15,6 +15,7 @@ import { z } from "zod";
 import { getChannelsRuntime, readWhatsAppConfig, type ChannelsRuntime } from "@/channels/core/runtime";
 import type { Canal } from "@/channels/core/types";
 import { modelesLivraison, type ModelesResultat } from "@/channels/whatsapp/embedded-signup";
+import { estNumeroTestMeta } from "@/channels/whatsapp/livraison-templates";
 import { dechiffrerJeton } from "@/lib/jetons-chiffres";
 import { tooManyRequests } from "@/lib/request-limit";
 import { checkBotAdmin } from "@/lib/server-auth";
@@ -76,7 +77,10 @@ async function traiter(p: Extract<Pret, { rt: ChannelsRuntime }>, canal: Canal, 
 
 async function canauxResto(rt: ChannelsRuntime) {
   // Les restos, et le numéro PFlow (démos) : son compte (celui de PFlow) a aussi les modèles de la livraison.
-  return (await rt.store.listCanaux()).filter((c) => c.plateforme === "whatsapp" && ["resto", "pflow"].includes(c.role ?? "resto") && c.etat !== "coupe");
+  // Jamais les numéros de test de Meta (ex. l'ancien numéro de test de Cookies An Nou) : aucun envoi réel depuis eux.
+  return (await rt.store.listCanaux()).filter(
+    (c) => c.plateforme === "whatsapp" && ["resto", "pflow"].includes(c.role ?? "resto") && c.etat !== "coupe" && !estNumeroTestMeta(c.numeroAffiche),
+  );
 }
 
 async function nomsRestos(rt: ChannelsRuntime) {

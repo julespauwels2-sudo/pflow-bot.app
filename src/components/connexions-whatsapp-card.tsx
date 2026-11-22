@@ -345,6 +345,7 @@ export function ModelesLivraisonCard({ canalIds, presentation = false }: { canal
   }
 
   const manquants = (c: CompteModeles) => c.etat?.filter((t) => !t.status).length ?? 0;
+  const nomsManquants = (c: CompteModeles) => c.etat?.filter((t) => !t.status).map((t) => `• ${t.name}`) ?? [];
   const aCorriger = (c: CompteModeles) => c.etat?.filter((t) => t.status === "REJECTED" && t.texteAJour === false).length ?? 0;
   const total = comptes?.reduce((n, c) => n + manquants(c), 0) ?? 0;
   return (
@@ -385,7 +386,12 @@ export function ModelesLivraisonCard({ canalIds, presentation = false }: { canal
                   variant="secondary"
                   className="ml-auto"
                   disabled={busy}
-                  onClick={() => void lancer({ method: "POST", body: JSON.stringify({ canalId: c.canalId }) }, `Créer les ${manquants(c)} modèles manquants sur le compte ${c.compteId} ?`)}
+                  onClick={() =>
+                    void lancer(
+                      { method: "POST", body: JSON.stringify({ canalId: c.canalId }) },
+                      `Créer les ${manquants(c)} modèles manquants sur le compte de ${c.libelle} (${c.compteId}) et les soumettre à Meta ?\n\n${nomsManquants(c).join("\n")}\n\nMêmes textes et mêmes noms que sur PFlow Démo. Réponse de Meta en quelques minutes à 1-2 jours.`,
+                    )
+                  }
                 >
                   Créer les {manquants(c)} manquants
                 </Button>

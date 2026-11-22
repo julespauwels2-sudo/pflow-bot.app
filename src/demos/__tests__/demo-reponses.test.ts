@@ -156,7 +156,8 @@ describe("PFlow Démo : réponses intelligentes", () => {
     const t = await setup();
     for (const [said, reply] of [
       ["Salut, ça va ?", "Ça va très bien, merci 😊 Et vous ?"],
-      ["Bonjour !", "Bonjour 👋"],
+      // « Bonjour » seul relance maintenant la démo (voir demo-auto.test.ts) ; « re » reste une politesse.
+      ["Re !", "Bonjour 👋"],
       ["merci beaucoup", "Avec plaisir 😊"],
       ["ok super", "Super 👍"],
     ]) {

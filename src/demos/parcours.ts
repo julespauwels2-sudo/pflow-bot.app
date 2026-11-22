@@ -3,6 +3,9 @@
  *
  * L'étape du contact (0 = accueil vu, 1, 2, 3) est gardée avec lui (ContactDemo.parcours). Avant de passer le
  * message au moteur :
+ * - une SALUTATION SEULE (« Bonjour », « salut ! », « démo », « recommencer », avec ou sans ponctuation ni emoji) en plein
+ *   parcours remet la démo à zéro : accueil Mint Bun, puis étape 1/3 (flux « recommencer ») ; l'étape 3 programmée est
+ *   annulée. Avec une vraie question en plus (« bonjour vous livrez ? »), c'est une question (ci-dessous) ;
  * - un mot-clé du bot PFlow (« tester la démo », « J'ai passé ma commande ✅ », « je veux le mien »…) lance
  *   directement son flux, quelle que soit la longueur du message ;
  * - « c'est fait », « ok »… fait passer à l'étape suivante (étapes 1 et 2) ;
@@ -67,7 +70,17 @@ const STEP_OF_FLOW: Record<string, ParcoursEtape> = {
   [PFLOW_FLOWS.etape3]: 3,
   [PFLOW_FLOWS.commentCaMarche]: 3,
   [PFLOW_FLOWS.mien]: 3,
+  [PFLOW_FLOWS.recommencer]: 1,
 };
+
+/** Salutations qui, SEULES (avec ou sans ponctuation ni emoji), relancent la démo depuis le début. */
+const RESTART_WORDS = new Set(["bonjour", "bonsoir", "salut", "slt", "hello", "coucou", "yo", "demo", "recommencer"]);
+
+/** « Bonjour », « Salut ! 👋 », « démo », « recommencer »… : seulement ces mots (3 au plus), rien d'autre. */
+export function isRestartGreeting(text: string): boolean {
+  const words = normalize(text).split(" ").filter(Boolean);
+  return words.length > 0 && words.length <= 3 && words.every((w) => RESTART_WORDS.has(w));
+}
 
 const REMINDER_OF_STEP: Record<ParcoursEtape, string> = {
   0: PFLOW_FLOWS.accueil,
@@ -99,12 +112,16 @@ export interface GuidedMessage {
   courtesy?: string;
   /** Étape en cours (absente : la démo n'a pas commencé). */
   step?: ParcoursEtape;
+  /** Salutation seule en plein parcours : la démo repart de zéro (accueil, puis étape 1/3). */
+  restart?: boolean;
 }
 
 /** Ce que le moteur doit jouer pour le bot PFlow de base, et s'il faut prévenir Jules. Boutons, médias… : inchangés. */
 export function guide(message: IncomingMessage, flows: Flow[], parcours: ParcoursState | undefined, now: Date): GuidedMessage {
   if (message.kind !== "text") return { message };
   const step = activeStep(parcours, now);
+  // Démo déjà commencée : une salutation seule la relance depuis le début (démo physique : « Bonjour » après le parcours).
+  if (step !== undefined && isRestartGreeting(message.text)) return { message: { kind: "start_flow", flowId: PFLOW_FLOWS.recommencer }, restart: true };
   const text = normalize(message.text);
   const next = step === undefined ? undefined : NEXT_OF_STEP[step];
   if (next && DONE_TEXTS.includes(text)) return { message: { kind: "start_flow", flowId: next } };
@@ -142,14 +159,26 @@ export function canAlertQuestion(parcours: ParcoursState | undefined, now: Date)
 export function nextParcours(parcours: ParcoursState | undefined, events: EngineEvent[], now: Date): ParcoursState | undefined {
   let etape = activeStep(parcours, now);
   let touched = false;
+  let restart = false;
   for (const e of events) {
     if (e.type !== "flow_started" || !e.flowId.startsWith("pflow-")) continue;
     touched = true;
+    if (e.flowId === PFLOW_FLOWS.recommencer) restart = true;
     const step = STEP_OF_FLOW[e.flowId];
     if (step !== undefined) etape = step;
   }
   if (etape === undefined) return undefined;
   if (!touched && parcours) return parcours;
+  // Démo relancée (salutation seule ou bouton « Recommencer la démo ») : tout repart de zéro, l'étape 3 programmée est
+  // annulée et pourra de nouveau être envoyée. Restent seulement l'anti-doublon des alertes et la limite de débit.
+  if (restart) {
+    return {
+      etape,
+      at: now.toISOString(),
+      ...(parcours?.alerteAt ? { alerteAt: parcours.alerteAt } : {}),
+      ...(parcours?.confirmations ? { confirmations: parcours.confirmations } : {}),
+    };
+  }
   // Parcours expiré : on repart de zéro (seule l'alerte anti-doublon est gardée).
   const kept: Partial<ParcoursState> = activeStep(parcours, now) === undefined ? (parcours?.alerteAt ? { alerteAt: parcours.alerteAt } : {}) : { ...parcours };
   const next: ParcoursState = { ...kept, etape, at: now.toISOString() };
