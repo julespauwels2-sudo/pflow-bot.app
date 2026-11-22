@@ -1246,3 +1246,12 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
   « Je commande » (la session n'existe que si un bloc attend une réponse ; le CTA n'attend rien). Ajouté à la PR n° 41 :
   en mode mots-clés, la conversation reste ouverte 30 min après chaque réponse du bot (réglable dans la fiche) ; pauses
   prioritaires ; un ami du gérant jamais servi par le bot reste ignoré. 560 tests.
+
+## 22 novembre 2026 — tournées récurrentes de Cookies (PR, migration non appliquée)
+
+- Fiche : planning hebdomadaire de tournées (lieux et créneau par jour, pré-rempli par les horaires du CRM) ;
+  tournées datées = exceptions (ajout, ou « Annulée » pour un lieu ou toute la journée).
+- L'IA reçoit le planning et les prochains passages (14 jours, exceptions comprises) et répond seule ; transfert si le
+  lieu n'y est pas (règles de la fiche). Infos pratiques : mêmes passages. Sans planning hebdo : inchangé.
+- Stockage partagé avec le CRM : `bot_tournees_hebdo` + `bot_tournees.annulee` + règle « son resto » (`a_acces`).
+  Migration montrée, non appliquée ; spécification CRM : `docs/etape-c/spec-crm-tournees-hebdo.md`. 569 tests.
