@@ -1246,3 +1246,10 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
   « Je commande » (la session n'existe que si un bloc attend une réponse ; le CTA n'attend rien). Ajouté à la PR n° 41 :
   en mode mots-clés, la conversation reste ouverte 30 min après chaque réponse du bot (réglable dans la fiche) ; pauses
   prioritaires ; un ami du gérant jamais servi par le bot reste ignoré. 560 tests.
+
+## 22 novembre 2026 — notification « transfert » avec son propre son (PR, après celle du CRM)
+
+- Les alertes de transfert (restos, « Parler à Jules ») partent vers l'appli avec `p_type: "transfert"` ; « Je veux le
+  mien », questions de la démo et alertes techniques restent « prospect » (sans p_type).
+- Si le CRM ne connaît pas encore p_type (404/400), l'alerte repart sans lui : rien ne se perd.
+- Spécification CRM : `docs/etape-c/spec-crm-alerte-transfert.md`. À fusionner après la PR du CRM. 562 tests.

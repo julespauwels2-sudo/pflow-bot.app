@@ -29,6 +29,32 @@ function fauxCrm(opts: { status?: number; appareils?: number; id?: number | null
 }
 
 describe("alerte vers l'appli iPhone (CRM)", () => {
+  it("type « transfert » (son dédié) : p_type envoyé ; « prospect » ou sans type : jamais de p_type", async () => {
+    const t = fauxCrm();
+    expect((await sendCrmAlert(t.config, { ...input, motif: "L'assistant passe la main", type: "transfert" })).statut).toBe("posee");
+    expect(t.rpc()[0]!.body).toMatchObject({ p_type: "transfert" });
+    const p = fauxCrm();
+    await sendCrmAlert(p.config, { ...input, type: "prospect" });
+    await sendCrmAlert(p.config, input);
+    expect(p.rpc().every((a) => a.body && !("p_type" in a.body))).toBe(true);
+  });
+
+  it("CRM pas encore à jour (fonction sans p_type : 404) : l'alerte repart sans p_type et part quand même", async () => {
+    const appels: Record<string, unknown>[] = [];
+    const config: CrmAlertConfig = {
+      url: "https://crm.supabase.co",
+      serviceKey: "service",
+      fetch: (async (url: string, o: RequestInit) => {
+        if (url.includes("/app_appareils")) return Response.json([{ id: "a0" }]);
+        const body = JSON.parse(String(o.body)) as Record<string, unknown>;
+        appels.push(body);
+        return "p_type" in body ? Response.json({ code: "PGRST202" }, { status: 404 }) : Response.json(7);
+      }) as unknown as typeof fetch,
+    };
+    expect((await sendCrmAlert(config, { ...input, type: "transfert" })).statut).toBe("posee");
+    expect(appels.map((b) => "p_type" in b)).toEqual([true, false]);
+  });
+
   it("configuration : seulement si les deux variables sont posées", () => {
     const env = (vars: Record<string, string>) => (name: string) => vars[name] ?? "";
     expect(crmAlertConfigFromEnv(env({ PFLOW_CRM_SUPABASE_URL: "https://x.supabase.co" }))).toBeUndefined();

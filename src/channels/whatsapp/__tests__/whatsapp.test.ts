@@ -318,6 +318,8 @@ describe("de bout en bout contre un faux serveur Meta", () => {
     await processWebhookPayload(payload([text("je voudrais parler à quelqu'un svp")]), avecAppli);
     expect(file).toHaveLength(1);
     expect(file[0]).toMatchObject({ p_titre: expect.stringContaining("Cookies An Nou"), p_corps: expect.stringContaining("je voudrais parler à quelqu'un svp"), p_url: "/crm#bots" });
+    // Son dédié : une alerte de transfert part avec le type « transfert ».
+    expect(file[0]).toMatchObject({ p_type: "transfert" });
     const [t] = await store.listTransferts("canal1");
     // Web Push non configuré dans ce test : l'appli seule suffit, pas de bandeau rouge.
     expect(t).toMatchObject({ gerantPrevenu: true, alertePush: "non_configure" });
