@@ -136,4 +136,31 @@ describe("boîte de réception : rapidité de l'envoi et de la liste", () => {
     expect(dates).toEqual([...dates].sort().reverse());
     expect(inbox!.conversations.find((c) => c.nom === "C7")?.dernierMessage?.texte).toBe("m7");
   });
+
+  it("recherche : par nom, par numéro (chiffres) ou par contenu d'un message, avec l'extrait trouvé", async () => {
+    const { store } = await setup();
+    const max = await store.getOrCreateContact("c1", "590690000002", "Max");
+    await store.addMessage({ canalId: "c1", contactId: max.id, sens: "entrant", type: "text", contenu: { texte: "Vous avez des quesadillas ?" } });
+    const noms = async (q: string) => (await listInbox(store, workspace, NOW, { q }))[0]!.conversations.map((c) => c.nom);
+    expect(await noms("lé")).toEqual(["Léa"]);
+    expect(await noms("0002")).toEqual(["Max"]);
+    expect(await noms("QUÉSADILLAS")).toEqual(["Max"]);
+    expect((await listInbox(store, workspace, NOW, { q: "quesadillas" }))[0]!.conversations[0]!.correspondance).toBe("Vous avez des quesadillas ?");
+    expect(await noms("pizza")).toEqual([]);
+    expect(await noms("")).toHaveLength(2);
+  });
+
+  it("non-lus synchronisés : la lecture enregistrée sur le serveur vaut pour tous les appareils de l'utilisateur", async () => {
+    const { store, contactId } = await setup();
+    let lectures: boolean | undefined;
+    const before = (await listInbox(store, workspace, NOW, { userId: "u1", onLectures: (a) => (lectures = a) }))[0]!.conversations[0]!;
+    expect(lectures).toBe(true);
+    expect(before.luJusqua).toBeUndefined();
+    const at = before.dernierMessage!.at;
+    expect(await store.markLu("u1", contactId, at)).toBe(true);
+    const after = (await listInbox(store, workspace, NOW, { userId: "u1" }))[0]!.conversations[0]!;
+    expect(after.luJusqua).toBe(at);
+    // Un autre utilisateur n'est pas concerné.
+    expect((await listInbox(store, workspace, NOW, { userId: "u2" }))[0]!.conversations[0]!.luJusqua).toBeUndefined();
+  });
 });

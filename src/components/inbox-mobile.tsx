@@ -95,7 +95,11 @@ export function MobileInboxList({
                     </span>
                     <span className="flex items-center gap-2">
                       <span className={`min-w-0 flex-1 truncate text-sm ${unread ? "font-semibold text-ink" : "text-muted"}`}>
-                        {conv.dernierMessage ? `${prefixe(conv.dernierMessage)}${plainExtract(conv.dernierMessage.texte)}` : "—"}
+                        {conv.correspondance
+                          ? `🔎 « ${plainExtract(conv.correspondance)} »`
+                          : conv.dernierMessage
+                            ? `${prefixe(conv.dernierMessage)}${plainExtract(conv.dernierMessage.texte)}`
+                            : "—"}
                       </span>
                       {unread && <span className="bg-brand size-2.5 shrink-0 rounded-full" aria-label="non lu" />}
                     </span>

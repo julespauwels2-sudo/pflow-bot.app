@@ -323,6 +323,33 @@ export function createSupabaseChannelStore(db: Db, newId: () => string = () => c
     async listContacts(canalId) {
       return (await db.select("bot_contacts", "*", { ...eq("canal_id", canalId), order: { column: "maj_le", ascending: false } })).map(rowToContact);
     },
+    async searchMessages(q, limit = 100) {
+      const text = q.trim();
+      if (!text) return [];
+      const rows = await db.select("bot_messages", "*", {
+        ilikeAny: { columns: ["contenu->>texte", "contenu->>text", "contenu->>transcription"], text },
+        order: { column: "cree_le", ascending: false },
+        limit,
+      });
+      return rows.map(rowToMessage);
+    },
+    async getLectures(userId) {
+      try {
+        const rows = await db.select("bot_lectures", "contact_id, lu_jusqua", { in: { column: "user_id", values: [userId] } });
+        return { available: true, lu: Object.fromEntries(rows.map((r) => [String(r.contact_id), iso(r.lu_jusqua) ?? String(r.lu_jusqua)])) };
+      } catch {
+        // Table pas encore créée (migration du 22 novembre 2026) : l'écran garde sa mémoire locale.
+        return { available: false, lu: {} };
+      }
+    },
+    async markLu(userId, contactId, at) {
+      try {
+        await db.upsert("bot_lectures", [{ user_id: userId, contact_id: contactId, lu_jusqua: at, maj_le: new Date().toISOString() }], "user_id,contact_id");
+        return true;
+      } catch {
+        return false;
+      }
+    },
     async listPausesEcheues(after, before) {
       const rows = await db.select("bot_contacts", "*", { range: { column: "pause_jusqu_a", gte: after, lte: before }, limit: 200 });
       return rows

@@ -153,3 +153,23 @@ export function FiltresInbox({ canaux, filtre, onChange, sombre = false }: { can
     </div>
   );
 }
+
+/** Recherche par nom, numéro ou contenu d'un message, avec l'état de la mise à jour (temps réel ou toutes les 5 s). */
+export function RechercheInbox({ value, onChange, sync, sombre = false }: { value: string; onChange: (v: string) => void; sync: "temps-reel" | "rafraichissement"; sombre?: boolean }) {
+  return (
+    <div className="space-y-1">
+      <input
+        type="search"
+        aria-label="Rechercher une conversation"
+        placeholder="🔎 Nom, numéro ou message…"
+        className="min-h-11 w-full rounded-xl border border-line bg-white px-3 py-1 text-base text-nuit"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        data-testid="inbox-recherche"
+      />
+      <p className={`text-[11px] ${sombre ? "text-white/60" : "text-muted"}`} data-testid="inbox-sync">
+        {sync === "temps-reel" ? "● Mise à jour en temps réel" : "○ Mise à jour toutes les 5 s"}
+      </p>
+    </div>
+  );
+}

@@ -11,6 +11,8 @@ export interface SelectOptions {
   in?: { column: string; values: string[] };
   order?: { column: string; ascending?: boolean };
   limit?: number;
+  /** Filtre « au moins une de ces colonnes (ou expressions JSON, ex. contenu->>texte) contient ce texte » (sans casse). */
+  ilikeAny?: { columns: string[]; text: string };
   /** Filtre « colonne entre deux valeurs » (bornes comprises, chacune facultative). */
   range?: { column: string; gte?: string; lte?: string };
 }
@@ -67,6 +69,11 @@ export function supabaseDb(sb: SupabaseClient): Db {
       const run = async (values?: string[]) => {
         let query = sb.from(table).select(columns);
         if (options.in && values) query = query.in(options.in.column, values);
+        if (options.ilikeAny?.text) {
+          // Caractères de la syntaxe des filtres retirés (virgule, parenthèses, jokers) : le texte reste un simple mot.
+          const t = options.ilikeAny.text.replace(/[,()%*\\"'.:]/g, " ").trim().slice(0, 60);
+          if (t) query = query.or(options.ilikeAny.columns.map((c) => `${c}.ilike.%${t}%`).join(","));
+        }
         if (options.range?.gte !== undefined) query = query.gte(options.range.column, options.range.gte);
         if (options.range?.lte !== undefined) query = query.lte(options.range.column, options.range.lte);
         if (options.order) query = query.order(options.order.column, { ascending: options.order.ascending ?? true });
