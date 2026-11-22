@@ -28,6 +28,10 @@ export const aiRequestSchema = z.object({
     )
     .max(20),
   instructions: text(4_000).optional(),
+  conversation: z
+    .array(z.object({ role: z.enum(["client", "equipe", "bot"]), text: text(2_000) }))
+    .max(40)
+    .optional(),
 });
 
 export const aiDecisionSchema = z.object({

@@ -173,6 +173,14 @@ export function formatFixedDelivery(days: DeliveryDays[], zonesText = ""): strin
 
 export const EXCEPTIONAL_ROUNDS_TITLE = "📅 *Livraisons exceptionnelles*";
 
+/** Pause intelligente : délai par défaut (minutes) avant que le bot reprenne quand personne ne répond au client. */
+export const DEFAULT_REPRISE_MINUTES = 10;
+
+export function repriseMinutes(sheet: Pick<InfoSheet, "repriseMinutes">): number {
+  const m = sheet.repriseMinutes;
+  return typeof m === "number" && Number.isFinite(m) && m >= 2 ? Math.min(Math.round(m), 240) : DEFAULT_REPRISE_MINUTES;
+}
+
 /** Emoji d'accueil quand la fiche n'en donne pas. */
 export const DEFAULT_WELCOME_EMOJI = "🍽️";
 

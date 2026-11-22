@@ -37,6 +37,7 @@ import {
   type OutgoingMessage,
   type PauseReason,
   type QuestionValidation,
+  type RecentTurn,
   type Session,
 } from "./types";
 
@@ -268,6 +269,13 @@ class EngineRun {
       return;
     }
 
+    // Reprise (tâche planifiée) : pause « l'équipe a répondu » échue, personne n'a répondu au client. Pas un message du
+    // client : la fenêtre de 24 h ne bouge pas.
+    if (message.kind === "reprise") {
+      await this.processReprise(message);
+      return;
+    }
+
     this.contact.lastInboundAt = now.toISOString();
 
     // 1. Contact en pause : on ne fait rien. Exception (bots des restos) : pendant un transfert, un mot-clé du client
@@ -278,6 +286,14 @@ class EngineRun {
       if (until === null || Date.parse(until) > now.getTime()) {
         const keyword = reason === "transfert_humain" && !this.input.channel.numeroPflow && message.kind === "text" ? this.findKeyword(message.text) : undefined;
         if (!keyword) {
+          // Pause intelligente : le client attend ; le bot reprendra dans le délai si personne ne répond (jamais plus tard
+          // que la fin de pause déjà prévue ; un 2e message ne repousse pas l'heure).
+          const minutes = this.input.channel.echoResumeMinutes;
+          if (reason === "echo_gerant" && minutes && until) {
+            const at = new Date(Math.min(Date.parse(until), now.getTime() + minutes * 60_000)).toISOString();
+            this.contact.pause = { reason, until: at };
+            this.events.push({ type: "reprise_programmee", at });
+          }
           this.events.push({ type: "ignored", reason: "pause" });
           return;
         }
@@ -531,6 +547,31 @@ class EngineRun {
    * Les mots-clés en mode « exact » ne sont pas concernés (le message entier doit déjà correspondre).
    */
   /**
+   * Reprise après la pause « l'équipe a répondu » (pause intelligente) : seulement si la pause est encore celle-là et
+   * échue (sinon l'équipe a répondu entre-temps, ou un transfert est en cours : rien). Puis comme un message normal :
+   * mot-clé → son flux ; sinon l'IA, qui lit la conversation récente (réponses de l'équipe comprises) ; sans IA,
+   * l'accueil complet.
+   */
+  private async processReprise(message: Extract<EngineInput["message"], { kind: "reprise" }>): Promise<void> {
+    const pause = this.contact.pause;
+    const now = this.input.now.getTime();
+    if (pause?.reason !== "echo_gerant" || pause.until === null || Date.parse(pause.until) > now) {
+      this.events.push({ type: "ignored", reason: "pause" });
+      return;
+    }
+    this.contact.pause = null;
+    this.session = null;
+    this.events.push({ type: "reprise" });
+    if (message.kind === "reprise" && this.tryKeyword(message.text)) return;
+    if (this.deps.ai) {
+      await this.callAi(message.text, { conversation: message.conversation });
+      return;
+    }
+    const defaultFlow = findDefaultFlow(this.input.flows);
+    if (defaultFlow) this.startFlow(defaultFlow, "defaut", { nouvelle_conversation: "oui" });
+  }
+
+  /**
    * Mot-clé qui lance un flux :
    * - message court (4 mots au plus) qui contient un mot-clé, ou mot-clé « exact » ;
    * - mode « mots-clés uniquement » (bots des restos) : aussi une phrase qui commence par un mot-clé, ou par une
@@ -587,7 +628,10 @@ class EngineRun {
     });
   }
 
-  private async callAi(text: string, opts: { repromptNode?: WaitingNode; aiNode?: FlowNodeOf<"ai">; conseil?: ConseilChoix }): Promise<void> {
+  private async callAi(
+    text: string,
+    opts: { repromptNode?: WaitingNode; aiNode?: FlowNodeOf<"ai">; conseil?: ConseilChoix; conversation?: RecentTurn[] },
+  ): Promise<void> {
     const { ai } = this.deps;
     const { client, channel, now, infoSheet, agent } = this.input;
     const { repromptNode, aiNode, conseil } = opts;
@@ -646,6 +690,7 @@ class EngineRun {
           : aiNode?.data.instructions?.trim()
             ? this.render(aiNode.data.instructions)
             : undefined,
+        ...(opts.conversation?.length ? { conversation: opts.conversation } : {}),
       });
     } catch (error) {
       this.events.push({ type: "error", message: `IA : ${errorMessage(error)}` });

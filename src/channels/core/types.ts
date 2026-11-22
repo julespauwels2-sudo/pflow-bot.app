@@ -184,6 +184,11 @@ export interface ChannelStore {
   noteMessage(messageId: string, note: string): Promise<void>;
   addTransfert(transfert: Omit<Transfert, "id" | "at" | "gerantPrevenu"> & { gerantPrevenu?: boolean }): Promise<Transfert>;
   listContacts(canalId: string): Promise<ChannelContact[]>;
+  /**
+   * Pause intelligente : contacts en pause « l'équipe a répondu » dont la fin de pause tombe entre `after` et `before`
+   * (la tâche planifiée regarde ceux qui viennent d'échoir).
+   */
+  listPausesEcheues(after: string, before: string): Promise<ChannelContact[]>;
   listMessages(contactId: string, limit?: number): Promise<StoredMessage[]>;
   listTransferts(canalId: string): Promise<Transfert[]>;
   resolveTransferts(contactId: string): Promise<void>;
@@ -213,6 +218,11 @@ export interface InboundEvent {
   contenu: unknown;
   /** Média à télécharger (message vocal) : identifiant WhatsApp ou adresse Instagram. */
   media?: MediaRef;
+  /**
+   * Reprise programmée (pause intelligente) : pas un nouveau message ; les messages du client sont déjà enregistrés.
+   * `messageWamid` : dernier message du client (accusé de lecture).
+   */
+  reprise?: { messageWamid?: string };
 }
 
 export interface StatusEvent {

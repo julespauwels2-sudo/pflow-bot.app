@@ -205,6 +205,21 @@ export function InfoSheetForm({
           <Field label="Emoji d'accueil" hint="Affiché dans le message d'accueil après le nom du resto ({{emoji_accueil}}). Vide : 🍽️.">
             <Input className="max-w-32" placeholder="🍽️" maxLength={16} {...text("emojiAccueil")} data-testid="emoji-accueil" />
           </Field>
+          <Field
+            label="Reprise du bot après une réponse de l'équipe (minutes)"
+            hint="Quand l'équipe répond à la main, le bot se tait. Si le client réécrit et que personne ne lui répond dans ce délai, le bot reprend. Vide : 10 min."
+          >
+            <Input
+              type="number"
+              min={2}
+              max={240}
+              className="max-w-32"
+              placeholder="10"
+              value={sheet.repriseMinutes ?? ""}
+              onChange={(e) => change({ ...sheet, repriseMinutes: e.target.value ? Number(e.target.value) : undefined })}
+              data-testid="reprise-minutes"
+            />
+          </Field>
           <Field label="Points de vente">
             <Textarea placeholder="Restaurant, food truck le samedi au marché…" {...text("pointsDeVente")} />
           </Field>

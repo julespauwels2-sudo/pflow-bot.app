@@ -43,6 +43,8 @@ export function describeIncoming(message: EngineInput["message"]): string {
       return `Événement PFlow Order : ${ORDER_EVENTS[message.event].icon} ${ORDER_EVENTS[message.event].label}`;
     case "start_flow":
       return "Démarrage manuel d'un flux";
+    case "reprise":
+      return `Personne n'a répondu au client à temps : le bot reprend (« ${message.text} »)`;
   }
 }
 

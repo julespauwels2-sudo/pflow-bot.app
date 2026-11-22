@@ -144,6 +144,7 @@ export const infoSheetSchema = z.object({
   zonesLivraison: z.string().optional(),
   pointsDeVente: z.string().optional(),
   emojiAccueil: z.string().max(16, "Un ou deux emojis au plus").optional(),
+  repriseMinutes: z.number().int().min(2, "2 minutes au moins").max(240, "4 heures au plus").optional(),
   resumeCarte: z.string().optional(),
   faq: z.string().optional(),
   reglesSpeciales: z.string().optional(),

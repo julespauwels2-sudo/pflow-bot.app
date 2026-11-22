@@ -2,7 +2,7 @@
  * Boîte de réception : conversations par resto, reprendre la main (le bot se tait), rendre la main au
  * bot, répondre à la main (dans la fenêtre de 24 h). Même stockage que le webhook.
  */
-import { canSendFreeform, type ContactState, type OutgoingMessage } from "@/engine";
+import { canSendFreeform, repriseMinutes, type ContactState, type OutgoingMessage } from "@/engine";
 import type { WorkspaceData } from "@/data/types";
 import type { Canal, ChannelContact, ChannelSender, ChannelStore, Plateforme, StoredMessage } from "./types";
 import { sendOptions } from "./send-options";
@@ -19,7 +19,11 @@ import { formatDuration } from "../voice/duration";
 export type EtatConversation =
   | { code: "actif" }
   | { code: "transfert"; until: string | null }
-  | { code: "equipe"; until: string | null }
+  /**
+   * Pause intelligente (`repriseMinutes` présent) : `attente` = le client a réécrit et attend ; le bot reprend à `until`
+   * si personne ne répond. Sans client en attente, le bot reprendra `repriseMinutes` après son prochain message.
+   */
+  | { code: "equipe"; until: string | null; attente?: boolean; repriseMinutes?: number }
   | { code: "main" }
   | { code: "ignore"; raison: string };
 
@@ -28,10 +32,19 @@ export function pauseActive(pause: ContactState["pause"], now: Date): ContactSta
   return pause && (pause.until === null || Date.parse(pause.until) > now.getTime()) ? pause : null;
 }
 
-export function etatConversation(pause: ContactState["pause"], dernier: Pick<StoredMessage, "sens" | "erreur"> | undefined, now: Date): EtatConversation {
+export function etatConversation(
+  pause: ContactState["pause"],
+  dernier: Pick<StoredMessage, "sens" | "erreur"> | undefined,
+  now: Date,
+  repriseMinutes?: number,
+): EtatConversation {
   const active = pauseActive(pause, now);
   if (active?.reason === "transfert_humain") return { code: "transfert", until: active.until };
-  if (active?.reason === "echo_gerant") return { code: "equipe", until: active.until };
+  if (active?.reason === "echo_gerant") {
+    if (!repriseMinutes) return { code: "equipe", until: active.until };
+    const attente = dernier?.sens === "entrant" && Boolean(dernier.erreur?.startsWith("ignore:pause_echo_gerant"));
+    return { code: "equipe", until: active.until, attente, repriseMinutes };
+  }
   // « manuel » avec une fin : ancienne réponse depuis la boîte de réception (avant le 22 novembre 2026).
   if (active?.reason === "manuel") return active.until ? { code: "equipe", until: active.until } : { code: "main" };
   if (dernier?.sens === "entrant" && dernier.erreur?.startsWith("ignore:")) return { code: "ignore", raison: dernier.erreur.slice("ignore:".length) };
@@ -140,9 +153,11 @@ export async function listInbox(store: ChannelStore, workspace: WorkspaceData | 
   return canaux.map((canal, index) => {
     const [list, transferts] = perCanal[index]!;
     const open = new Set(transferts.filter((t) => !t.resoluLe).map((t) => t.contactId));
+    // Pause intelligente : seulement sur les numéros des restos (délai de la fiche, 10 min par défaut).
+    const reprise = canal.role === "pflow" ? undefined : repriseMinutes(data.infoSheets?.[canal.restaurantId] ?? { horaires: [] });
     const conversations: InboxConversation[] = list.map((contact) => {
       const last = lastById.get(contact.id);
-      const etat = etatConversation(contact.state.pause, last, now);
+      const etat = etatConversation(contact.state.pause, last, now, reprise);
       return {
         contactId: contact.id,
         waId: contact.waId,

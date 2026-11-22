@@ -11,6 +11,8 @@ export interface SelectOptions {
   in?: { column: string; values: string[] };
   order?: { column: string; ascending?: boolean };
   limit?: number;
+  /** Filtre « colonne entre deux valeurs » (bornes comprises, chacune facultative). */
+  range?: { column: string; gte?: string; lte?: string };
 }
 
 /** Lecture seule : c'est tout ce que reçoit le code qui lit le CRM. */
@@ -65,6 +67,8 @@ export function supabaseDb(sb: SupabaseClient): Db {
       const run = async (values?: string[]) => {
         let query = sb.from(table).select(columns);
         if (options.in && values) query = query.in(options.in.column, values);
+        if (options.range?.gte !== undefined) query = query.gte(options.range.column, options.range.gte);
+        if (options.range?.lte !== undefined) query = query.lte(options.range.column, options.range.lte);
         if (options.order) query = query.order(options.order.column, { ascending: options.order.ascending ?? true });
         if (options.limit) query = query.limit(options.limit);
         const { data, error } = await query;

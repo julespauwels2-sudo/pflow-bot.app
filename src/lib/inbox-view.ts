@@ -56,6 +56,8 @@ export function etatLabel(etat: EtatConversation, now = new Date()): { texte: st
     case "transfert":
       return { texte: `🔔 En pause : transfert${jusqua(etat.until)}`, ton: "alerte" };
     case "equipe":
+      if (etat.attente && etat.until) return { texte: `⏸ En pause : l'équipe a répondu (le bot reprend à ${heure(etat.until, now)} si personne ne répond)`, ton: "pause" };
+      if (etat.repriseMinutes) return { texte: `⏸ En pause : l'équipe a répondu (si le client réécrit, le bot reprend après ${etat.repriseMinutes} min sans réponse)`, ton: "pause" };
       return { texte: `⏸ En pause : l'équipe a répondu${jusqua(etat.until)}`, ton: "pause" };
     case "main":
       return { texte: "✋ En pause : tu as repris la main", ton: "pause" };
@@ -74,7 +76,7 @@ export function noteLabel(note: string | undefined): string | null {
     {
       aucun_declencheur: "Ignoré : pas de mot-clé",
       pause_transfert_humain: "Pas de réponse : bot en pause (transfert)",
-      pause_echo_gerant: "Pas de réponse : l'équipe a répondu (pause 12 h)",
+      pause_echo_gerant: "En attente : l'équipe a répondu récemment (le bot reprend si personne ne répond)",
       pause_manuel: "Pas de réponse : tu as repris la main",
       media_non_gere: "Pas de réponse : type de message non géré",
       retour_commande: "Pas de réponse : retour de la page de commande",

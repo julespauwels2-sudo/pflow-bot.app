@@ -35,7 +35,7 @@ const EXPLICATIONS: Record<InboxConversation["etat"]["code"], string> = {
   actif: "Le bot répond à ce client.",
   ignore: "Le bot est actif, mais il a laissé passer le dernier message (aucun mot-clé). Réponds à la main si besoin.",
   transfert: "Le client a demandé l'équipe : le bot se tait. Il reprend si le client renvoie un mot-clé (bonjour, commande, menu…) ou si tu le rends au bot.",
-  equipe: "L'équipe a répondu à la main : le bot se tait 12 h après sa dernière réponse, même si le client écrit « Bonjour ».",
+  equipe: "L'équipe a répondu à la main : le bot se tait. Si le client réécrit et que personne ne lui répond dans le délai, le bot reprend en tenant compte de ce que l'équipe a dit.",
   main: "Tu as repris la main : le bot se tait jusqu'à ce que tu le lui rendes.",
 };
 

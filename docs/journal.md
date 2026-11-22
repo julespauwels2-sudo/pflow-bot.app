@@ -1231,3 +1231,13 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
 - Boîte de réception : état unique, « Rendre au bot » pour toutes les pauses, tri par dernier message, non-lus, filtre
   par resto, numéros de test Meta masqués, bulles client / bot / équipe distinctes.
 - Numéro PFlow (démos) : inchangé. 538 tests.
+
+## 22 novembre 2026 — pause intelligente après une réponse de l'équipe (PR, par-dessus la n° 40)
+
+- PR n° 34 et n° 35 fusionnées par Jules ; conflit de la n° 40 avec la production (journal) résolu.
+- Numéros des restos : après une réponse manuelle de l'équipe, le bot se tait. Si le client réécrit et que personne ne
+  répond en 10 min (réglable dans la fiche), le bot répond, avec la conversation récente (jamais contre l'équipe).
+  Puis bot actif. Transfert et numéro PFlow inchangés.
+- Tâche planifiée à la minute `/api/cron/reprise` (Vercel Cron) ; aucune migration ; coût négligeable (détails :
+  `docs/etape-c/pause-intelligente.md`). Boîte de réception : « le bot reprend à HH:MM si personne ne répond ».
+  552 tests.

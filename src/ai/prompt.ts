@@ -97,6 +97,24 @@ export interface BuiltPrompt {
   messages: { role: "user" | "assistant"; content: string }[];
 }
 
+const ROLE_LABEL = { client: "Client", equipe: "Équipe (à la main)", bot: "Bot" } as const;
+
+/**
+ * Reprise après une réponse de l'équipe : personne n'a répondu au client dans le délai. L'IA lit la conversation
+ * récente et ne contredit jamais l'équipe (ce qu'elle a dit l'emporte sur la carte et la base de connaissances).
+ */
+export const REPRISE_RULES = `# Reprise de la conversation (règles prioritaires)
+L'équipe du resto a répondu à la main à ce client, puis le client a réécrit et personne ne lui a répondu depuis quelques minutes. Tu prends le relais pour son dernier message (le message du client ci-dessous).
+- Lis toute la conversation récente : ce que l'équipe a dit fait foi et l'emporte sur la carte et la base de connaissances (ex. « on n'a plus de crème » : ne propose jamais de crème, même si la carte en contient).
+- Ne contredis jamais l'équipe, ne reviens pas sur ce qu'elle a promis ou refusé, ne répète pas ce qu'elle a déjà dit.
+- Si tu ne sais pas, ou si la réponse dépend de l'équipe (une commande précise, un geste, un délai) : dis-le simplement et propose de commander (fonction proposer_commande) ou d'attendre que l'équipe réponde.
+- Ne dis pas que l'équipe est absente ou en retard.`;
+
+function conversationBlock(conversation: NonNullable<AiRequest["conversation"]>): string {
+  const lines = conversation.slice(-30).map((t) => `${ROLE_LABEL[t.role]} : ${t.text.replace(/\s+/g, " ").trim().slice(0, 600)}`);
+  return [REPRISE_RULES, "", "## Conversation récente (de la plus ancienne à la plus récente)", ...lines].join("\n");
+}
+
 export function buildContext(req: AiRequest): string {
   const lines = [`Nous sommes le ${formatLocalNow(req.client.maintenantLocal)} (heure du resto, fuseau ${req.client.timezone}).`];
   if (req.client.prenomContact) lines.push(`Prénom du client : ${req.client.prenomContact}.`);
@@ -109,6 +127,7 @@ export function buildContext(req: AiRequest): string {
   }
 
   if (req.instructions?.trim()) lines.push("", "# Consigne pour cette étape de la conversation", req.instructions.trim());
+  if (req.conversation?.length) lines.push("", conversationBlock(req.conversation));
   return lines.join("\n");
 }
 
