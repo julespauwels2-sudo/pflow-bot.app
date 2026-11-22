@@ -12,7 +12,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { chiffrerJeton, cleJetons, dechiffrerJeton } from "@/lib/jetons-chiffres";
 import { createMemoryChannelStore } from "@/channels/core/memory-store";
 import { createMemoryConnexionStore, hashJeton, nouveauJetonLien, jetonValide } from "@/channels/core/connexions";
-import { ANCIENS_NOMS_LIVRAISON, LIVRAISON_TEMPLATES, nomModeleLivraison, templatePayload } from "../livraison-templates";
+import { ANCIENS_NOMS_LIVRAISON, LIVRAISON_TEMPLATES, estNumeroTestMeta, nomModeleLivraison, templatePayload } from "../livraison-templates";
 import { terminerConnexion, type MetaAppConfig } from "../embedded-signup";
 
 const KEY = randomBytes(32);
@@ -360,6 +360,13 @@ describe("page État : modèles compte par compte, client test hors CRM, débran
     await rt.store.ensureCanal({ ...canal("5550003333", "9990001111"), role: "pflow" as const });
     const avecPflow = await (await route.GET(new Request("http://localhost/x"))).json();
     expect(avecPflow.comptes.find((c: { libelle: string }) => c.libelle.includes("5550003333")).libelle).toContain("PFlow Démo");
+    // Numéro de test de Meta (+1 555…, ex. l'ancien numéro de test de Cookies An Nou) : jamais listé, aucun modèle créé.
+    await rt.store.ensureCanal({ ...canal("5550004444", "9990002222", "9990003333"), numeroAffiche: "+1 555 010 4444" });
+    const sansTest = await (await route.GET(new Request("http://localhost/x", { headers: { "x-forwarded-for": "10.0.0.43" } }))).json();
+    expect(sansTest.comptes.some((c: { libelle: string }) => c.libelle.includes("555 010 4444"))).toBe(false);
+    expect(estNumeroTestMeta("+1 555 010 4444")).toBe(true);
+    expect(estNumeroTestMeta("+15550104444")).toBe(true);
+    expect(estNumeroTestMeta("+590 690 12 34 56")).toBe(false);
   });
 
   it("modèles refusés : motif, catégorie, texte chez Meta ; anciens noms ignorés ; « corriger » seulement sur les refusés à l'ancien texte", async () => {

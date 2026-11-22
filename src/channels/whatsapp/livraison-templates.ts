@@ -121,3 +121,8 @@ export const MOTIFS_REFUS: Record<string, string> = {
   SCAM: "Contenu jugé trompeur (arnaque possible).",
   PROMOTIONAL: "Contenu jugé promotionnel dans un modèle Utilitaire.",
 };
+
+/** Numéro de test fourni par Meta (+1 555…) : il n'envoie jamais de livraison, pas de modèles sur son compte. */
+export function estNumeroTestMeta(numero: string | undefined): boolean {
+  return /^\+?1[\s.-]?555/.test((numero ?? "").trim());
+}

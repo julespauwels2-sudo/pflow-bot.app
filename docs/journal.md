@@ -1113,6 +1113,31 @@ incompréhensible). Version mobile en dessous de 768 px, ordinateur inchangé (`
 - Tâches de la configuration : suffisantes pour tout ce que fait PFlow Bots (tableau dans
   `docs/etape-c/embedded-signup.md`, 2 quinquies). Migration `20261112000000_bot_jetons_expiration.sql` à valider.
 
+## 21 novembre 2026 — démo PFlow qui redémarre, modèles de la livraison sur les comptes des restos
+
+Jour de bascule des 3 clients (Cookies An Nou, Mexico, AG Pizza) d'UChat vers PFlow Bots : **rien n'est fusionné
+ni déployé en production avant « bascules terminées »**. Deux PR séparées, avec leur Preview.
+
+### Démo PFlow (Mint Bun) : « Bonjour » relance la démo (PR n° 34)
+- Canal PFlow Démo seulement (role `pflow`, bot PFlow de base). Une salutation seule (bonjour, bonsoir, salut, slt,
+  hello, coucou, yo, démo, recommencer ; ponctuation, accents, emoji ignorés ; 3 mots au plus) en plein parcours
+  remet tout à zéro : accueil Mint Bun puis étape 1/3 « Je commande ». L'étape 3 programmée est annulée.
+- Salutation + vraie question : comme avant (IA ou Jules). Premier contact : accueil habituel. Bouton « Recommencer
+  la démo » sur l'étape 3. Restos (role `resto`) : aucun changement, testé sur le canal de Cookies An Nou.
+- Vérifié dans le simulateur du numéro PFlow (étape 3 avec le bouton ; « Bonjour ! » → accueil puis étape 1).
+
+### Modèles de la livraison sur les comptes des restos (PR séparée)
+- **État des lieux (lecture seule en base)** : les 3 restos ont un canal en test, en coexistence, avec un identifiant
+  de compte de messagerie, et le jeton général de PFlow (pas de jeton client). Cookies An Nou a aussi un **ancien
+  numéro de test Meta (+1 555…)** sur un autre compte. Les modèles présents chez Meta sur chaque compte ne se lisent
+  qu'avec le jeton (pas dans cette session) : page État → « Voir les modèles de chaque compte » (lecture seule).
+- **Préparé, rien de lancé** : la carte des modèles écarte maintenant les numéros de test de Meta (aucun modèle créé
+  sur le compte de test de Cookies) ; la confirmation « Créer les N manquants » liste les noms exacts et le compte.
+  Mêmes textes et noms que sur PFlow Démo (6 en `_v2` + 4 d'origine), anciens noms refusés ignorés.
+- **Examen Meta** : aucune dépendance. Les comptes sont dans le portefeuille de PFlow, le jeton général y a accès
+  (les modèles de PFlow Démo ont été créés de la même façon). L'examen ne concerne que l'Embedded Signup des comptes
+  de clients extérieurs.
+
 ## 21 novembre 2026 (suite) — toutes les alertes sur l'appli PFlow (avant les bascules)
 
 Jules a supprimé la PWA de PFlow Bots et utilise l'appli mobile PFlow (celle du CRM). Seules les alertes « Je veux le
