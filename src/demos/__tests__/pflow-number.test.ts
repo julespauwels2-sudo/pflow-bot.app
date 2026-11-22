@@ -1,3 +1,5 @@
+import { CONSEIL_TEXTS } from "@/engine/conseil";
+import { MINT_BUN_INFOS } from "../mint-bun";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -317,9 +319,25 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(msgs[1].interactive?.body.text).toBe(PFLOW_TEXTS.step1Aide);
     expect(titles(msgs[1])).toEqual(["⭐ Me conseiller", "ℹ️ Infos pratiques"]);
     expect(await step()).toBe(1);
-    // « Me conseiller » : ce que ferait le bot du resto, puis [Je commande] (aucune carte inventée) ; toujours l'étape 1.
-    const conseil = await press(msgs[1], 0);
-    expect(conseil[0].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.conseilDemo }, action: { parameters: { display_text: "Je commande" } } });
+    // « Me conseiller » : comme sur un vrai resto, les choix, puis de vrais produits de la carte Mint Bun avec leur prix,
+    // [🛒 Commander] et [🔄 Autre chose] ; toujours l'étape 1.
+    const choix = await press(msgs[1], 0);
+    expect(choix[0].interactive?.body.text).toBe(CONSEIL_TEXTS.intro);
+    expect(titles(choix[0])).toEqual(["🍔 Burgers", "🍵 Matcha & desserts", "🎲 Surprenez-moi"]);
+    const burgers = await press(choix[0], 0);
+    expect(burgers[0].text?.body).toContain("🍔 *Mint Classic* : 12,90 €");
+    expect(burgers[0].text?.body).toContain("*Burger + frites + boisson* : 16,90 €");
+    expect(burgers[1].interactive).toMatchObject({ type: "cta_url", action: { parameters: { display_text: "🛒 Commander", url: DEMO_PERMANENTE.commandeUrl } } });
+    expect(titles(burgers[2])).toEqual(["🔄 Autre chose"]);
+    const encore = await press(burgers[2], 0);
+    expect(encore[0].interactive?.body.text).toBe(CONSEIL_TEXTS.intro);
+    expect(await step()).toBe(1);
+    // « Infos pratiques » : Horaires, Livraison (et retrait), Paiement, puis [😋 Je commande].
+    const infos = await press(msgs[1], 1);
+    expect(titles(infos[0])).toEqual(["🕒 Horaires", "🛵 Livraison", "💳 Paiement"]);
+    const livraison = await press(infos[0], 1);
+    expect(livraison[0].text?.body).toBe(MINT_BUN_INFOS.livraison);
+    expect(livraison[1].interactive).toMatchObject({ type: "cta_url", action: { parameters: { display_text: "😋 Je commande" } } });
     expect(await step()).toBe(1);
 
     // Filet de sécurité : autre chose → rappel de l'étape 1 avec son bouton ; une politesse (« re ») : un bonjour en
