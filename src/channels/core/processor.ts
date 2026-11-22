@@ -507,6 +507,12 @@ export async function processReprises(
         report.ignorees += 1;
         continue;
       }
+      // Numéro « mots-clés uniquement » (aussi utilisé par le gérant pour ses conversations perso) : reprise seulement
+      // pour un client à qui le bot a déjà parlé. Un ami qui répond au gérant n'aura jamais de réponse du bot.
+      if (canal.triggerMode === "mots_cles_uniquement" && !messages.some((m) => m.sens === "sortant" && m.auteur === "bot")) {
+        report.ignorees += 1;
+        continue;
+      }
       let i = messages.length;
       while (i > 0 && messages[i - 1]!.sens === "entrant") i -= 1;
       const attente = messages.slice(i).map(messageText).filter(Boolean);

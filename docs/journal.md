@@ -1237,7 +1237,8 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
 - PR n° 34 et n° 35 fusionnées par Jules ; conflit de la n° 40 avec la production (journal) résolu.
 - Numéros des restos : après une réponse manuelle de l'équipe, le bot se tait. Si le client réécrit et que personne ne
   répond en 10 min (réglable dans la fiche), le bot répond, avec la conversation récente (jamais contre l'équipe).
-  Puis bot actif. Transfert et numéro PFlow inchangés.
+  Puis bot actif. Mots-clés uniquement : seulement pour un client à qui le bot a déjà parlé (jamais un ami du gérant).
+  Transfert et numéro PFlow inchangés.
 - Tâche planifiée à la minute `/api/cron/reprise` (Vercel Cron) ; aucune migration ; coût négligeable (détails :
   `docs/etape-c/pause-intelligente.md`). Boîte de réception : « le bot reprend à HH:MM si personne ne répond ».
-  552 tests.
+  553 tests.

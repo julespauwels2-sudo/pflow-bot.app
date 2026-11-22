@@ -18,6 +18,9 @@ sur les numéros des restos. Le numéro PFlow (démos) garde la pause de 12 h.
      - si elle ne sait pas, elle propose de commander ou d'attendre l'équipe.
    - **Sans IA** (clé absente) : l'accueil complet.
 5. Après la réponse du bot, le bot est actif jusqu'à la prochaine réponse de l'équipe.
+5 bis. **Numéros « mots-clés uniquement »** (Mexico, AG Pizza, aussi utilisés par le gérant pour ses conversations
+   perso) : la reprise n'a lieu que pour un client à qui le bot a déjà parlé. Un ami qui répond au gérant n'aura
+   jamais de réponse du bot.
 6. Le client n'écrit pas : le bot ne dit rien. Au bout de 12 h, la pause tombe et le bot répond normalement.
 7. **Transfert** (le client a demandé quelqu'un) : inchangé.
 8. **Délai réglable** dans la fiche de chaque resto : « Reprise du bot après une réponse de l'équipe », 10 min par défaut,

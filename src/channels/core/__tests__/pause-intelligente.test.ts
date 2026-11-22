@@ -105,6 +105,8 @@ describe("pause intelligente après une réponse de l'équipe", () => {
 
   it("le client écrit et personne ne répond pendant 10 min : le bot répond, avec la conversation récente ; puis bot actif", async () => {
     const s = await setup();
+    await s.client("Commande", at(-30)); // le bot a déjà parlé à ce client (accueil)
+    s.sent.length = 0;
     await s.equipe("Bonsoir Naomi, je regarde votre commande", T0);
     await s.client("Merci ! Et vous avez des desserts ?", at(2));
     await s.client("Pour 2 personnes", at(3));
@@ -115,7 +117,7 @@ describe("pause intelligente après une réponse de l'équipe", () => {
     expect(s.aiRequests).toHaveLength(1);
     const req = s.aiRequests[0]!;
     expect(req.message).toBe("Merci ! Et vous avez des desserts ?\nPour 2 personnes");
-    expect(req.conversation).toEqual([
+    expect(req.conversation?.slice(-3)).toEqual([
       { role: "equipe", text: "Bonsoir Naomi, je regarde votre commande" },
       { role: "client", text: "Merci ! Et vous avez des desserts ?" },
       { role: "client", text: "Pour 2 personnes" },
@@ -133,7 +135,7 @@ describe("pause intelligente après une réponse de l'équipe", () => {
   });
 
   it("l'équipe a dit « on n'a plus de crème » puis le client demande une recommandation : l'IA le sait et a la consigne", async () => {
-    const s = await setup();
+    const s = await setup({ triggerMode: "toujours" });
     await s.equipe("Désolé, on n'a plus de crème ce soir", T0);
     await s.client("Ok, vous me conseillez quoi alors ?", at(1));
     await s.cron(at(11));
@@ -146,7 +148,7 @@ describe("pause intelligente après une réponse de l'équipe", () => {
   });
 
   it("délai réglable dans la fiche du resto (ici 3 min)", async () => {
-    const s = await setup({ fiche: { repriseMinutes: 3 } });
+    const s = await setup({ fiche: { repriseMinutes: 3 }, triggerMode: "toujours" });
     await s.equipe("Bonsoir", T0);
     await s.client("Vous livrez à Jarry ?", at(1));
     expect((await s.contact()).state.pause?.until).toBe(at(4).toISOString());
@@ -160,6 +162,15 @@ describe("pause intelligente après une réponse de l'équipe", () => {
     expect(s.sent).toEqual([]);
     await s.client("Bonjour", at(12 * 60 + 1));
     expect(texts(s.sent)[0]).toMatch(/^👋 Hello Naomi ! Bienvenue chez Mexico/);
+  });
+
+  it("numéro « mots-clés uniquement » : un ami du gérant (le bot ne lui a jamais parlé) n'a jamais de réponse du bot", async () => {
+    const s = await setup();
+    await s.equipe("Salut, tu viens ce soir ?", T0);
+    await s.client("Grave, j'arrive vers 21h", at(1));
+    expect((await s.cron(at(11))).reprises).toBe(0);
+    expect(s.sent).toEqual([]);
+    expect(s.aiRequests).toEqual([]);
   });
 
   it("transfert inchangé : la tâche ne reprend jamais un client en attente de l'équipe après un transfert", async () => {
