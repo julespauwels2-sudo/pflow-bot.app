@@ -1247,6 +1247,17 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
   en mode mots-clés, la conversation reste ouverte 30 min après chaque réponse du bot (réglable dans la fiche) ; pauses
   prioritaires ; un ami du gérant jamais servi par le bot reste ignoré. 560 tests.
 
+## 22 novembre 2026 — mise à jour de sécurité de Next.js (PR)
+
+- Next.js 16.4.2 → **16.4.5** (et eslint-config-next), même série, sans saut majeur : première version corrigée des
+  7 failles de gravité moyenne qui touchent 16.0.0 à 16.4.4 (avis GitHub GHSA-mfr8-8qww-v76h, GHSA-vc7v-qv4w-wrv8,
+  GHSA-7qx7-33qx-rqx2, GHSA-f3mh-rxg3-f5g2, GHSA-pc58-hwjq-p385, GHSA-rhh4-g77r-r9qj, GHSA-vvgp-ww4w-46vf).
+- Nous concernaient-elles ? Pratiquement pas : pas de « use cache » ni d'unstable_cache, pas de route Edge, hébergement
+  Vercel (pas d'auto-hébergement), aucun usage de next/image. Seul point exposé en théorie : l'optimiseur d'images
+  /_next/image (actif par défaut) et son contournement du refus des SVG.
+- `npm audit` (production) : 0 faille. Restent 2 alertes moyennes dans les outils de développement (vitest, minimatch),
+  jamais déployées. Tests (560), typage, lint et construction : OK.
+
 ## 22 novembre 2026 — notification « transfert » avec son propre son (PR, après celle du CRM)
 
 - Les alertes de transfert (restos, « Parler à Jules ») partent vers l'appli avec `p_type: "transfert"` ; « Je veux le
