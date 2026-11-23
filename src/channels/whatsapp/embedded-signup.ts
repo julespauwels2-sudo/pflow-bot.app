@@ -309,7 +309,17 @@ type ModeleMeta = { id?: string; status: string; motif?: string; categorie?: str
  * n'est plus celui d'aujourd'hui sont modifiés sur place (POST /{id}, même nom) et renvoyés à l'examen. Un modèle
  * approuvé ou en cours d'examen n'est jamais modifié.
  */
-export async function modelesLivraison(target: GraphTarget, wabaId: string, token: string, creer: boolean, corriger = false): Promise<ModelesResultat> {
+/** Modèles créés en même temps sur un compte (Meta accepte 100 créations par heure et par compte). */
+export const CREATIONS_SIMULTANEES = 4;
+
+/** Message d'un modèle pas lancé faute de temps (la page État le montre : cliquer à nouveau crée le reste). */
+export const PAS_LE_TEMPS = "Pas eu le temps dans cet appel : clique à nouveau pour créer le reste.";
+
+/**
+ * `limite` (horodatage en ms) : aucune nouvelle création n'est lancée après elle, pour répondre avant le délai de
+ * Vercel (504 sinon, et la page ne sait plus ce qui a été créé). Les modèles restants sont notés en échec avec PAS_LE_TEMPS.
+ */
+export async function modelesLivraison(target: GraphTarget, wabaId: string, token: string, creer: boolean, corriger = false, limite?: number): Promise<ModelesResultat> {
   const lire = async () => {
     const liste = await graph(target, "GET", `${wabaId}/message_templates?fields=id,name,status,category,rejected_reason,quality_score,language,components&limit=200`, token);
     const parNom = new Map<string, ModeleMeta>();
@@ -332,16 +342,30 @@ export async function modelesLivraison(target: GraphTarget, wabaId: string, toke
   const crees: string[] = [];
   const echecs: ModelesResultat["echecs"] = [];
   if (creer) {
-    for (const t of LIVRAISON_TEMPLATES) {
-      if (avant.has(t.name)) continue;
-      try {
-        const r = await graph(target, "POST", `${wabaId}/message_templates`, token, templatePayload(t));
-        crees.push(t.name);
-        avant.set(t.name, { status: typeof r.status === "string" ? r.status : "PENDING" });
-      } catch (error) {
-        echecs.push({ name: t.name, erreur: (error as Error).message });
+    // Plusieurs créations à la fois (une par une, 11 modèles sur plusieurs comptes dépassaient le délai de Vercel).
+    const aCreer = LIVRAISON_TEMPLATES.filter((t) => !avant.has(t.name));
+    let suivant = 0;
+    const ouvrier = async () => {
+      while (suivant < aCreer.length) {
+        const t = aCreer[suivant++];
+        if (limite !== undefined && Date.now() >= limite) {
+          echecs.push({ name: t.name, erreur: PAS_LE_TEMPS });
+          continue;
+        }
+        try {
+          const r = await graph(target, "POST", `${wabaId}/message_templates`, token, templatePayload(t));
+          crees.push(t.name);
+          avant.set(t.name, { status: typeof r.status === "string" ? r.status : "PENDING" });
+        } catch (error) {
+          echecs.push({ name: t.name, erreur: (error as Error).message });
+        }
       }
-    }
+    };
+    await Promise.all(Array.from({ length: Math.min(CREATIONS_SIMULTANEES, aCreer.length) }, ouvrier));
+    // Ordre stable pour l'affichage (celui de LIVRAISON_TEMPLATES).
+    const rang = (n: string) => LIVRAISON_TEMPLATES.findIndex((t) => t.name === n);
+    crees.sort((a, b) => rang(a) - rang(b));
+    echecs.sort((a, b) => rang(a.name) - rang(b.name));
   }
   const corriges: string[] = [];
   if (corriger) {
