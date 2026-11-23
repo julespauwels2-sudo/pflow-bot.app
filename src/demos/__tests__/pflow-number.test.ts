@@ -16,7 +16,7 @@ import { createGraphClient } from "@/channels/whatsapp/graph";
 import { DEMO_PERMANENTE, PFLOW_DEMO_BUTTONS, PFLOW_FLOWS, PFLOW_TEXTS, pflowBaseBot } from "../pflow-bot";
 import { canAlertQuestion, guide, guideMessage, looksLikeQuestion } from "../parcours";
 import { buildPrompt } from "@/ai/prompt";
-import { matchKeyword, TEXTS, type AiRequest } from "@/engine";
+import { TEXTS, type AiRequest } from "@/engine";
 import { routePflowMessage } from "../router";
 
 const PFLOW_PHONE = "1000000099";
