@@ -1253,3 +1253,19 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
   mien », questions de la démo et alertes techniques restent « prospect » (sans p_type).
 - Si le CRM ne connaît pas encore p_type (404/400), l'alerte repart sans lui : rien ne se perd.
 - Spécification CRM : `docs/etape-c/spec-crm-alerte-transfert.md`. À fusionner après la PR du CRM. 562 tests.
+
+## 23 novembre 2026 — livraison : route `pflow-livraison` (messages de suivi au client)
+
+- **Construit** : `POST /api/webhooks/pflow-livraison`, contrat `docs/livraison/INTERFACE-PFLOW-BOTS.md` du CRM
+  (version 1). Même signature que `/api/webhooks/pflow-order`. Toujours depuis le canal **actif** du resto, jamais le
+  numéro PFlow ni un canal en test (`pas_de_canal`).
+- Fenêtre de 24 h ouverte : message libre avec le bouton lien. Fermée : le **modèle** (nouvel envoi de modèles dans le
+  client Graph, `sendTemplate`), nom logique du CRM traduit vers `_v2`. Meta répond « fenêtre fermée » (131047) : le
+  modèle part dans le même appel. Codes 132xxx → `modele_absent` ; 131026 → `numero_invalide` ; le reste → `erreur_meta`.
+- Idempotence **sans nouvelle table** : `bot_webhook_evenements` (source `pflow_order`, clé `livraison:<idempotence>`),
+  notée avant Meta, résultat gardé pour répondre pareil à un renvoi ; un essai en échec est refait au suivant. Ni texte,
+  ni variables, ni numéro en clair dans le journal. Le message est gardé dans la conversation du resto.
+- 11e modèle **`pflow_livraison_noter`** (bouton « Noter ma livraison », qg110 du CRM) : à créer sur les comptes des
+  restos depuis la page État (« Créer les manquants »). Meta peut le reclasser en Marketing.
+- **Aucun SQL.** À faire par Jules après la fusion : créer les modèles manquants, passer le canal du resto en « actif »,
+  puis allumer « Messages WhatsApp aux clients » dans le QG (Livraison > Paramètres). 578 tests.

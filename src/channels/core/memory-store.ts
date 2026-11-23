@@ -31,9 +31,16 @@ export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: 
       events.set(k, { charge, done: false, at: now(), source, key });
       return true;
     },
-    async finishEvent(source, key, error) {
+    async finishEvent(source, key, error, charge) {
       const e = events.get(`${source}:${key}`);
-      if (e) Object.assign(e, { done: true, error });
+      if (e) Object.assign(e, { done: true, error }, charge === undefined ? {} : { charge });
+    },
+    async getEvent(source, key) {
+      const e = events.get(`${source}:${key}`);
+      return e ? clone({ charge: e.charge, done: e.done, at: e.at, ...(e.error ? { error: e.error } : {}) }) : null;
+    },
+    async releaseEvent(source, key) {
+      events.delete(`${source}:${key}`);
     },
     async canalByAccount(plateforme, accountId) {
       return clone(canalList.find((c) => c.plateforme === plateforme && c.accountId === accountId) ?? null);
