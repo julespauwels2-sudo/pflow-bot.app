@@ -13,7 +13,7 @@ import { chiffrerJeton, cleJetons, dechiffrerJeton } from "@/lib/jetons-chiffres
 import { createMemoryChannelStore } from "@/channels/core/memory-store";
 import { createMemoryConnexionStore, hashJeton, nouveauJetonLien, jetonValide } from "@/channels/core/connexions";
 import { ANCIENS_NOMS_LIVRAISON, LIVRAISON_TEMPLATES, estNumeroTestMeta, nomModeleLivraison, templatePayload } from "../livraison-templates";
-import { terminerConnexion, type MetaAppConfig } from "../embedded-signup";
+import { modelesLivraison, PAS_LE_TEMPS, terminerConnexion, type MetaAppConfig } from "../embedded-signup";
 
 const KEY = randomBytes(32);
 const CLIENT_TOKEN = "EAAG-jeton-du-client-" + randomBytes(6).toString("hex");
@@ -476,5 +476,22 @@ describe("page État : modèles compte par compte, client test hors CRM, débran
     expect(calls[0]).toMatchObject({ method: "DELETE", path: "9876543210/subscribed_apps", auth: `Bearer ${CLIENT_TOKEN}` });
     expect((await rt.store.listCanaux()).find((x) => x.accountId === "1234567890")!.etat).toBe("coupe");
     expect(await rt.connexions.jetonChiffre("9876543210")).toBeNull();
+  });
+});
+
+describe("création des modèles : avant le délai de Vercel (Erreur 504 du 23/11)", () => {
+  it("plusieurs à la fois, tous créés, dans l'ordre de la liste", async () => {
+    const r = await modelesLivraison({ base, version: "v24.0" }, "9876543210", "jeton", true);
+    expect(r.crees).toEqual(LIVRAISON_TEMPLATES.map((t) => t.name));
+    expect(r.echecs).toEqual([]);
+  });
+
+  it("limite dépassée : aucune nouvelle création, les restants signalés pour un nouveau clic", async () => {
+    existingTemplates = ["pflow_livraison_annulee"];
+    const r = await modelesLivraison({ base, version: "v24.0" }, "9876543210", "jeton", true, false, Date.now() - 1);
+    expect(calls.filter((c) => c.method === "POST")).toEqual([]);
+    expect(r.crees).toEqual([]);
+    expect(r.echecs).toHaveLength(LIVRAISON_TEMPLATES.length - 1);
+    expect(r.echecs.every((e) => e.erreur === PAS_LE_TEMPS)).toBe(true);
   });
 });

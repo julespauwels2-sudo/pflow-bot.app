@@ -24,6 +24,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+/** Plus de nouvelle création après ce délai (une création en cours a encore jusqu'à 10 s chez Meta) : sous les 60 s. */
+const LIMITE_MS = 40_000;
+
 type Pret = { error: NextResponse; rt?: undefined } | { error?: undefined; rt: ChannelsRuntime; token: string; base: string; version: string };
 
 async function preparer(request: Request, max: number): Promise<Pret> {
@@ -44,7 +47,7 @@ interface CompteResultat extends Partial<ModelesResultat> {
   error?: string;
 }
 
-async function traiter(p: Extract<Pret, { rt: ChannelsRuntime }>, canal: Canal, creer: boolean, noms: Map<string, string>, corriger = false): Promise<CompteResultat> {
+async function traiter(p: Extract<Pret, { rt: ChannelsRuntime }>, canal: Canal, creer: boolean, noms: Map<string, string>, corriger = false, limite?: number): Promise<CompteResultat> {
   const nom = canal.role === "pflow" ? "PFlow Démo (compte de PFlow)" : noms.get(canal.restaurantId);
   const libelle = `${canal.numeroAffiche ?? canal.accountId}${nom ? ` · ${nom}` : ""}`;
   let token = p.token;
@@ -65,7 +68,7 @@ async function traiter(p: Extract<Pret, { rt: ChannelsRuntime }>, canal: Canal, 
   const erreurs: string[] = [];
   for (const id of ids) {
     try {
-      const r = await modelesLivraison({ base: p.base, version: p.version }, id, token, creer, corriger);
+      const r = await modelesLivraison({ base: p.base, version: p.version }, id, token, creer, corriger, limite);
       return { canalId: canal.id, libelle, compteId: id, jeton, ...r };
     } catch (error) {
       const type = id === canal.messagingAccountId ? "compte de messagerie" : "WABA";
@@ -92,8 +95,8 @@ export async function GET(request: Request) {
   const p = await preparer(request, 20);
   if (p.error) return p.error;
   const noms = await nomsRestos(p.rt);
-  const comptes = [];
-  for (const canal of await canauxResto(p.rt)) comptes.push(await traiter(p, canal, false, noms));
+  // Les comptes en parallèle : une lecture par compte, chacune jusqu'à 10 s chez Meta.
+  const comptes = await Promise.all((await canauxResto(p.rt)).map((canal) => traiter(p, canal, false, noms)));
   return NextResponse.json({ comptes }, { headers: { "cache-control": "no-store" } });
 }
 
@@ -112,8 +115,10 @@ export async function POST(request: Request) {
   const cibles = "tous" in parsed.data ? canaux : canaux.filter((c) => "canalId" in parsed.data && c.id === parsed.data.canalId);
   if (!cibles.length) return NextResponse.json({ error: "Canal inconnu" }, { status: 400 });
   const noms = await nomsRestos(p.rt);
-  const comptes = [];
   const corriger = "corriger" in parsed.data;
-  for (const canal of cibles) comptes.push(await (corriger ? traiter(p, canal, false, noms, true) : traiter(p, canal, true, noms)));
+  // Tous les comptes en parallèle, et plus aucune création lancée après LIMITE_MS : la réponse arrive avant le délai de
+  // Vercel (maxDuration). Créées une par une sur tous les comptes, elles dépassaient ce délai (Erreur 504 du 23/11).
+  const limite = Date.now() + LIMITE_MS;
+  const comptes = await Promise.all(cibles.map((canal) => (corriger ? traiter(p, canal, false, noms, true) : traiter(p, canal, true, noms, false, limite))));
   return NextResponse.json({ comptes });
 }

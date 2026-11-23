@@ -1269,3 +1269,10 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
   restos depuis la page État (« Créer les manquants »). Meta peut le reclasser en Marketing.
 - **Aucun SQL.** À faire par Jules après la fusion : créer les modèles manquants, passer le canal du resto en « actif »,
   puis allumer « Messages WhatsApp aux clients » dans le QG (Livraison > Paramètres). 578 tests.
+
+## 23 novembre 2026 (suite) — « Créer les manquants sur tous les comptes » : Erreur 504
+
+- **Cause** : 34 modèles créés **un par un**, compte après compte, dans un seul appel : plus de 60 s (délai de Vercel).
+- **Corrigé** : comptes en parallèle, 4 créations à la fois par compte, et plus aucune création lancée après 40 s ; les
+  restants sont signalés « Pas eu le temps : clique à nouveau ». La lecture (Actualiser) lit aussi les comptes en parallèle.
+  580 tests.
