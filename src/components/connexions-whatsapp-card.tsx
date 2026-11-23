@@ -149,7 +149,7 @@ export function ConnexionsWhatsAppCard() {
   return (
     <Card
       title="Connecter le WhatsApp d'un resto (Embedded Signup)"
-      description="Le gérant garde son appli WhatsApp Business (coexistence). Il reçoit un lien unique valable 7 jours ; à la fin, son canal est créé en test et les 10 modèles de la livraison sont demandés à Meta. Il paie Meta avec sa propre carte."
+      description="Le gérant garde son appli WhatsApp Business (coexistence). Il reçoit un lien unique valable 7 jours ; à la fin, son canal est créé en test et les 11 modèles de la livraison sont demandés à Meta. Il paie Meta avec sa propre carte."
       className="lg:col-span-2"
     >
       <div className="space-y-3" data-testid="connexions-whatsapp">
@@ -297,6 +297,8 @@ interface CompteModeles {
   corriges?: string[];
   echecs?: { name: string; erreur: string }[];
   error?: string;
+  /** Option livraison du resto : active, inconnue (CRM illisible), ou demo (numéro PFlow). */
+  option?: "active" | "inactive" | "inconnue" | "demo";
 }
 
 const STATUTS: Record<string, { texte: string; ton: "neutral" | "success" | "warning" | "info" }> = {
@@ -309,7 +311,7 @@ const STATUTS: Record<string, { texte: string; ton: "neutral" | "success" | "war
 };
 
 /**
- * Page État : les 10 modèles WhatsApp de la livraison, COMPTE PAR COMPTE (chaque resto a son compte WhatsApp ; un
+ * Page État : les 11 modèles WhatsApp de la livraison, COMPTE PAR COMPTE, pour les restos qui ont l'option livraison (chaque resto a son compte WhatsApp ; un
  * modèle appartient à un compte). Statut chez Meta, et création des manquants (soumis à l'examen), jamais de
  * modification.
  */
@@ -319,14 +321,17 @@ const STATUTS: Record<string, { texte: string; ton: "neutral" | "success" | "war
  */
 export function ModelesLivraisonCard({ canalIds, presentation = false }: { canalIds?: string[]; presentation?: boolean } = {}) {
   const [comptes, setComptes] = useState<CompteModeles[] | null>(null);
+  // Restos sans l'option livraison : pas besoin des modèles, affichés par leur nom seulement.
+  const [sansOption, setSansOption] = useState<{ canalId: string; libelle: string }[]>([]);
   const [erreur, setErreur] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function appel(init?: RequestInit) {
     const token = await accessToken();
     const r = await fetch("/api/etat/modeles-livraison", { ...init, headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) } });
-    const body = (await r.json().catch(() => ({}))) as { comptes?: CompteModeles[]; error?: string };
+    const body = (await r.json().catch(() => ({}))) as { comptes?: CompteModeles[]; sansOption?: { canalId: string; libelle: string }[]; error?: string };
     if (!r.ok) throw new Error(body.error ?? `Erreur ${r.status}`);
+    if (body.sansOption) setSansOption(body.sansOption.filter((c) => !canalIds || canalIds.includes(c.canalId)));
     return (body.comptes ?? []).filter((c) => !canalIds || canalIds.includes(c.canalId));
   }
 
@@ -351,7 +356,7 @@ export function ModelesLivraisonCard({ canalIds, presentation = false }: { canal
   return (
     <Card
       title="Modèles WhatsApp de la livraison (par compte)"
-      description="Chaque numéro de resto a son compte WhatsApp, et un modèle appartient à un compte : il faut les 10 modèles sur le compte de chaque resto. Hors fenêtre de 24 h, la livraison ne peut prévenir le client qu'avec un modèle approuvé."
+      description="Chaque numéro de resto a son compte WhatsApp, et un modèle appartient à un compte : il faut les 11 modèles sur le compte de chaque resto qui a l'option livraison. Hors fenêtre de 24 h, la livraison ne peut prévenir le client qu'avec un modèle approuvé."
       className="lg:col-span-2"
     >
       <div className="space-y-3" data-testid="modeles-livraison">
@@ -366,21 +371,27 @@ export function ModelesLivraisonCard({ canalIds, presentation = false }: { canal
           </Button>
           {comptes && total > 0 && !presentation && (
             <Button
-              onClick={() => void lancer({ method: "POST", body: JSON.stringify({ tous: true }) }, `Créer les ${total} modèles manquants sur tous les comptes et les soumettre à Meta ?`)}
+              onClick={() => void lancer({ method: "POST", body: JSON.stringify({ tous: true }) }, `Créer les ${total} modèles manquants sur les comptes des restos qui ont l'option livraison, et les soumettre à Meta ?`)}
               disabled={busy}
               data-testid="modeles-creer-tous"
             >
-              Créer les {total} manquants sur tous les comptes
+              Créer les {total} manquants (restos avec l&apos;option livraison)
             </Button>
           )}
         </div>
-        {comptes && comptes.length === 0 && <p className="text-sm text-muted">Aucun canal de resto pour l&apos;instant.</p>}
+        {comptes && comptes.length === 0 && <p className="text-sm text-muted">Aucun resto avec l&apos;option livraison pour l&apos;instant.</p>}
+        {comptes && sansOption.length > 0 && (
+          <p className="text-xs text-muted" data-testid="modeles-sans-option">
+            Sans l&apos;option livraison (pas de modèles à créer) : {sansOption.map((c) => c.libelle).join(", ")}. Ils apparaîtront ici dès que l&apos;option sera activée dans le QG.
+          </p>
+        )}
         {comptes?.map((c) => (
           <div key={c.canalId} className="rounded-2xl border border-rule p-3 text-sm">
             <div className="flex flex-wrap items-center gap-2">
               <strong>{c.libelle}</strong>
               {c.compteId && <span className="font-mono text-xs text-muted">compte {c.compteId}</span>}
               <span className="text-xs text-muted">jeton {c.jeton === "client" ? "du client" : "général"}</span>
+              {c.option === "inconnue" && <span className="text-xs text-muted">option livraison non vérifiée</span>}
               {manquants(c) > 0 && (
                 <Button
                   variant="secondary"

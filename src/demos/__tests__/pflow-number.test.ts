@@ -1,3 +1,5 @@
+import { CONSEIL_TEXTS } from "@/engine/conseil";
+import { MINT_BUN_INFOS } from "../mint-bun";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -14,7 +16,7 @@ import { createGraphClient } from "@/channels/whatsapp/graph";
 import { DEMO_PERMANENTE, PFLOW_DEMO_BUTTONS, PFLOW_FLOWS, PFLOW_TEXTS, pflowBaseBot } from "../pflow-bot";
 import { canAlertQuestion, guide, guideMessage, looksLikeQuestion } from "../parcours";
 import { buildPrompt } from "@/ai/prompt";
-import { matchKeyword, TEXTS, type AiRequest } from "@/engine";
+import { TEXTS, type AiRequest } from "@/engine";
 import { routePflowMessage } from "../router";
 
 const PFLOW_PHONE = "1000000099";
@@ -308,10 +310,34 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     expect(titles(msgs[0])).toEqual(["Tester la démo"]);
     expect(await step()).toBe(0);
 
-    // 2. Étape 1/3 : un message, un bouton lien « Je commande ».
+    // 2. Étape 1/3 : l'accueil de Mint Bun, comme celui d'un vrai resto (bouton lien « Je commande »), puis « Besoin
+    //    d'un petit coup de main ? » [⭐ Me conseiller] [ℹ️ Infos pratiques].
     msgs = await press(msgs[0], 0);
-    expect(msgs).toHaveLength(1);
-    expect(msgs[0].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.step1 }, action: { parameters: { display_text: "Je commande", url: DEMO_PERMANENTE.commandeUrl } } });
+    expect(msgs).toHaveLength(2);
+    expect(msgs[0].interactive).toMatchObject({ type: "cta_url", action: { parameters: { display_text: "Je commande", url: DEMO_PERMANENTE.commandeUrl } } });
+    expect(msgs[0].interactive?.body.text).toMatch(/^👋 Hello .*! Bienvenue chez Mint Bun 🍔 Une petite faim \? Composez votre commande en quelques clics 👇$/);
+    expect(msgs[1].interactive?.body.text).toBe(PFLOW_TEXTS.step1Aide);
+    expect(titles(msgs[1])).toEqual(["⭐ Me conseiller", "ℹ️ Infos pratiques"]);
+    expect(await step()).toBe(1);
+    // « Me conseiller » : comme sur un vrai resto, les choix, puis de vrais produits de la carte Mint Bun avec leur prix,
+    // [🛒 Commander] et [🔄 Autre chose] ; toujours l'étape 1.
+    const choix = await press(msgs[1], 0);
+    expect(choix[0].interactive?.body.text).toBe(CONSEIL_TEXTS.intro);
+    expect(titles(choix[0])).toEqual(["🍔 Burgers", "🍵 Matcha & desserts", "🎲 Surprenez-moi"]);
+    const burgers = await press(choix[0], 0);
+    expect(burgers[0].text?.body).toContain("🍔 *Mint Classic* : 12,90 €");
+    expect(burgers[0].text?.body).toContain("*Burger + frites + boisson* : 16,90 €");
+    expect(burgers[1].interactive).toMatchObject({ type: "cta_url", action: { parameters: { display_text: "🛒 Commander", url: DEMO_PERMANENTE.commandeUrl } } });
+    expect(titles(burgers[2])).toEqual(["🔄 Autre chose"]);
+    const encore = await press(burgers[2], 0);
+    expect(encore[0].interactive?.body.text).toBe(CONSEIL_TEXTS.intro);
+    expect(await step()).toBe(1);
+    // « Infos pratiques » : Horaires, Livraison (et retrait), Paiement, puis [😋 Je commande].
+    const infos = await press(msgs[1], 1);
+    expect(titles(infos[0])).toEqual(["🕒 Horaires", "🛵 Livraison", "💳 Paiement"]);
+    const livraison = await press(infos[0], 1);
+    expect(livraison[0].text?.body).toBe(MINT_BUN_INFOS.livraison);
+    expect(livraison[1].interactive).toMatchObject({ type: "cta_url", action: { parameters: { display_text: "😋 Je commande" } } });
     expect(await step()).toBe(1);
 
     // Filet de sécurité : autre chose → rappel de l'étape 1 avec son bouton ; une politesse (« re ») : un bonjour en
@@ -397,9 +423,9 @@ describe("numéro PFlow partagé par les démos (faux Meta)", () => {
     // Plus tard, un autre message : rappel de l'étape 3 (ses boutons).
     clock.now = new Date("2026-11-10T09:00:00Z");
     expect(await say("hmm")).toContain("Étape 3/3");
-    // « bonjour » seul : la démo repart de zéro (accueil puis étape 1/3).
+    // « bonjour » seul : la démo repart de zéro (la présentation PFlow et son bouton).
     expect(await say("bonjour")).toContain("Bienvenue chez PFlow");
-    expect(await step()).toBe(1);
+    expect(await step()).toBe(0);
     // Nom d'une démo personnalisée : toujours prioritaire.
     expect(await say("gwada food")).toContain("Gwada food");
     // 7 jours sans rien : on repart de l'accueil.

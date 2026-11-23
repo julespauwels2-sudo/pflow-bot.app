@@ -13,6 +13,7 @@ import { z } from "zod";
 import { etatEffectif, hashJeton, jetonValide, type Connexion } from "@/channels/core/connexions";
 import { getChannelsRuntime, metaAppConfig, type ChannelsRuntime } from "@/channels/core/runtime";
 import { idsValides, terminerConnexion } from "@/channels/whatsapp/embedded-signup";
+import { optionsLivraison } from "@/channels/whatsapp/livraison-restos";
 import { tooManyRequests } from "@/lib/request-limit";
 
 export const runtime = "nodejs";
@@ -103,6 +104,11 @@ export async function POST(request: Request, ctx: Ctx) {
   const meta = metaAppConfig();
   if (!meta) return NextResponse.json({ error: "Connexion pas encore disponible (configuration Meta incomplète) : contactez PFlow." }, { status: 503 });
 
-  const done = await terminerConnexion({ meta, connexions: a.rt.connexions, store: a.rt.store }, a.c, f.data);
+  const rt = a.rt;
+  const optionLivraison = async (rid: string) => {
+    const slug = (await rt.workspace()).clients.find((c) => c.id === rid)?.orderSlug;
+    return (await optionsLivraison(rt.pageLivraison, new Map([[rid, slug]]))).get(rid) ?? "inconnue";
+  };
+  const done = await terminerConnexion({ meta, connexions: rt.connexions, store: rt.store, optionLivraison }, a.c, f.data);
   return NextResponse.json(vue(done, nomResto), { status: done.etat === "erreur" ? 502 : 200 });
 }

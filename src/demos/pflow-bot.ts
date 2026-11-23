@@ -1,7 +1,8 @@
 /**
  * Bot PFlow de base du numéro PFlow : répond quand aucun mot-clé de démo personnalisée n'a été écrit. Figé
  * dans le code (jamais modifié depuis l'app). Un parcours simple et guidé, un seul chemin, les choix à la fin :
- *   Accueil [Tester la démo] → Étape 1/3 [Je commande] → (« J'ai passé ma commande ✅ ») → Étape 2/3
+ *   Présentation PFlow [Tester la démo] → accueil de Mint Bun comme un vrai resto [Je commande] (« Besoin d'un petit
+ *   coup de main ? » [Me conseiller] [Infos pratiques]) → (« J'ai passé ma commande ✅ ») → Étape 2/3
  *   [Voir le dashboard] → (« J'ai vu le dashboard 👀 ») → Étape 3/3 [Je veux le mien] [Comment ça marche ?].
  * La démo permanente (Mint Bun) se joue sur la vraie page de commande et le vrai Dashboard de démonstration
  * du CRM ; leurs boutons « Retour sur WhatsApp » renvoient ici le texte qui fait passer à l'étape suivante.
@@ -9,6 +10,8 @@
  */
 import { DEFAULT_TIMEZONE, encodeReplyId, type ChoiceOption, type Flow, type FlowNode } from "@/engine";
 import type { LoadedBot } from "@/channels/core/bot-loader";
+import { CONSEIL_TEXTS } from "@/engine/conseil";
+import { MINT_BUN_CONSEILS, MINT_BUN_INFOS } from "./mint-bun";
 
 export const PFLOW_BOT_ID = "pflow";
 
@@ -48,7 +51,13 @@ export const DEMO_PERMANENTE = {
 export const PFLOW_TEXTS = {
   /** Accueil : un seul message, un seul bouton. */
   welcome: `👋 Bienvenue chez PFlow ! Testez en 1 minute ce que vos clients vivraient en commandant chez vous sur WhatsApp. On fait comme si vous étiez client de ${DEMO_PERMANENTE.nomResto}, notre resto de démo 🍔\n\n_Vous avez un code de démo ? Écrivez-le ici._`,
-  step1: "*Étape 1/3* : passez commande comme un client 👇\nVotre confirmation arrivera ici, comme pour un vrai client.",
+  /**
+   * Étape 1 : l'accueil de Mint Bun, sur la même trame que le modèle maître des restos (src/data/template-seed.ts), pour
+   * que le restaurateur voie exactement ce que verrait son client.
+   */
+  step1: `👋 Hello {{prenom}} ! Bienvenue chez ${DEMO_PERMANENTE.nomResto} 🍔 Une petite faim ? Composez votre commande en quelques clics 👇`,
+  step1Aide: "✨ Besoin d'un petit coup de main ? Je peux aussi vous conseiller ou répondre à vos questions 👇",
+
   step2: "*Étape 2/3* : voici ce que le resto voit, en direct 👇\nVotre commande vient d'y arriver.",
   /**
    * Confirmation automatique de la commande de démo (comme un vrai client PFlow Order), envoyée quand le prospect
@@ -104,7 +113,10 @@ export const PFLOW_FLOWS = {
   rappel3: "pflow-rappel-3",
   jules: "pflow-jules",
   commandeDemo: "pflow-commande-demo",
-  /** Remise à zéro (salutation seule en plein parcours, ou bouton « Recommencer la démo ») : accueil, puis étape 1/3. */
+  /** Boutons « Me conseiller » / « Infos pratiques » de l'accueil Mint Bun (étape 1). */
+  conseilDemo: "pflow-conseil-demo",
+  infosDemo: "pflow-infos-demo",
+  /** Remise à zéro (salutation seule en plein parcours, ou bouton « Recommencer la démo ») : la présentation PFlow et son bouton. */
   recommencer: "pflow-recommencer",
   /** Réponse en plein parcours (politesse, IA, ou Jules), puis rappel de l'étape N (pflow-question-0 … -3). */
   question: "pflow-question-",
@@ -155,9 +167,78 @@ const welcome: Flow = {
 
 const step1: Flow = {
   id: PFLOW_FLOWS.etape1,
-  name: "PFlow — étape 1/3 : commander (Mint Bun)",
-  nodes: [trigger(TRY_DEMO_KEYWORDS), message("m", [{ text: PFLOW_TEXTS.step1, buttons: [link("cmd", "Je commande", LIEN_COMMANDE)] }])],
-  edges: [{ id: "e1", source: "t", target: "m" }],
+  name: "PFlow — étape 1/3 : l'accueil de Mint Bun (comme un vrai resto)",
+  nodes: [
+    trigger(TRY_DEMO_KEYWORDS),
+    message("m", [
+      { text: PFLOW_TEXTS.step1, buttons: [link("cmd", "Je commande", LIEN_COMMANDE)] },
+      { text: PFLOW_TEXTS.step1Aide, buttons: [reply("conseil", "⭐ Me conseiller"), reply("infos", "ℹ️ Infos pratiques")] },
+    ]),
+    goto("g_conseil", PFLOW_FLOWS.conseilDemo, 0),
+    goto("g_infos", PFLOW_FLOWS.infosDemo, 200),
+  ],
+  edges: [
+    { id: "e1", source: "t", target: "m" },
+    { id: "e2", source: "m", sourceHandle: "conseil", target: "g_conseil" },
+    { id: "e3", source: "m", sourceHandle: "infos", target: "g_infos" },
+  ],
+};
+
+/**
+ * « ⭐ Me conseiller » de l'accueil Mint Bun, comme sur le modèle maître des restos : les choix, puis 2 ou 3 vrais produits
+ * de la carte avec leur prix, puis [🛒 Commander] et [🔄 Autre chose]. Écrit à l'avance (carte fixe) : aucun appel à l'IA.
+ */
+const conseilDemo: Flow = {
+  id: PFLOW_FLOWS.conseilDemo,
+  name: "PFlow — Me conseiller (Mint Bun)",
+  nodes: [
+    trigger([]),
+    message("m", [
+      {
+        text: CONSEIL_TEXTS.intro,
+        buttons: [reply("burgers", MINT_BUN_CONSEILS.burgers.titre), reply("matcha", MINT_BUN_CONSEILS.matcha.titre), reply("surprise", MINT_BUN_CONSEILS.surprise.titre)],
+      },
+    ]),
+    ...(["burgers", "matcha", "surprise"] as const).flatMap((k, i) => [
+      message(`r_${k}`, [{ text: MINT_BUN_CONSEILS[k].texte }], 200 * i),
+      message(`c_${k}`, [{ text: CONSEIL_TEXTS.commanderTexte, buttons: [link("cmd", CONSEIL_TEXTS.commander, LIEN_COMMANDE)] }, { text: CONSEIL_TEXTS.autreTexte, buttons: [reply("autre", CONSEIL_TEXTS.autre)] }], 200 * i + 100),
+      goto(`g_${k}`, PFLOW_FLOWS.conseilDemo, 200 * i + 100),
+    ]),
+  ],
+  edges: [
+    { id: "e1", source: "t", target: "m" },
+    ...(["burgers", "matcha", "surprise"] as const).flatMap((k) => [
+      { id: `e_${k}`, source: "m", sourceHandle: k, target: `r_${k}` },
+      { id: `e_${k}_c`, source: `r_${k}`, target: `c_${k}` },
+      { id: `e_${k}_g`, source: `c_${k}`, sourceHandle: "autre", target: `g_${k}` },
+    ]),
+  ],
+};
+
+/**
+ * « ℹ️ Infos pratiques » de l'accueil Mint Bun, comme sur le modèle maître : Horaires, Livraison (et retrait),
+ * Paiement, puis l'invitation à commander. Infos fictives mais crédibles (src/demos/mint-bun.ts).
+ */
+const infosDemo: Flow = {
+  id: PFLOW_FLOWS.infosDemo,
+  name: "PFlow — Infos pratiques (Mint Bun)",
+  nodes: [
+    trigger([]),
+    message("m", [{ text: "ℹ️ *Infos pratiques*\nQue souhaitez-vous savoir ?", buttons: [reply("horaires", "🕒 Horaires"), reply("livraison", "🛵 Livraison"), reply("paiement", "💳 Paiement")] }]),
+    message("h", [{ text: MINT_BUN_INFOS.horaires }], -100),
+    message("l", [{ text: MINT_BUN_INFOS.livraison }], 100),
+    message("p", [{ text: MINT_BUN_INFOS.paiement }], 300),
+    message("cta", [{ text: "Ça vous tente ? 😋 Vous pouvez passer votre commande directement ici 👇", buttons: [link("cmd", "😋 Je commande", LIEN_COMMANDE)] }], 500),
+  ],
+  edges: [
+    { id: "e1", source: "t", target: "m" },
+    { id: "e2", source: "m", sourceHandle: "horaires", target: "h" },
+    { id: "e3", source: "m", sourceHandle: "livraison", target: "l" },
+    { id: "e4", source: "m", sourceHandle: "paiement", target: "p" },
+    { id: "e5", source: "h", target: "cta" },
+    { id: "e6", source: "l", target: "cta" },
+    { id: "e7", source: "p", target: "cta" },
+  ],
 };
 
 const step2: Flow = {
@@ -191,16 +272,17 @@ const step3: Flow = {
 };
 
 /**
- * Remise à zéro de la démo : l'accueil Mint Bun (sans son bouton), puis directement l'étape 1/3 avec « Je commande ».
- * Lancé par le parcours (src/demos/parcours.ts) sur une salutation seule, ou par le bouton de l'étape 3.
+ * Remise à zéro de la démo : la présentation PFlow et son bouton [Tester la démo], comme au premier contact. Le
+ * prospect relance lui-même la démo (accueil de Mint Bun). Lancé par le parcours (src/demos/parcours.ts) sur une
+ * salutation seule, ou par le bouton « Recommencer la démo » de l'étape 3.
  */
 const restart: Flow = {
   id: PFLOW_FLOWS.recommencer,
   name: "PFlow — recommencer la démo",
-  nodes: [trigger([]), message("m", [{ text: PFLOW_TEXTS.welcome }]), goto("g", PFLOW_FLOWS.etape1, 0)],
+  nodes: [trigger([]), message("m", [{ text: PFLOW_TEXTS.welcome, buttons: [reply("tester", "Tester la démo")] }]), goto("g_tester", PFLOW_FLOWS.etape1, 0)],
   edges: [
     { id: "e1", source: "t", target: "m" },
-    { id: "e2", source: "m", target: "g" },
+    { id: "e2", source: "m", sourceHandle: "tester", target: "g_tester" },
   ],
 };
 
@@ -341,7 +423,7 @@ const wantMine: Flow = {
 export function pflowBaseBot(): LoadedBot {
   return {
     client: { id: PFLOW_BOT_ID, nomResto: "PFlow", orderSlug: "", timezone: DEFAULT_TIMEZONE, vars: { ...DEFAULT_DEMO_VARS } },
-    flows: structuredClone([welcome, restart, step1, step2, step3, remind1, remind2, remind3, howItWorks, wantMine, talkToJules, ...questionFlows, answerBeforeDemo, orderConfirmed]),
+    flows: structuredClone([welcome, restart, step1, conseilDemo, infosDemo, step2, step3, remind1, remind2, remind3, howItWorks, wantMine, talkToJules, ...questionFlows, answerBeforeDemo, orderConfirmed]),
     infoSheet: { horaires: [] },
     aiDailyLimit: 0,
   };

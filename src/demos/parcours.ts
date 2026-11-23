@@ -4,7 +4,7 @@
  * L'étape du contact (0 = accueil vu, 1, 2, 3) est gardée avec lui (ContactDemo.parcours). Avant de passer le
  * message au moteur :
  * - une SALUTATION SEULE (« Bonjour », « salut ! », « démo », « recommencer », avec ou sans ponctuation ni emoji) en plein
- *   parcours remet la démo à zéro : accueil Mint Bun, puis étape 1/3 (flux « recommencer ») ; l'étape 3 programmée est
+ *   parcours remet la démo à zéro : présentation PFlow et son bouton (flux « recommencer ») ; l'étape 3 programmée est
  *   annulée. Avec une vraie question en plus (« bonjour vous livrez ? »), c'est une question (ci-dessous) ;
  * - un mot-clé du bot PFlow (« tester la démo », « J'ai passé ma commande ✅ », « je veux le mien »…) lance
  *   directement son flux, quelle que soit la longueur du message ;
@@ -70,7 +70,10 @@ const STEP_OF_FLOW: Record<string, ParcoursEtape> = {
   [PFLOW_FLOWS.etape3]: 3,
   [PFLOW_FLOWS.commentCaMarche]: 3,
   [PFLOW_FLOWS.mien]: 3,
-  [PFLOW_FLOWS.recommencer]: 1,
+  // Recommencer : la présentation PFlow et son bouton (étape 0) ; l'accueil Mint Bun vient au clic.
+  [PFLOW_FLOWS.recommencer]: 0,
+  [PFLOW_FLOWS.conseilDemo]: 1,
+  [PFLOW_FLOWS.infosDemo]: 1,
 };
 
 /** Salutations qui, SEULES (avec ou sans ponctuation ni emoji), relancent la démo depuis le début. */

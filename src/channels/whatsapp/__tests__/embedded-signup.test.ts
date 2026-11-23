@@ -13,7 +13,7 @@ import { chiffrerJeton, cleJetons, dechiffrerJeton } from "@/lib/jetons-chiffres
 import { createMemoryChannelStore } from "@/channels/core/memory-store";
 import { createMemoryConnexionStore, hashJeton, nouveauJetonLien, jetonValide } from "@/channels/core/connexions";
 import { ANCIENS_NOMS_LIVRAISON, LIVRAISON_TEMPLATES, estNumeroTestMeta, nomModeleLivraison, templatePayload } from "../livraison-templates";
-import { terminerConnexion, type MetaAppConfig } from "../embedded-signup";
+import { modelesLivraison, PAS_LE_TEMPS, terminerConnexion, type MetaAppConfig } from "../embedded-signup";
 
 const KEY = randomBytes(32);
 const CLIENT_TOKEN = "EAAG-jeton-du-client-" + randomBytes(6).toString("hex");
@@ -93,7 +93,7 @@ describe("jetons chiffrés", () => {
 });
 
 describe("modèles de la livraison", () => {
-  it("les 10 noms du contrat, textes conformes aux règles de Meta, bouton « Suivre ma livraison »", () => {
+  it("les 11 noms du contrat, textes conformes aux règles de Meta, bouton « Suivre ma livraison »", () => {
     expect(LIVRAISON_TEMPLATES.map((t) => t.name).sort()).toEqual(
       [
         "pflow_livraison_confirmee_v2",
@@ -106,6 +106,7 @@ describe("modèles de la livraison", () => {
         "pflow_livraison_aucun_livreur",
         "pflow_livraison_annulee",
         "pflow_livraison_annulee_sans_livreur",
+        "pflow_livraison_noter",
       ].sort(),
     );
     for (const t of LIVRAISON_TEMPLATES) {
@@ -134,6 +135,9 @@ describe("modèles de la livraison", () => {
         { type: "BUTTONS", buttons: [{ type: "URL", text: "Suivre ma livraison", url: "https://order.pflow.fr/suivi/{{1}}", example: ["https://order.pflow.fr/suivi/0b6f2c1e-1111-4222-8333-444455556666"] }] },
       ],
     });
+    // qg110 : « Noter ma livraison », même URL de suivi.
+    const noter = templatePayload(LIVRAISON_TEMPLATES.find((t) => t.name === "pflow_livraison_noter")!);
+    expect((noter.components as { type: string; buttons?: { text: string; url: string }[] }[])[1].buttons![0]).toMatchObject({ text: "Noter ma livraison", url: "https://order.pflow.fr/suivi/{{1}}" });
   });
 });
 
@@ -150,7 +154,8 @@ describe("fin du parcours (coexistence)", () => {
     const { connexions, store, c } = await nouvelleConnexion();
     // Un ancien nom refusé (ignoré) et une version _v2 déjà là : seuls les 9 autres sont créés, jamais l'ancien nom.
     existingTemplates = ["pflow_livraison_confirmee", "pflow_livraison_confirmee_v2", "autre_modele"];
-    const done = await terminerConnexion({ meta: meta(), connexions, store, chiffrer: (t) => chiffrerJeton(t, KEY) }, c, input);
+    // Le resto a l'option livraison : les modèles sont créés.
+    const done = await terminerConnexion({ meta: meta(), connexions, store, chiffrer: (t) => chiffrerJeton(t, KEY), optionLivraison: async (rid) => (rid === "resto-1" ? "active" : "inactive") }, c, input);
 
     expect(done.etat).toBe("terminee");
     expect(done.erreur).toBeUndefined();
@@ -163,7 +168,7 @@ describe("fin du parcours (coexistence)", () => {
       "POST 1234567890/smb_app_data",
       "POST 1234567890/smb_app_data",
       "GET 9876543210/message_templates",
-      ...Array(9).fill("POST 9876543210/message_templates"),
+      ...Array(10).fill("POST 9876543210/message_templates"),
     ]);
     // Le secret de l'app seulement pour l'échange du code ; ensuite le jeton du client, en en-tête.
     expect(calls[0].path).toContain("client_secret=secret-app");
@@ -186,7 +191,19 @@ describe("fin du parcours (coexistence)", () => {
     const [canal] = await store.listCanaux();
     expect(canal).toMatchObject({ restaurantId: "resto-1", accountId: "1234567890", wabaId: "9876543210", etat: "test", coexistence: true, role: "resto", testNumeros: ["590690938108"] });
     expect(done.canalId).toBe(canal.id);
-    expect(done.etapes.find((e) => e.etape === "modeles_livraison")?.detail).toBe("9 créé(s), 1 déjà là");
+    expect(done.etapes.find((e) => e.etape === "modeles_livraison")?.detail).toBe("10 créé(s), 1 déjà là");
+  });
+
+  it("resto SANS l'option livraison (ou option inconnue) : aucun modèle créé, étape notée réussie", async () => {
+    for (const optionLivraison of [async () => "inactive" as const, async () => "inconnue" as const, undefined]) {
+      calls.length = 0;
+      const { connexions, store, c } = await nouvelleConnexion();
+      const done = await terminerConnexion({ meta: meta(), connexions, store, chiffrer: (t) => chiffrerJeton(t, KEY), ...(optionLivraison ? { optionLivraison } : {}) }, c, input);
+      expect(done.etat).toBe("terminee");
+      expect(done.erreur).toBeUndefined();
+      expect(calls.some((x) => x.path.includes("message_templates"))).toBe(false);
+      expect(done.etapes.find((e) => e.etape === "modeles_livraison")).toMatchObject({ ok: true, detail: expect.stringContaining("pas créés") });
+    }
   });
 
   it("deuxième connexion du même numéro : canal existant laissé tel quel (aucun doublon)", async () => {
@@ -339,14 +356,14 @@ describe("page État : modèles compte par compte, client test hors CRM, débran
 
     const lu = await (await route.GET(new Request("http://localhost/x"))).json();
     const compte = lu.comptes.find((c: { canalId: string; compteId: string }) => c.compteId === "4170754433058228");
-    expect(compte.etat).toHaveLength(10);
+    expect(compte.etat).toHaveLength(11);
     expect(compte.jeton).toBe("general");
     // Le canal de démo du mode mémoire n'a pas d'identifiant Meta : signalé, pas d'appel.
     expect(lu.comptes.find((c: { error?: string }) => c.error?.includes("Aucun identifiant"))).toBeTruthy();
 
     calls.length = 0;
     const cree = await (await route.POST(new Request("http://localhost/x", { method: "POST", body: JSON.stringify({ canalId: compte.canalId }) }))).json();
-    expect(cree.comptes[0].crees).toHaveLength(8);
+    expect(cree.comptes[0].crees).toHaveLength(9);
     const posts = calls.filter((c) => c.method === "POST");
     expect(posts.every((c) => c.path === "4170754433058228/message_templates" && c.auth === "Bearer jeton-general-pflow")).toBe(true);
     expect(posts.map((c) => c.body?.name)).not.toContain("pflow_livraison_en_route_v2");
@@ -423,10 +440,10 @@ describe("page État : modèles compte par compte, client test hors CRM, débran
     const cree = await (await route.POST(new Request("http://localhost/x", { method: "POST", headers, body: JSON.stringify({ canalId: compte.canalId }) }))).json();
     const noms = calls.filter((c) => c.method === "POST").map((c) => c.body?.name as string);
     expect(noms.sort()).toEqual(
-      ["pflow_livraison_arrive_bientot_v2", "pflow_livraison_livreur_arrive_v2", "pflow_livraison_livreur_trouve_v2", "pflow_livraison_paiement_refuse", "pflow_livraison_annulee_sans_livreur"].sort(),
+      ["pflow_livraison_arrive_bientot_v2", "pflow_livraison_livreur_arrive_v2", "pflow_livraison_livreur_trouve_v2", "pflow_livraison_paiement_refuse", "pflow_livraison_annulee_sans_livreur", "pflow_livraison_noter"].sort(),
     );
     expect(noms.some((n) => ANCIENS_NOMS_LIVRAISON.includes(n))).toBe(false);
-    expect(cree.comptes[0].crees).toHaveLength(5);
+    expect(cree.comptes[0].crees).toHaveLength(6);
   });
 
   it("correspondance des noms : nom logique du CRM → nom chez Meta (_v2) ; nom à jour gardé ; inconnu : null", () => {
@@ -472,5 +489,22 @@ describe("page État : modèles compte par compte, client test hors CRM, débran
     expect(calls[0]).toMatchObject({ method: "DELETE", path: "9876543210/subscribed_apps", auth: `Bearer ${CLIENT_TOKEN}` });
     expect((await rt.store.listCanaux()).find((x) => x.accountId === "1234567890")!.etat).toBe("coupe");
     expect(await rt.connexions.jetonChiffre("9876543210")).toBeNull();
+  });
+});
+
+describe("création des modèles : avant le délai de Vercel (Erreur 504 du 23/11)", () => {
+  it("plusieurs à la fois, tous créés, dans l'ordre de la liste", async () => {
+    const r = await modelesLivraison({ base, version: "v24.0" }, "9876543210", "jeton", true);
+    expect(r.crees).toEqual(LIVRAISON_TEMPLATES.map((t) => t.name));
+    expect(r.echecs).toEqual([]);
+  });
+
+  it("limite dépassée : aucune nouvelle création, les restants signalés pour un nouveau clic", async () => {
+    existingTemplates = ["pflow_livraison_annulee"];
+    const r = await modelesLivraison({ base, version: "v24.0" }, "9876543210", "jeton", true, false, Date.now() - 1);
+    expect(calls.filter((c) => c.method === "POST")).toEqual([]);
+    expect(r.crees).toEqual([]);
+    expect(r.echecs).toHaveLength(LIVRAISON_TEMPLATES.length - 1);
+    expect(r.echecs.every((e) => e.erreur === PAS_LE_TEMPS)).toBe(true);
   });
 });

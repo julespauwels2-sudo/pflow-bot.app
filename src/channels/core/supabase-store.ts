@@ -123,9 +123,17 @@ export function createSupabaseChannelStore(db: Db, newId: () => string = () => c
       const { conflict } = await db.insert("bot_webhook_evenements", { source, cle_unique: `${source}:${key}`, charge });
       return !conflict;
     },
-    async finishEvent(source, key, error) {
+    async finishEvent(source, key, error, charge) {
       const [row] = await db.select("bot_webhook_evenements", "*", eq("cle_unique", `${source}:${key}`));
-      if (row) await db.upsert("bot_webhook_evenements", [{ ...row, traite_le: new Date().toISOString(), erreur: error ?? null }], "id");
+      if (row) await db.upsert("bot_webhook_evenements", [{ ...row, traite_le: new Date().toISOString(), erreur: error ?? null, ...(charge === undefined ? {} : { charge }) }], "id");
+    },
+    async getEvent(source, key) {
+      const [row] = await db.select("bot_webhook_evenements", "charge, recu_le, traite_le, erreur", eq("cle_unique", `${source}:${key}`));
+      if (!row) return null;
+      return { charge: row.charge, done: Boolean(row.traite_le), at: iso(row.recu_le)!, ...(row.erreur ? { error: String(row.erreur) } : {}) };
+    },
+    async releaseEvent(source, key) {
+      await db.remove("bot_webhook_evenements", "cle_unique", [`${source}:${key}`]);
     },
     async canalByAccount(plateforme, accountId) {
       const rows = await db.select("bot_canaux", "*", eq("compte_id", accountId));
