@@ -27,8 +27,9 @@ export interface DbReader {
 /**
  * Seules fonctions du CRM que le bot peut appeler : elles ne font que lire (vérifié dans leur code).
  * paiement_mode_public(rid) : « choix » | « obligatoire » | « non », le paiement en ligne en vigueur.
+ * page_livraison(p_slug) (qg83, « stable », que des select) : { actif, … }, la livraison PFlow de ce resto.
  */
-export const READ_ONLY_FUNCTIONS = ["paiement_mode_public"] as const;
+export const READ_ONLY_FUNCTIONS = ["paiement_mode_public", "page_livraison"] as const;
 export type ReadOnlyFunction = (typeof READ_ONLY_FUNCTIONS)[number];
 
 export function assertReadOnlyFunction(name: string): asserts name is ReadOnlyFunction {

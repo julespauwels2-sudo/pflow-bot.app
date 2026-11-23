@@ -1,5 +1,5 @@
 /**
- * Les 10 modèles WhatsApp de la livraison (contrat docs/livraison/INTERFACE-PFLOW-BOTS.md du CRM, §8 ; textes exacts :
+ * Les 11 modèles WhatsApp de la livraison (contrat docs/livraison/INTERFACE-PFLOW-BOTS.md du CRM, §8 ; textes exacts :
  * docs/livraison/GUIDE-MODELES-WHATSAPP.md). Catégorie Utility, langue fr, bouton « Suivre ma livraison » vers
  * https://order.pflow.fr/suivi/{{1}}. Créés automatiquement sur le compte WhatsApp de chaque resto connecté par
  * l'Embedded Signup (POST /{waba-id}/message_templates). Les noms et l'ordre des variables ne doivent jamais changer.
@@ -22,6 +22,8 @@ export interface LivraisonTemplate {
    * modèle reste chez Meta (un nom supprimé est bloqué plusieurs semaines) et n'est plus jamais utilisé.
    */
   remplace?: string;
+  /** Texte du bouton lien, s'il n'est pas « Suivre ma livraison » (même URL /suivi/{{1}}). */
+  bouton?: string;
 }
 
 export const SUIVI_URL = "https://order.pflow.fr/suivi/{{1}}";
@@ -85,6 +87,14 @@ export const LIVRAISON_TEMPLATES: LivraisonTemplate[] = [
     body: "Chez {{1}}, l'heure de livraison de votre commande n° {{2}} a été mise à jour. Nouvelle heure d'arrivée estimée : {{3}}. Le détail est disponible sur la page de suivi.",
     examples: ["Bokit An Nou", "1042", "12h52"],
   },
+  {
+    // qg110 du CRM (22/11) : 15 min après la livraison, la note du client (docs/livraison/PFLOW-BOTS-NOTER-MA-LIVRAISON.md).
+    // Meta peut le reclasser en Marketing (il demande un avis) : à voir avec Jules si c'est le cas.
+    name: "pflow_livraison_noter",
+    body: "Chez {{1}}, votre commande n° {{2}} a bien été livrée. Bon appétit ! Comment s'est passée la livraison ? Donnez votre note avec le bouton ci-dessous (2 minutes, facultatif).",
+    examples: ["Bokit An Nou", "1042"],
+    bouton: "Noter ma livraison",
+  },
 ];
 
 /** Anciens noms chez Meta (refusés, remplacés par une version _v2) : ignorés partout, jamais utilisés ni recréés. */
@@ -103,7 +113,7 @@ export function nomModeleLivraison(nom: string): string | null {
 export function templateComponents(t: LivraisonTemplate): Record<string, unknown>[] {
   return [
     { type: "BODY", text: t.body, example: { body_text: [t.examples] } },
-    { type: "BUTTONS", buttons: [{ type: "URL", text: SUIVI_BOUTON, url: SUIVI_URL, example: [SUIVI_EXEMPLE] }] },
+    { type: "BUTTONS", buttons: [{ type: "URL", text: t.bouton ?? SUIVI_BOUTON, url: SUIVI_URL, example: [SUIVI_EXEMPLE] }] },
   ];
 }
 

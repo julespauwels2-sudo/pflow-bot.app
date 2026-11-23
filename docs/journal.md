@@ -1255,3 +1255,77 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
 - Non-lus côté serveur par utilisateur (bot_lectures) : synchronisés ordinateur / iPhone ; mémoire locale tant que la
   table n'existe pas.
 - Migration `20261122010000_bot_inbox_lectures_realtime.sql` montrée, non appliquée. 563 tests.
+
+## 22 novembre 2026 — tournées récurrentes de Cookies (PR, migration non appliquée)
+
+- Fiche : planning hebdomadaire de tournées (lieux et créneau par jour, pré-rempli par les horaires du CRM) ;
+  tournées datées = exceptions (ajout, ou « Annulée » pour un lieu ou toute la journée).
+- L'IA reçoit le planning et les prochains passages (14 jours, exceptions comprises) et répond seule ; transfert si le
+  lieu n'y est pas (règles de la fiche). Infos pratiques : mêmes passages. Sans planning hebdo : inchangé.
+- Stockage partagé avec le CRM : `bot_tournees_hebdo` + `bot_tournees.annulee` + règle « son resto » (`a_acces`).
+  Migration montrée, non appliquée ; spécification CRM : `docs/etape-c/spec-crm-tournees-hebdo.md`. 569 tests.
+
+## 22 novembre 2026 — démo Mint Bun : présentation PFlow, puis accueil comme un vrai resto (PR)
+
+- Premier contact ET redémarrage (salutation seule en plein parcours, bouton « Recommencer la démo ») : la présentation
+  PFlow et son bouton [Tester la démo]. Avant, le redémarrage enchaînait présentation (sans bouton) et étape 1.
+- [Tester la démo] : l'accueil de Mint Bun sur la même trame que le modèle maître des restos (« 👋 Hello … ! Bienvenue
+  chez Mint Bun 🍔 Une petite faim ?… » [Je commande], puis « ✨ Besoin d'un petit coup de main ? » [⭐ Me conseiller]
+  [ℹ️ Infos pratiques]). Décision de Jules : la démo marche pour de vrai. « Me conseiller » : choix (Burgers, Matcha &
+  desserts, Surprenez-moi), puis 2 ou 3 vrais produits de la carte Mint Bun avec leur prix, [🛒 Commander],
+  [🔄 Autre chose]. « Infos pratiques » : horaires, livraison et retrait (adresse fictive signalée), paiement, puis
+  [😋 Je commande]. Carte copiée de celle du CRM (`src/demos/mint-bun.ts`), écrite à l'avance : aucun appel à l'IA.
+  Les questions libres restent sur l'IA de la démo PFlow.
+- Étapes 2/3 et 3/3, dashboard, « Je veux le mien », rappels : inchangés. Restos : inchangés (seul le bot PFlow de base
+  change). Captures du simulateur : `docs/etape-c/captures-demo-ordre/`. 560 tests.
+
+## 22 novembre 2026 — mise à jour de sécurité de Next.js (PR)
+
+- Next.js 16.4.2 → **16.4.5** (et eslint-config-next), même série, sans saut majeur : première version corrigée des
+  7 failles de gravité moyenne qui touchent 16.0.0 à 16.4.4 (avis GitHub GHSA-mfr8-8qww-v76h, GHSA-vc7v-qv4w-wrv8,
+  GHSA-7qx7-33qx-rqx2, GHSA-f3mh-rxg3-f5g2, GHSA-pc58-hwjq-p385, GHSA-rhh4-g77r-r9qj, GHSA-vvgp-ww4w-46vf).
+- Nous concernaient-elles ? Pratiquement pas : pas de « use cache » ni d'unstable_cache, pas de route Edge, hébergement
+  Vercel (pas d'auto-hébergement), aucun usage de next/image. Seul point exposé en théorie : l'optimiseur d'images
+  /_next/image (actif par défaut) et son contournement du refus des SVG.
+- `npm audit` (production) : 0 faille. Restent 2 alertes moyennes dans les outils de développement (vitest, minimatch),
+  jamais déployées. Tests (560), typage, lint et construction : OK.
+
+## 22 novembre 2026 — notification « transfert » avec son propre son (PR, après celle du CRM)
+
+- Les alertes de transfert (restos, « Parler à Jules ») partent vers l'appli avec `p_type: "transfert"` ; « Je veux le
+  mien », questions de la démo et alertes techniques restent « prospect » (sans p_type).
+- Si le CRM ne connaît pas encore p_type (404/400), l'alerte repart sans lui : rien ne se perd.
+- Spécification CRM : `docs/etape-c/spec-crm-alerte-transfert.md`. À fusionner après la PR du CRM. 562 tests.
+
+## 23 novembre 2026 — livraison : route `pflow-livraison` (messages de suivi au client)
+
+- **Construit** : `POST /api/webhooks/pflow-livraison`, contrat `docs/livraison/INTERFACE-PFLOW-BOTS.md` du CRM
+  (version 1). Même signature que `/api/webhooks/pflow-order`. Toujours depuis le canal **actif** du resto, jamais le
+  numéro PFlow ni un canal en test (`pas_de_canal`).
+- Fenêtre de 24 h ouverte : message libre avec le bouton lien. Fermée : le **modèle** (nouvel envoi de modèles dans le
+  client Graph, `sendTemplate`), nom logique du CRM traduit vers `_v2`. Meta répond « fenêtre fermée » (131047) : le
+  modèle part dans le même appel. Codes 132xxx → `modele_absent` ; 131026 → `numero_invalide` ; le reste → `erreur_meta`.
+- Idempotence **sans nouvelle table** : `bot_webhook_evenements` (source `pflow_order`, clé `livraison:<idempotence>`),
+  notée avant Meta, résultat gardé pour répondre pareil à un renvoi ; un essai en échec est refait au suivant. Ni texte,
+  ni variables, ni numéro en clair dans le journal. Le message est gardé dans la conversation du resto.
+- 11e modèle **`pflow_livraison_noter`** (bouton « Noter ma livraison », qg110 du CRM) : à créer sur les comptes des
+  restos depuis la page État (« Créer les manquants »). Meta peut le reclasser en Marketing.
+- **Aucun SQL.** À faire par Jules après la fusion : créer les modèles manquants, passer le canal du resto en « actif »,
+  puis allumer « Messages WhatsApp aux clients » dans le QG (Livraison > Paramètres). 578 tests.
+
+## 23 novembre 2026 (suite) — « Créer les manquants sur tous les comptes » : Erreur 504
+
+- **Cause** : 34 modèles créés **un par un**, compte après compte, dans un seul appel : plus de 60 s (délai de Vercel).
+- **Corrigé** : comptes en parallèle, 4 créations à la fois par compte, et plus aucune création lancée après 40 s ; les
+  restants sont signalés « Pas eu le temps : clique à nouveau ». La lecture (Actualiser) lit aussi les comptes en parallèle.
+  580 tests.
+
+## 23 novembre 2026 (suite) — modèles de la livraison : seulement les restos avec l'option
+
+- Demande de Jules : ne créer les modèles que pour les restos qui ont l'option livraison.
+- Option lue dans le CRM par `page_livraison(slug)` (qg83, la fonction de la page de commande : lecture seule, ajoutée
+  aux fonctions autorisées) ; « actif » = option activée, Stripe prêt, zone ouverte.
+- **Page État** : seuls ces restos (et le numéro PFlow des démos) sont lus chez Meta et touchés par le bouton global ;
+  les autres sont listés par leur nom. Lecture impossible : le compte reste affiché (« option non vérifiée »).
+- **Embedded Signup** : les modèles ne sont créés à la connexion que si l'option est déjà active ; sinon, depuis la page
+  État une fois l'option activée. Aucun SQL. 584 tests.

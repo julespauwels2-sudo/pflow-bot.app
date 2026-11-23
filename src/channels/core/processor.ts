@@ -325,10 +325,13 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
   const flowsStarted = result.events.flatMap((e) => (e.type === "flow_started" ? [e.flowId] : []));
   for (const e of result.events) {
     if (e.type !== "handoff") continue;
+    const motif = handoffMotif(e.source, flowsStarted);
     const alert = await sendAlert(alertDeps, {
       canal,
       resto: alertResto,
-      motif: handoffMotif(e.source, flowsStarted),
+      motif,
+      // Son dédié aux transferts dans l'appli ; « Je veux le mien » reste une alerte « prospect ».
+      type: motif === "Je veux le mien" ? "prospect" : "transfert",
       contactName: event.profileName,
       contactId: event.waId,
       extrait: e.message,

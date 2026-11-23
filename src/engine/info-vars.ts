@@ -3,7 +3,7 @@
  * calculées dans le fuseau du client. Utilisées par le moteur et par l'aperçu de l'éditeur.
  */
 import { WEEKDAY_LABELS, localTime, parseHhmm } from "./time";
-import type { DeliveryDays, DeliveryRound, InfoSheet, IsoWeekday, TimeRange } from "./types";
+import type { DeliveryDays, DeliveryRound, InfoSheet, IsoWeekday, TimeRange, WeeklyRound } from "./types";
 
 const DAYS: IsoWeekday[] = [1, 2, 3, 4, 5, 6, 7];
 const capitalize = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
@@ -94,6 +94,56 @@ export function upcomingRounds(rounds: DeliveryRound[] | undefined, now: Date, t
     .sort((x, y) => (x.date + (x.de ?? "")).localeCompare(y.date + (y.de ?? "")));
 }
 
+/** Passages calculés à partir du planning hebdomadaire : les 14 prochains jours. */
+export const PASSAGES_JOURS = 14;
+
+const addDays = (date: string, days: number) => {
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(Date.UTC(y!, m! - 1, d! + days)).toISOString().slice(0, 10);
+};
+const isoWeekdayOf = (date: string): IsoWeekday => {
+  const [y, m, d] = date.split("-").map(Number);
+  return (((new Date(Date.UTC(y!, m! - 1, d!)).getUTCDay() + 6) % 7) + 1) as IsoWeekday;
+};
+const sameLieu = (a: string, b: string) => a.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === b.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+/**
+ * Prochains passages : planning hebdomadaire (14 prochains jours) + tournées datées ajoutées − passages annulés (une
+ * tournée datée « annulée » retire le passage de ce lieu ce jour-là ; lieu « * » : toute la journée). Sans planning
+ * hebdomadaire : les tournées datées à venir, comme avant.
+ */
+export function computedRounds(sheet: Pick<InfoSheet, "tournees" | "tourneesHebdo">, now: Date, timezone: string): DeliveryRound[] {
+  const dated = sheet.tournees ?? [];
+  const added = dated.filter((r) => !r.annulee);
+  const weekly = sheet.tourneesHebdo ?? [];
+  if (!weekly.length) return upcomingRounds(added, now, timezone);
+  const cancels = dated.filter((r) => r.annulee);
+  const today = localTime(now, timezone).date;
+  const out: DeliveryRound[] = [];
+  for (let i = 0; i < PASSAGES_JOURS; i++) {
+    const date = addDays(today, i);
+    const jour = isoWeekdayOf(date);
+    for (const w of weekly) {
+      if (w.jour !== jour || !w.lieux.trim()) continue;
+      if (cancels.some((c) => c.date === date && (c.lieux.trim() === "*" || sameLieu(c.lieux, w.lieux)))) continue;
+      out.push({ id: `hebdo-${w.id}-${date}`, date, ...(w.de ? { de: w.de } : {}), ...(w.a ? { a: w.a } : {}), lieux: w.lieux });
+    }
+  }
+  return upcomingRounds([...out, ...added], now, timezone);
+}
+
+/** « • *Mardi* (8h – 12h) : Jarry » : le planning de chaque semaine, du lundi au dimanche. */
+export function formatWeeklyRounds(weekly: WeeklyRound[]): string {
+  return [...weekly]
+    .filter((w) => w.lieux.trim())
+    .sort((a, b) => a.jour - b.jour || (a.de ?? "").localeCompare(b.de ?? ""))
+    .map((w) => {
+      const when = w.de && w.a ? ` (${formatHour(w.de)} – ${formatHour(w.a)})` : w.de ? ` (à partir de ${formatHour(w.de)})` : "";
+      return `• *${capitalize(WEEKDAY_LABELS[w.jour])}*${when} : ${w.lieux.trim()}`;
+    })
+    .join("\n");
+}
+
 export const MAX_LISTED_ROUNDS = 5;
 
 /** « • *Mardi 10 novembre* (11h30 – 13h) : Jarry — Orange, EDF » */
@@ -111,8 +161,8 @@ export const RETRAIT_SEULEMENT_TEXT = "Pas de livraison pour le moment : les com
 
 /** Fiche d'infos sans les tournées passées : c'est elle que reçoit l'IA. */
 export function withUpcomingRounds(sheet: InfoSheet, now: Date, timezone: string): InfoSheet {
-  if (!sheet.tournees?.length) return sheet;
-  return { ...sheet, tournees: upcomingRounds(sheet.tournees, now, timezone) };
+  if (!sheet.tournees?.length && !sheet.tourneesHebdo?.length) return sheet;
+  return { ...sheet, tournees: computedRounds(sheet, now, timezone) };
 }
 
 export function formatServiceModes(sheet: Pick<InfoSheet, "livraison" | "retrait">): string {
@@ -241,7 +291,7 @@ export function formatPayment(sheet: InfoSheet): string {
 
 export function infoSheetVariables(sheet: InfoSheet, now: Date, timezone: string): InfoVariables {
   const horaires = formatWeeklyHours(sheet);
-  const upcoming = upcomingRounds(sheet.tournees, now, timezone);
+  const upcoming = computedRounds(sheet, now, timezone);
   const fixed = fixedDeliveryDays(sheet);
   const zonesText = sheet.zonesLivraison?.trim() ?? "";
   let zones: string;

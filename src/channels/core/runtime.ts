@@ -77,6 +77,8 @@ export interface ChannelsRuntime {
   workspace(): Promise<WorkspaceData>;
   /** « Connecter votre WhatsApp » (Embedded Signup) : demandes de connexion et jetons chiffrés des clients. */
   connexions: ConnexionStore;
+  /** Lecture de page_livraison(slug) dans le CRM (option livraison d'un resto) ; absente en mode mémoire. */
+  pageLivraison?: (slug: string) => Promise<unknown>;
 }
 
 /**
@@ -159,6 +161,7 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
   let connexions: ConnexionStore;
   let repos: Repositories;
   let workspace: () => Promise<WorkspaceData>;
+  let pageLivraison: ((slug: string) => Promise<unknown>) | undefined;
 
   if (storeMode() === "memory") {
     const data = await demoWorkspace();
@@ -190,6 +193,7 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
     store = createSupabaseChannelStore(db);
     connexions = createSupabaseConnexionStore(db);
     workspace = () => workspaceStore.read();
+    pageLivraison = (slug) => db.readFunction!("page_livraison", { p_slug: slug });
   }
 
   // WhatsApp : chaque numéro connecté par l'Embedded Signup envoie avec le jeton de SON client (gardé chiffré) ; les
@@ -225,6 +229,7 @@ async function buildRuntime(): Promise<ChannelsRuntime> {
     connexions,
     senders: sendersByPlatform,
     workspace,
+    ...(pageLivraison ? { pageLivraison } : {}),
     deps(plateforme) {
       const graph = sendersByPlatform[plateforme];
       if (!graph) return null;
