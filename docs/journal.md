@@ -1257,3 +1257,10 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
   /_next/image (actif par défaut) et son contournement du refus des SVG.
 - `npm audit` (production) : 0 faille. Restent 2 alertes moyennes dans les outils de développement (vitest, minimatch),
   jamais déployées. Tests (560), typage, lint et construction : OK.
+
+## 22 novembre 2026 — notification « transfert » avec son propre son (PR, après celle du CRM)
+
+- Les alertes de transfert (restos, « Parler à Jules ») partent vers l'appli avec `p_type: "transfert"` ; « Je veux le
+  mien », questions de la démo et alertes techniques restent « prospect » (sans p_type).
+- Si le CRM ne connaît pas encore p_type (404/400), l'alerte repart sans lui : rien ne se perd.
+- Spécification CRM : `docs/etape-c/spec-crm-alerte-transfert.md`. À fusionner après la PR du CRM. 562 tests.
