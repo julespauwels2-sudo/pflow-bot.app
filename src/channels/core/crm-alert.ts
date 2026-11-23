@@ -39,8 +39,16 @@ export function crmAlertConfigFromEnv(env: (name: string) => string): CrmAlertCo
   return { url: urlBots, serviceKey: cleBots };
 }
 
+/**
+ * Type de notification de l'appli (son dédié côté CRM) : « transfert » pour un client qui attend l'équipe,
+ * « prospect » pour le reste (« Je veux le mien », questions de la démo, alertes techniques).
+ */
+export type AppAlertType = "prospect" | "transfert";
+
 export interface CrmAlertInput {
   motif: string;
+  /** Absent : « prospect » (comme avant). */
+  type?: AppAlertType;
   /** Resto du canal (ou « PFlow Démo ») : dans le titre, pour savoir d'où vient l'alerte. */
   resto?: string;
   contactName?: string;
@@ -74,17 +82,18 @@ export async function sendCrmAlert(config: CrmAlertConfig | undefined, input: Cr
     const appareils = await f(`${config.url}/rest/v1/app_appareils?actif=eq.true&select=id&limit=1`, { headers, signal: AbortSignal.timeout(4000) });
     if (!appareils.ok) return { statut: "echec", erreur: `appli : appareils ${appareils.status}` };
     const actifs = (await appareils.json().catch(() => [])) as unknown[];
-    const res = await f(`${config.url}/rest/v1/rpc/app_alerte_bot`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        p_cle: `${input.motif === "Je veux le mien" ? "mien" : "alerte"}:${input.conversationId || input.contactId || "pflow"}:${now.toISOString()}`,
-        p_titre: titre,
-        p_corps: corps,
-        p_url: "/crm#bots",
-      }),
-      signal: AbortSignal.timeout(4000),
-    });
+    const body = {
+      p_cle: `${input.motif === "Je veux le mien" ? "mien" : "alerte"}:${input.conversationId || input.contactId || "pflow"}:${now.toISOString()}`,
+      p_titre: titre,
+      p_corps: corps,
+      p_url: "/crm#bots",
+    };
+    const post = (payload: Record<string, unknown>) =>
+      f(`${config.url}/rest/v1/rpc/app_alerte_bot`, { method: "POST", headers, body: JSON.stringify(payload), signal: AbortSignal.timeout(4000) });
+    // Type « transfert » (son dédié) : seulement si le CRM connaît p_type. Ancienne fonction (404, fonction introuvable
+    // avec ce paramètre) : l'alerte repart sans p_type, en « prospect », comme avant. « prospect » : jamais de p_type.
+    let res = await post(input.type === "transfert" ? { ...body, p_type: "transfert" } : body);
+    if (input.type === "transfert" && (res.status === 404 || res.status === 400)) res = await post(body);
     if (!res.ok) return { statut: "echec", erreur: `appli : file ${res.status}` };
     const id = await res.json().catch(() => null);
     if (id === null || id === undefined) return { statut: "coupee", erreur: "appli : notifications coupées dans le QG" };

@@ -83,6 +83,11 @@ Ordre validé par Jules. Rien ne passe à l'étape suivante sans sa validation.
 - **22 novembre** : PR n° 41 « pause intelligente » + conversation ouverte 30 min en mode mots-clés (bug de Mexico) :
   à fusionner après la n° 40, avec l'accord de Jules. Après fusion : vérifier dans Vercel que la tâche `/api/cron/reprise` tourne (Settings → Cron Jobs).
 
+- **22 novembre** : six chantiers en PR séparées (ordre de Jules) : 1. Next.js 16.4.5 (sécurité) ; 2. démo Mint Bun
+  (présentation PFlow puis accueil comme un vrai resto) ; 3. tournées récurrentes de Cookies ; 4. lien direct vers un
+  produit (après la PR du CRM) ; 5. boîte de réception (recherche, temps réel, non-lus serveur) ; 6. type de
+  notification « transfert » (après la PR du CRM).
+
 ### Après le 22 novembre
 - PR « Envoi rapide depuis la boîte de réception » (21 novembre) : réponse affichée tout de suite puis confirmée,
   liste 3 fois plus rapide ; **à ne fusionner qu'après « bascules terminées »** (accord de Jules).

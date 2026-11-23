@@ -149,7 +149,7 @@ export function ConnexionsWhatsAppCard() {
   return (
     <Card
       title="Connecter le WhatsApp d'un resto (Embedded Signup)"
-      description="Le gérant garde son appli WhatsApp Business (coexistence). Il reçoit un lien unique valable 7 jours ; à la fin, son canal est créé en test et les 10 modèles de la livraison sont demandés à Meta. Il paie Meta avec sa propre carte."
+      description="Le gérant garde son appli WhatsApp Business (coexistence). Il reçoit un lien unique valable 7 jours ; à la fin, son canal est créé en test et les 11 modèles de la livraison sont demandés à Meta. Il paie Meta avec sa propre carte."
       className="lg:col-span-2"
     >
       <div className="space-y-3" data-testid="connexions-whatsapp">
@@ -351,7 +351,7 @@ export function ModelesLivraisonCard({ canalIds, presentation = false }: { canal
   return (
     <Card
       title="Modèles WhatsApp de la livraison (par compte)"
-      description="Chaque numéro de resto a son compte WhatsApp, et un modèle appartient à un compte : il faut les 10 modèles sur le compte de chaque resto. Hors fenêtre de 24 h, la livraison ne peut prévenir le client qu'avec un modèle approuvé."
+      description="Chaque numéro de resto a son compte WhatsApp, et un modèle appartient à un compte : il faut les 11 modèles sur le compte de chaque resto. Hors fenêtre de 24 h, la livraison ne peut prévenir le client qu'avec un modèle approuvé."
       className="lg:col-span-2"
     >
       <div className="space-y-3" data-testid="modeles-livraison">
