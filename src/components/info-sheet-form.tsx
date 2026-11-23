@@ -7,11 +7,13 @@ import {
   formatPayment,
   infoSheetVariables,
   upcomingRounds,
+  computedRounds,
   type DeliveryDays,
   type DeliveryRound,
   type InfoSheet,
   type IsoWeekday,
   type TimeRange,
+  type WeeklyRound,
 } from "@/engine";
 import { BUILTIN_VARIABLES } from "@/editor/variables";
 import { errorText, getRepositories } from "@/data/browser";
@@ -283,6 +285,71 @@ function CrmTag() {
   return <span className="ml-2 rounded-full bg-blue/10 px-2 py-0.5 text-[11px] font-semibold text-bleu">CRM</span>;
 }
 
+const JOURS_SEMAINE: { jour: IsoWeekday; label: string }[] = [
+  { jour: 1, label: "Lundi" },
+  { jour: 2, label: "Mardi" },
+  { jour: 3, label: "Mercredi" },
+  { jour: 4, label: "Jeudi" },
+  { jour: 5, label: "Vendredi" },
+  { jour: 6, label: "Samedi" },
+  { jour: 7, label: "Dimanche" },
+];
+
+/**
+ * Planning hebdomadaire des tournées (chaque semaine, un ou plusieurs lieux par jour, avec un créneau pré-rempli par les
+ * horaires du CRM). Table bot_tournees_hebdo, que la gérante peut aussi modifier depuis le CRM.
+ */
+function WeeklyRoundsEditor({ sheet, onChange }: { sheet: InfoSheet; onChange: (s: InfoSheet) => void }) {
+  const weekly = sheet.tourneesHebdo ?? [];
+  const set = (tourneesHebdo: WeeklyRound[]) => onChange({ ...sheet, tourneesHebdo: tourneesHebdo.length ? tourneesHebdo : undefined });
+  const update = (id: string, patch: Partial<WeeklyRound>) => set(weekly.map((w) => (w.id === id ? { ...w, ...patch } : w)));
+  const add = (jour: IsoWeekday) => {
+    const plage = sheet.horaires.find((h) => h.jour === jour)?.plages[0];
+    set([...weekly, { id: newRoundId(), jour, lieux: "", ...(plage ? { de: plage.de, a: plage.a } : {}) }]);
+  };
+  return (
+    <div className="space-y-2" data-testid="tournees-hebdo">
+      <h4 className="text-sm font-semibold">Planning hebdomadaire de tournées</h4>
+      <p className="text-xs text-muted">
+        Chaque semaine, le même lieu (zone ou entreprise) le même jour. Le créneau est pré-rempli avec les horaires du CRM. L&apos;IA calcule les
+        prochains passages (planning + exceptions ci-dessous) et répond seule ; elle transfère si le lieu n&apos;y est pas.
+      </p>
+      <ul className="space-y-2">
+        {JOURS_SEMAINE.map(({ jour, label }) => {
+          const ofDay = weekly.filter((w) => w.jour === jour);
+          return (
+            <li key={jour} className="flex flex-wrap items-start gap-2 rounded-xl border border-line p-2">
+              <span className="w-24 shrink-0 pt-1 text-sm font-semibold">{label}</span>
+              <div className="min-w-0 flex-1 space-y-1.5">
+                {ofDay.map((w) => (
+                  <div key={w.id} className="flex flex-wrap items-center gap-2">
+                    <input
+                      aria-label={`Lieu du ${label.toLowerCase()}`}
+                      placeholder="Jarry — zone industrielle, Orange…"
+                      className="min-w-40 flex-1 rounded-lg border border-line px-2 py-1 text-sm"
+                      value={w.lieux}
+                      onChange={(e) => update(w.id, { lieux: e.target.value })}
+                    />
+                    <input type="time" aria-label="Début" className="rounded-lg border border-line px-2 py-1 text-sm" value={w.de ?? ""} onChange={(e) => update(w.id, { de: e.target.value || undefined })} />
+                    <span className="text-muted">→</span>
+                    <input type="time" aria-label="Fin" className="rounded-lg border border-line px-2 py-1 text-sm" value={w.a ?? ""} onChange={(e) => update(w.id, { a: e.target.value || undefined })} />
+                    <button type="button" aria-label="Retirer ce lieu" className="px-1 text-alerte" onClick={() => set(weekly.filter((x) => x.id !== w.id))}>
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <button type="button" className="text-xs font-semibold text-rose underline" onClick={() => add(jour)}>
+                  + Ajouter un lieu
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 /** Livraison : zones fixes, ou tournées à des dates précises (planning). */
 function DeliveryEditor({
   sheet,
@@ -298,10 +365,12 @@ function DeliveryEditor({
   const minute = useCurrentMinute();
   const rounds = sheet.tournees ?? [];
   const upcoming = minute === null ? null : new Set(upcomingRounds(rounds, new Date(minute * 60_000), timezone).map((r) => r.id));
+  // Passages à venir (planning hebdomadaire + exceptions) : c'est eux qui font passer le resto « sur planning ».
+  const passages = minute === null ? null : computedRounds(sheet, new Date(minute * 60_000), timezone).length;
   const fixed = fixedDeliveryDays(sheet);
   // Sans choix explicite, des tournées à venir font passer le resto « sur planning ».
-  const mode = sheet.livraisonMode ?? (upcoming?.size ? "planning" : "zones");
-  const forcedPlanning = !fixed.length && mode === "zones" && Boolean(upcoming?.size);
+  const mode = sheet.livraisonMode ?? (passages ? "planning" : "zones");
+  const forcedPlanning = !fixed.length && mode === "zones" && Boolean(passages);
   const past = upcoming ? rounds.filter((r) => !upcoming.has(r.id)) : [];
   const setRounds = (tournees: DeliveryRound[]) => onChange({ ...sheet, tournees });
   const updateRound = (id: string, patch: Partial<DeliveryRound>) => setRounds(rounds.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -324,8 +393,18 @@ function DeliveryEditor({
 
       <FixedDaysEditor sheet={sheet} onChange={onChange} />
 
+      <WeeklyRoundsEditor sheet={sheet} onChange={onChange} />
+
       <div className="space-y-2">
-        <h4 className="text-sm font-semibold">{fixed.length ? "Livraisons exceptionnelles (dates précises)" : "Tournées datées"}</h4>
+        <h4 className="text-sm font-semibold">
+          {sheet.tourneesHebdo?.length ? "Exceptions au planning (dates précises)" : fixed.length ? "Livraisons exceptionnelles (dates précises)" : "Tournées datées"}
+        </h4>
+        {Boolean(sheet.tourneesHebdo?.length) && (
+          <p className="text-xs text-muted">
+            Une tournée ajoutée un jour précis, ou un passage du planning <strong>annulé</strong> ce jour-là (cochez « Annulée » ; lieu « * » : toute la
+            journée, ex. jour férié).
+          </p>
+        )}
         <p className="text-xs text-muted">
           {fixed.length
             ? "En plus des jours fixes : une livraison à une date donnée (ex. un samedi de fête). Elles s'affichent après les jours fixes."
@@ -344,11 +423,21 @@ function DeliveryEditor({
                 <input type="time" aria-label="Fin" className="rounded-lg border border-line px-2 py-1 text-sm" value={r.a ?? ""} onChange={(e) => updateRound(r.id, { a: e.target.value || undefined })} />
                 <input
                   aria-label="Zone ou entreprises desservies"
-                  placeholder="Jarry — Orange, EDF…"
-                  className="min-w-40 flex-1 rounded-lg border border-line px-2 py-1 text-sm"
+                  placeholder={r.annulee ? "Lieu annulé, ou * pour toute la journée" : "Jarry — Orange, EDF…"}
+                  className={`min-w-40 flex-1 rounded-lg border border-line px-2 py-1 text-sm ${r.annulee ? "line-through" : ""}`}
                   value={r.lieux}
                   onChange={(e) => updateRound(r.id, { lieux: e.target.value })}
                 />
+                <label className="flex items-center gap-1 text-xs font-semibold">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-pink"
+                    checked={Boolean(r.annulee)}
+                    onChange={(e) => updateRound(r.id, { annulee: e.target.checked || undefined })}
+                    data-testid="tournee-annulee"
+                  />
+                  Annulée
+                </label>
                 {isPast && <span className="text-xs font-semibold text-muted">passée</span>}
                 <button type="button" aria-label="Supprimer la tournée" className="px-1 text-alerte" onClick={() => setRounds(rounds.filter((x) => x.id !== r.id))}>
                   ✕
@@ -393,7 +482,7 @@ function DeliveryEditor({
       )}
       {forcedPlanning && (
         <p className="rounded-xl bg-pink/10 p-2 text-xs text-ink" data-testid="planning-force">
-          Il reste {upcoming!.size} tournée{upcoming!.size > 1 ? "s" : ""} à venir : le bot reste « sur planning » tant qu&apos;elles existent
+          Il reste {passages} passage{passages! > 1 ? "s" : ""} à venir : le bot reste « sur planning » tant qu&apos;elles existent
           (les zones ne sont pas annoncées). Supprime-les pour revenir aux zones.
         </p>
       )}

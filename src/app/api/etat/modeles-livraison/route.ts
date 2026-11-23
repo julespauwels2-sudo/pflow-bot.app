@@ -2,8 +2,11 @@
  * Les 10 modèles WhatsApp de la livraison, COMPTE PAR COMPTE : chaque numéro de resto (canal WhatsApp « resto ») a son
  * compte WhatsApp ; un modèle appartient à un compte, il faut donc les 10 sur le compte de chaque resto. Administrateurs
  * du bot seulement.
- * - GET : pour chaque compte, le statut des 10 chez Meta (APPROVED, PENDING, REJECTED…, ou absent) ;
+ * - GET : pour chaque compte, le statut des 11 chez Meta (APPROVED, PENDING, REJECTED…, ou absent) ;
  * - POST { canalId } ou { tous: true } : crée les manquants et les soumet à l'examen ;
+ * Seulement les restos qui ont l'option livraison (demande de Jules du 23/11), et le numéro PFlow (démos) : les autres
+ * sont listés à part (sansOption), sans lecture chez Meta, et « tous » ne les touche pas. Option inconnue (lecture du
+ * CRM impossible) : le compte reste affiché.
  * - POST { canalId, corriger: true } : modifie les modèles REFUSÉS de ce compte avec le texte d'aujourd'hui (même nom),
  *   renvoyés à l'examen. Jamais un modèle approuvé ou en cours d'examen.
  * Jeton : celui du client si le numéro a été connecté par l'Embedded Signup, sinon le jeton général (WHATSAPP_TOKEN).
@@ -15,6 +18,7 @@ import { z } from "zod";
 import { getChannelsRuntime, readWhatsAppConfig, type ChannelsRuntime } from "@/channels/core/runtime";
 import type { Canal } from "@/channels/core/types";
 import { modelesLivraison, type ModelesResultat } from "@/channels/whatsapp/embedded-signup";
+import { canauxAvecLivraison, optionsLivraison, type OptionLivraison } from "@/channels/whatsapp/livraison-restos";
 import { estNumeroTestMeta } from "@/channels/whatsapp/livraison-templates";
 import { dechiffrerJeton } from "@/lib/jetons-chiffres";
 import { tooManyRequests } from "@/lib/request-limit";
@@ -23,6 +27,9 @@ import { checkBotAdmin } from "@/lib/server-auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+/** Plus de nouvelle création après ce délai (une création en cours a encore jusqu'à 10 s chez Meta) : sous les 60 s. */
+const LIMITE_MS = 40_000;
 
 type Pret = { error: NextResponse; rt?: undefined } | { error?: undefined; rt: ChannelsRuntime; token: string; base: string; version: string };
 
@@ -44,7 +51,7 @@ interface CompteResultat extends Partial<ModelesResultat> {
   error?: string;
 }
 
-async function traiter(p: Extract<Pret, { rt: ChannelsRuntime }>, canal: Canal, creer: boolean, noms: Map<string, string>, corriger = false): Promise<CompteResultat> {
+async function traiter(p: Extract<Pret, { rt: ChannelsRuntime }>, canal: Canal, creer: boolean, noms: Map<string, string>, corriger = false, limite?: number): Promise<CompteResultat> {
   const nom = canal.role === "pflow" ? "PFlow Démo (compte de PFlow)" : noms.get(canal.restaurantId);
   const libelle = `${canal.numeroAffiche ?? canal.accountId}${nom ? ` · ${nom}` : ""}`;
   let token = p.token;
@@ -65,7 +72,7 @@ async function traiter(p: Extract<Pret, { rt: ChannelsRuntime }>, canal: Canal, 
   const erreurs: string[] = [];
   for (const id of ids) {
     try {
-      const r = await modelesLivraison({ base: p.base, version: p.version }, id, token, creer, corriger);
+      const r = await modelesLivraison({ base: p.base, version: p.version }, id, token, creer, corriger, limite);
       return { canalId: canal.id, libelle, compteId: id, jeton, ...r };
     } catch (error) {
       const type = id === canal.messagingAccountId ? "compte de messagerie" : "WABA";
@@ -83,18 +90,31 @@ async function canauxResto(rt: ChannelsRuntime) {
   );
 }
 
-async function nomsRestos(rt: ChannelsRuntime) {
+async function restos(rt: ChannelsRuntime) {
   const data = await rt.workspace().catch(() => null);
-  return new Map((data?.clients ?? []).map((c) => [c.id, c.nomResto]));
+  const clients = data?.clients ?? [];
+  return { noms: new Map(clients.map((c) => [c.id, c.nomResto])), slugs: new Map(clients.map((c) => [c.id, c.orderSlug])) };
 }
+
+/** Les canaux qui ont besoin des modèles (option livraison ou numéro PFlow), et les autres. */
+async function trier(rt: ChannelsRuntime, canaux: Canal[], slugs: Map<string, string>) {
+  const ids = new Map(canaux.filter((c) => (c.role ?? "resto") === "resto").map((c) => [c.restaurantId, slugs.get(c.restaurantId)]));
+  const options = await optionsLivraison(rt.pageLivraison, ids);
+  return { ...canauxAvecLivraison(canaux, options), options };
+}
+
+const optionDe = (canal: Canal, options: Map<string, OptionLivraison>): OptionLivraison | "demo" =>
+  canal.role === "pflow" ? "demo" : (options.get(canal.restaurantId) ?? "inconnue");
 
 export async function GET(request: Request) {
   const p = await preparer(request, 20);
   if (p.error) return p.error;
-  const noms = await nomsRestos(p.rt);
-  const comptes = [];
-  for (const canal of await canauxResto(p.rt)) comptes.push(await traiter(p, canal, false, noms));
-  return NextResponse.json({ comptes }, { headers: { "cache-control": "no-store" } });
+  const { noms, slugs } = await restos(p.rt);
+  const { avec, sans, options } = await trier(p.rt, await canauxResto(p.rt), slugs);
+  // Les comptes en parallèle : une lecture par compte, chacune jusqu'à 10 s chez Meta.
+  const comptes = await Promise.all(avec.map(async (canal) => ({ ...(await traiter(p, canal, false, noms)), option: optionDe(canal, options) })));
+  const sansOption = sans.map((c) => ({ canalId: c.id, libelle: `${c.numeroAffiche ?? c.accountId}${noms.get(c.restaurantId) ? ` · ${noms.get(c.restaurantId)}` : ""}` }));
+  return NextResponse.json({ comptes, sansOption }, { headers: { "cache-control": "no-store" } });
 }
 
 const corps = z.union([
@@ -109,11 +129,17 @@ export async function POST(request: Request) {
   const parsed = corps.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Demande incomplète" }, { status: 400 });
   const canaux = await canauxResto(p.rt);
-  const cibles = "tous" in parsed.data ? canaux : canaux.filter((c) => "canalId" in parsed.data && c.id === parsed.data.canalId);
-  if (!cibles.length) return NextResponse.json({ error: "Canal inconnu" }, { status: 400 });
-  const noms = await nomsRestos(p.rt);
-  const comptes = [];
+  const { noms, slugs } = await restos(p.rt);
+  // « Tous » : seulement les comptes qui ont besoin des modèles (option livraison, numéro PFlow). Un compte précis : au choix de Jules.
+  const { avec, options } = await trier(p.rt, canaux, slugs);
+  const cibles = "tous" in parsed.data ? avec : canaux.filter((c) => "canalId" in parsed.data && c.id === parsed.data.canalId);
+  if (!cibles.length) return NextResponse.json({ error: "tous" in parsed.data ? "Aucun resto avec l'option livraison" : "Canal inconnu" }, { status: 400 });
   const corriger = "corriger" in parsed.data;
-  for (const canal of cibles) comptes.push(await (corriger ? traiter(p, canal, false, noms, true) : traiter(p, canal, true, noms)));
+  // Tous les comptes en parallèle, et plus aucune création lancée après LIMITE_MS : la réponse arrive avant le délai de
+  // Vercel (maxDuration). Créées une par une sur tous les comptes, elles dépassaient ce délai (Erreur 504 du 23/11).
+  const limite = Date.now() + LIMITE_MS;
+  const comptes = await Promise.all(
+    cibles.map(async (canal) => ({ ...(await (corriger ? traiter(p, canal, false, noms, true) : traiter(p, canal, true, noms, false, limite))), option: optionDe(canal, options) })),
+  );
   return NextResponse.json({ comptes });
 }

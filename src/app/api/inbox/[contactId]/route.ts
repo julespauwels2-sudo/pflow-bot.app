@@ -32,6 +32,7 @@ const actionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("reprendre") }),
   z.object({ type: z.literal("relancer") }),
   z.object({ type: z.literal("repondre"), texte: z.string().max(4096) }),
+  z.object({ type: z.literal("lu"), at: z.string().datetime({ offset: true }) }),
 ]);
 
 /**
@@ -49,6 +50,10 @@ export async function POST(request: Request, { params }: Params) {
   if (!contact || !visible) return NextResponse.json({ error: "Conversation introuvable" }, { status: 404 });
   const parsed = actionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Action invalide" }, { status: 400 });
+  // Conversation lue sur cet appareil : enregistrée pour l'utilisateur (non-lus synchronisés entre appareils).
+  if (parsed.data.type === "lu") {
+    return NextResponse.json({ ok: await store.markLu(access.userId, contactId, new Date(parsed.data.at).toISOString()) });
+  }
   try {
     const result = await applyInboxAction({ store, senders: access.runtime.senders, now: new Date(), contact, canaux }, contactId, parsed.data);
     return NextResponse.json({

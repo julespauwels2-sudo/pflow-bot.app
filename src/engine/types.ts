@@ -108,6 +108,21 @@ export interface DeliveryRound {
   a?: string;
   /** Zone ou entreprises desservies. */
   lieux: string;
+  /**
+   * Exception au planning hebdomadaire : ce jour-là, le passage à `lieux` est ANNULÉ (« * » : toute la journée). Une
+   * tournée datée sans ce drapeau est un passage ajouté.
+   */
+  annulee?: boolean;
+}
+
+/** Passage récurrent du planning hebdomadaire (chaque semaine, ce jour-là). Table bot_tournees_hebdo, partagée avec le CRM. */
+export interface WeeklyRound {
+  id: string;
+  jour: IsoWeekday;
+  lieux: string;
+  /** Créneau facultatif, "HH:MM" (pré-rempli avec les horaires du CRM). */
+  de?: string;
+  a?: string;
 }
 
 /** Jours de livraison fixes d'une zone, chaque semaine (ex. Jarry : mardi, mercredi, vendredi). */
@@ -137,6 +152,8 @@ export interface InfoSheet {
    */
   livraisonMode?: "zones" | "planning";
   tournees?: DeliveryRound[];
+  /** Planning hebdomadaire de tournées (récurrent) ; les tournées datées servent d'exceptions (ajout ou annulation). */
+  tourneesHebdo?: WeeklyRound[];
   /**
    * Jours fixes par zone, chaque semaine. S'il y en a, ils sont toujours annoncés ; des tournées
    * datées à venir s'y ajoutent comme livraisons exceptionnelles.

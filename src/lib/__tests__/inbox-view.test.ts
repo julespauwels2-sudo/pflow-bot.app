@@ -78,4 +78,12 @@ describe("boîte de réception : messages du bot avec boutons", () => {
       "⏸ En pause : l'équipe a répondu (si le client réécrit, le bot reprend après 10 min sans réponse)",
     );
   });
+
+  it("non lu : la lecture la plus récente gagne, celle de cet appareil ou celle du serveur (autre appareil)", () => {
+    const state: SeenState = { initAt: "2026-11-09T09:00:00Z", seen: {} };
+    const c = conv("a", "2026-11-09T10:00:00Z");
+    expect(isUnread(c, state)).toBe(true);
+    expect(isUnread({ ...c, luJusqua: "2026-11-09T10:00:00Z" }, state)).toBe(false); // lu sur l'iPhone
+    expect(isUnread({ ...c, luJusqua: "2026-11-09T09:30:00Z" }, markSeen(state, "a", "2026-11-09T10:00:00Z"))).toBe(false);
+  });
 });

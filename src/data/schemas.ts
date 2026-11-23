@@ -132,8 +132,13 @@ export const infoSheetSchema = z.object({
         de: hhmm.optional(),
         a: hhmm.optional(),
         lieux: z.string(),
+        annulee: z.boolean().optional(),
       }),
     )
+    .optional(),
+  tourneesHebdo: z
+    .array(z.object({ id, jour: weekday, lieux: z.string().max(300), de: hhmm.optional(), a: hhmm.optional() }))
+    .max(70)
     .optional(),
   joursLivraison: z
     .array(z.object({ id, zone: z.string(), jours: z.array(weekday), note: z.string().optional() }))

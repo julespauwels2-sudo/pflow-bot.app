@@ -4,7 +4,9 @@ import { tooManyRequests } from "@/lib/request-limit";
 import { checkAccesBoite } from "@/lib/server-auth";
 import { getChannelsRuntime, readInstagramConfig, readWhatsAppConfig, type ChannelsRuntime } from "./runtime";
 
-export type InboxAccess = { ok: true; runtime: ChannelsRuntime; role: "admin" | "examinateur" } | { ok: false; response: NextResponse };
+export type InboxAccess =
+  | { ok: true; runtime: ChannelsRuntime; role: "admin" | "examinateur"; /** Utilisateur connecté (« local » sans Supabase) : non-lus synchronisés. */ userId: string }
+  | { ok: false; response: NextResponse };
 
 /** Conversations visibles par un examinateur : seulement celles du numéro PFlow (démos). */
 export function canauxVisibles<T extends { canalId: string }>(role: "admin" | "examinateur", canaux: T[], canauxPflow: Set<string>): T[] {
@@ -29,7 +31,7 @@ export async function inboxAccess(request: Request, options: { adminSeulement?: 
     return { ok: false, response: NextResponse.json({ available: false, missing }, { status: 200 }) };
   }
   try {
-    return { ok: true, runtime: await getChannelsRuntime(), role: caller.role };
+    return { ok: true, runtime: await getChannelsRuntime(), role: caller.role, userId: caller.userId ?? "local" };
   } catch (error) {
     return { ok: false, response: NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 }) };
   }

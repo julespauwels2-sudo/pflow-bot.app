@@ -11,7 +11,7 @@
  */
 import type { AlertPush, Canal, ChannelStore } from "./types";
 import { alertPushPayload, pushConfigFromEnv, sendPushToAll, type PushConfig } from "./push";
-import { crmAlertConfigFromEnv, sendCrmAlert, type AppAlertStatut, type CrmAlertConfig } from "./crm-alert";
+import { crmAlertConfigFromEnv, sendCrmAlert, type AppAlertStatut, type AppAlertType, type CrmAlertConfig } from "./crm-alert";
 
 export interface AlertConfig {
   /** Notifications push (clés VAPID). Absent : « non_configure », l'alerte reste dans la boîte de réception. */
@@ -39,6 +39,8 @@ export interface AlertInput {
   extrait?: string;
   /** Identifiant de la conversation dans la boîte de réception (le toucher de la notification l'ouvre). */
   conversationId?: string;
+  /** Type de notification de l'appli (son) : « transfert » pour un client qui attend l'équipe ; « prospect » par défaut. */
+  type?: AppAlertType;
 }
 
 export interface AlertResult {

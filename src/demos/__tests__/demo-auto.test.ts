@@ -388,11 +388,11 @@ describe("étape 3/3 à ≈ 20 s (depuis la route du dashboard), tâche à la mi
 
 describe("démo physique : « Bonjour » relance la démo depuis le début (canal PFlow Démo seulement)", () => {
   const MOI = "590690111111";
-  /** Accueil Mint Bun, puis étape 1/3 avec le bouton « Je commande ». */
+  /** La présentation PFlow et son bouton « Tester la démo », comme au premier contact (22 novembre 2026). */
   const expectRestart = (msgs: Out[]) => {
-    expect(msgs).toHaveLength(2);
-    expect(msgs[0].text?.body).toBe(PFLOW_TEXTS.welcome);
-    expect(msgs[1].interactive).toMatchObject({ type: "cta_url", body: { text: PFLOW_TEXTS.step1 }, action: { parameters: { display_text: "Je commande" } } });
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].interactive).toMatchObject({ type: "button", body: { text: PFLOW_TEXTS.welcome } });
+    expect(msgs[0].interactive!.action.buttons!.map((b) => b.reply.title)).toEqual(["Tester la démo"]);
   };
 
   it("salutation seule : reconnue avec ou sans ponctuation, emoji, accents ; jamais avec une vraie question", () => {
@@ -404,22 +404,25 @@ describe("démo physique : « Bonjour » relance la démo depuis le début (cana
     }
   });
 
-  it("à chaque étape (0, 1, 2, 3), « Bonjour » renvoie l'accueil puis l'étape 1 ; le parcours repart à l'étape 1", async () => {
+  it("à chaque étape (0, 1, 2, 3), « Bonjour » renvoie la présentation PFlow et son bouton ; le parcours repart à l'étape 0", async () => {
     const t = await setup();
     // étape 0 (accueil vu)
     await t.say(MOI, "Bonjour");
     expect((await t.contactOf(MOI)).demo!.parcours!.etape).toBe(0);
     expectRestart(await t.say(MOI, "Bonjour !"));
+    expect((await t.contactOf(MOI)).demo!.parcours!.etape).toBe(0);
+    // étape 1 (accueil de Mint Bun)
+    await t.say(MOI, "Tester la démo");
     expect((await t.contactOf(MOI)).demo!.parcours!.etape).toBe(1);
-    // étape 1
     expectRestart(await t.say(MOI, "salut"));
+    expect((await t.contactOf(MOI)).demo!.parcours!.etape).toBe(0);
     // étape 2 (commande validée)
     const { token } = await t.start(MOI);
     await handleDemoOrder(t.auto, { jeton: token, commande: order(11) });
     expect((await t.contactOf(MOI)).demo!.parcours!.etape).toBe(2);
     expectRestart(await t.say(MOI, "Bonsoir 👋"));
     let p = (await t.contactOf(MOI)).demo!.parcours!;
-    expect(p.etape).toBe(1);
+    expect(p.etape).toBe(0);
     expect(p.derniereCommande).toBeUndefined();
     // étape 3 (« J'ai vu le dashboard » écrit à la main)
     await t.say(MOI, "Tester la démo");
@@ -428,7 +431,7 @@ describe("démo physique : « Bonjour » relance la démo depuis le début (cana
     expect((await t.contactOf(MOI)).demo!.parcours!.etape).toBe(3);
     expectRestart(await t.say(MOI, "démo"));
     p = (await t.contactOf(MOI)).demo!.parcours!;
-    expect(p.etape).toBe(1);
+    expect(p.etape).toBe(0);
     expect(p.etape3EnvoyeeAt).toBeUndefined(); // la nouvelle démo pourra de nouveau recevoir l'étape 3
   });
 
@@ -463,7 +466,7 @@ describe("démo physique : « Bonjour » relance la démo depuis le début (cana
     expect(t.out(from)).toHaveLength(0);
   });
 
-  it("bouton « Recommencer la démo » de l'étape 3 : accueil puis étape 1", async () => {
+  it("bouton « Recommencer la démo » de l'étape 3 : la présentation PFlow, puis l'accueil Mint Bun au clic", async () => {
     const t = await setup();
     await t.say(MOI, "Tester la démo");
     await t.say(MOI, DEMO_PERMANENTE.retourCommande);
@@ -472,7 +475,17 @@ describe("démo physique : « Bonjour » relance la démo depuis le début (cana
     expect(RESTART_BUTTON.length).toBeLessThanOrEqual(20);
     const from = sent.length;
     await processWebhookPayloadReply(t, MOI, bouton.reply.id, bouton.reply.title);
-    expectRestart(t.out(from));
+    const restart = t.out(from);
+    expectRestart(restart);
+    expect((await t.contactOf(MOI)).demo!.parcours!.etape).toBe(0);
+    // « Tester la démo » : l'accueil de Mint Bun, écrit comme celui d'un vrai resto.
+    const tester = restart[0].interactive!.action.buttons![0]!;
+    const from2 = sent.length;
+    await processWebhookPayloadReply(t, MOI, tester.reply.id, tester.reply.title);
+    const accueil = t.out(from2);
+    expect(accueil[0].interactive).toMatchObject({ type: "cta_url", action: { parameters: { display_text: "Je commande" } } });
+    expect(accueil[0].interactive!.body.text).toMatch(/^👋 Hello .*! Bienvenue chez Mint Bun 🍔 Une petite faim \? Composez votre commande en quelques clics 👇$/);
+    expect(accueil[1].interactive!.body.text).toBe(PFLOW_TEXTS.step1Aide);
     expect((await t.contactOf(MOI)).demo!.parcours!.etape).toBe(1);
   });
 

@@ -23,10 +23,20 @@ export interface SendOptions {
 export interface ChannelSender {
   /** Envoie un message et renvoie son identifiant sur la plateforme. */
   send(accountId: string, to: string, message: OutgoingMessage, options?: SendOptions): Promise<string | undefined>;
+  /** Message modèle approuvé par Meta (hors fenêtre de 24 h) ; WhatsApp seulement. */
+  sendTemplate?(accountId: string, to: string, template: TemplateMessage, options?: SendOptions): Promise<string | undefined>;
   /** Accusé de lecture et « en train d'écrire ». */
   markRead(accountId: string, messageId: string, typing: boolean, to?: string): Promise<void>;
   /** Téléchargement d'un média reçu (message vocal). */
   downloadMedia?(media: MediaRef, accountId?: string): Promise<{ data: Uint8Array; mimeType: string }>;
+}
+
+/** Un modèle WhatsApp à envoyer : corps à variables et, s'il y en a un, bouton lien à suffixe variable (index 0). */
+export interface TemplateMessage {
+  name: string;
+  language: string;
+  variables: string[];
+  urlSuffix?: string | null;
 }
 
 /** Média à télécharger : identifiant WhatsApp ou adresse Instagram. */
@@ -155,7 +165,12 @@ export interface PurgeCounts {
 export interface ChannelStore {
   /** Note un événement reçu. Faux s'il a déjà été reçu (renvoi de Meta) : il n'est pas retraité. */
   claimEvent(source: EventSource, key: string, charge: unknown): Promise<boolean>;
-  finishEvent(source: EventSource, key: string, error?: string): Promise<void>;
+  /** Fin du traitement ; `charge`, si donnée, remplace celle notée à la réception (ex. le résultat d'un envoi). */
+  finishEvent(source: EventSource, key: string, error?: string, charge?: unknown): Promise<void>;
+  /** Un événement déjà reçu (null s'il est inconnu) : livraison, pour répondre pareil à un renvoi. */
+  getEvent(source: EventSource, key: string): Promise<{ charge: unknown; done: boolean; error?: string; at: string } | null>;
+  /** Oublie un événement (envoi échoué : le prochain essai de PFlow Order doit pouvoir le refaire). */
+  releaseEvent(source: EventSource, key: string): Promise<void>;
   canalByAccount(plateforme: Plateforme, accountId: string): Promise<Canal | null>;
   /** Derniers événements reçus (page « État du système »). */
   recentEvents(limit?: number): Promise<{ source: EventSource; key: string; at: string; error?: string }[]>;
@@ -189,6 +204,14 @@ export interface ChannelStore {
    * (la tâche planifiée regarde ceux qui viennent d'échoir).
    */
   listPausesEcheues(after: string, before: string): Promise<ChannelContact[]>;
+  /** Boîte de réception : messages dont le texte contient `q` (sans casse), les plus récents d'abord. */
+  searchMessages(q: string, limit?: number): Promise<StoredMessage[]>;
+  /**
+   * Non-lus synchronisés entre appareils (table bot_lectures) : dernière lecture de chaque conversation par cet
+   * utilisateur. `available` faux tant que la table n'existe pas (l'écran garde alors sa mémoire locale).
+   */
+  getLectures(userId: string): Promise<{ available: boolean; lu: Record<string, string> }>;
+  markLu(userId: string, contactId: string, at: string): Promise<boolean>;
   listMessages(contactId: string, limit?: number): Promise<StoredMessage[]>;
   listTransferts(canalId: string): Promise<Transfert[]>;
   resolveTransferts(contactId: string): Promise<void>;
