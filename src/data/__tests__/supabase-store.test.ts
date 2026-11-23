@@ -133,7 +133,10 @@ describe("lecture du CRM", () => {
     expect(sheet.resumeCarte).toContain("Allergènes : Gluten, Œufs, Fruits à coque");
     expect(sheet.resumeCarte).toContain("Allergènes : non renseignés");
     expect(sheet.resumeCarte).not.toContain("Rupture");
-    expect(await repos.infoSheets.lockedFields(R1)).toEqual(["horaires", "adresse", "livraison", "retrait", "zonesLivraison", "paiementEnLigne", "familles", "resumeCarte"]);
+    expect(await repos.infoSheets.lockedFields(R1)).toEqual(["horaires", "adresse", "livraison", "retrait", "zonesLivraison", "paiementEnLigne", "familles", "resumeCarte", "produits"]);
+    // Lien direct vers un produit : les produits disponibles (id + nom), jamais un produit en rupture.
+    expect(sheet.produits?.some((p) => p.nom === "Tout choco")).toBe(true);
+    expect(sheet.produits?.some((p) => /rupture/i.test(p.nom))).toBe(false);
     // Démo sans horaires ni carte : ces champs restent modifiables côté bot.
     expect(await repos.infoSheets.lockedFields(R2)).toEqual(["livraison", "retrait", "paiementEnLigne"]);
   });

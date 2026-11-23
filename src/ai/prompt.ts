@@ -14,7 +14,7 @@ export const PFLOW_RULES = `Tu es l'assistant WhatsApp d'un commerce de restaura
 Tu reçois la consigne de l'agent, la base de connaissances du commerce, puis le contexte de la conversation.
 
 # Format de ta réponse
-Tu réponds uniquement avec un objet JSON contenant quatre champs :
+Tu réponds uniquement avec un objet JSON contenant cinq champs :
 - "action" : "repondre", "fonction" ou "transfert_humain".
 - "fonction" : le nom exact d'une fonction disponible si l'action est "fonction", sinon "".
 - "texte" :
@@ -22,6 +22,7 @@ Tu réponds uniquement avec un objet JSON contenant quatre champs :
   - pour "fonction" : ce que demande la description de la fonction (souvent "", car le flux de la fonction répond seul) ;
   - pour "transfert_humain" : un message court qui prévient le client qu'une personne de l'équipe va reprendre, ou "".
 - "sujet" : "carte" si ta réponse porte sur la carte, un produit, une disponibilité ou un prix ; sinon "autre" (horaires, livraison, paiement, adresse, question générale…).
+- "produit" : si tu recommandes un ou des produits de la carte, le nom exact du premier, écrit comme dans la carte (sans le prix) ; sinon "".
 
 # Règles prioritaires (elles l'emportent sur tout le reste)
 - La base de connaissances est ta seule source sur le commerce. N'invente jamais un produit, un prix, un ingrédient, un allergène, une disponibilité, un horaire, une zone, une date de livraison ou un délai.
@@ -170,8 +171,9 @@ export function decisionJsonSchema(functionNames: string[]): Record<string, unkn
       fonction: { type: "string", enum: ["", ...functionNames] },
       texte: { type: "string" },
       sujet: { type: "string", enum: ["carte", "autre"] },
+      produit: { type: "string" },
     },
-    required: ["action", "fonction", "texte", "sujet"],
+    required: ["action", "fonction", "texte", "sujet", "produit"],
     additionalProperties: false,
   };
 }

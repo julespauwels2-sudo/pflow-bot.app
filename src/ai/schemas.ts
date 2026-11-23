@@ -40,4 +40,5 @@ export const aiDecisionSchema = z.object({
   fonction: z.string().default(""),
   texte: z.string().default(""),
   sujet: z.enum(["carte", "autre"]).optional(),
+  produit: z.string().max(200).optional(),
 });

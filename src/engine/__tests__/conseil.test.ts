@@ -137,6 +137,15 @@ describe("conseil : parcours dans le moteur", () => {
     expect(ai.calls).toHaveLength(1);
   });
 
+  it("« Me conseiller » : le bouton « 🛒 Commander » ouvre la page sur le produit recommandé (produit=<id>)", async () => {
+    const withProducts = { ...mexico, produits: [{ id: "p1", nom: "Burrito poulet" }] };
+    const r1 = await runEngine(base({ infoSheet: withProducts, message: { kind: "text", text: "conseil" } }), {});
+    const poulet = choices(r1).find((c) => c.title === "Poulet")!;
+    const ai = fakeAi({ action: "repondre", texte: "🌯 *Burrito poulet* : 12 €", produit: "Burrito poulet" });
+    const r2 = await runEngine(next(r1, { infoSheet: withProducts, ...click(poulet.id, poulet.title) }), { ai: ai.port });
+    expect(sent(r2)[1]).toMatchObject({ kind: "link", buttonLabel: "🛒 Commander", url: expect.stringMatching(/mexico.*[?&]produit=p1$/) });
+  });
+
   it("Surprenez-moi : consigne « le client te laisse choisir »", async () => {
     const r1 = await runEngine(base({ message: { kind: "text", text: "conseil" } }), {});
     const surprise = choices(r1).at(-1)!;

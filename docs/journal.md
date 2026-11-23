@@ -1329,3 +1329,12 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
   les autres sont listés par leur nom. Lecture impossible : le compte reste affiché (« option non vérifiée »).
 - **Embedded Signup** : les modèles ne sont créés à la connexion que si l'option est déjà active ; sinon, depuis la page
   État une fois l'option activée. Aucun SQL. 584 tests.
+
+## 22 novembre 2026 — lien direct vers le produit recommandé (PR, après celle du CRM)
+
+- L'IA indique le nom exact du produit qu'elle recommande (nouveau champ « produit » de sa réponse) ; le bot le traduit
+  en id avec les produits disponibles du CRM (jamais montrés à l'IA) et ajoute `produit=<id>` au lien « Commander »
+  (via=wa et wa=… gardés) : proposer_commande, réponse sur la carte, « Me conseiller ».
+- Nom inconnu, aucun produit, démo : lien inchangé. Accents, majuscules et « œ » ignorés dans la comparaison.
+- Spécification CRM : `docs/etape-c/spec-crm-lien-produit.md`. Côté CRM, la page de commande lit déjà `produit`
+  (PR n° 136 du CRM, fusionnée le 22 novembre). 23 novembre : branche remise à jour avec la branche de prod.

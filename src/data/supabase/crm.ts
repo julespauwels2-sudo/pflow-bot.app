@@ -277,7 +277,7 @@ export function crmMenuText(restaurantId: string, data: Pick<CrmData, "produits"
 }
 
 /** Champs de la fiche d'infos qui viennent du CRM (affichés en lecture seule). */
-export type CrmSheetField = "horaires" | "adresse" | "livraison" | "retrait" | "zonesLivraison" | "resumeCarte" | "paiementEnLigne" | "familles";
+export type CrmSheetField = "horaires" | "adresse" | "livraison" | "retrait" | "zonesLivraison" | "resumeCarte" | "paiementEnLigne" | "familles" | "produits";
 
 /** Catégories qui ne sont pas des choix de « Me conseiller » (on ne conseille pas une boisson). */
 const PAS_UN_CONSEIL = /boisson|drink|soda|jus|biere|bière|vin|alcool|cocktail|softs?$/i;
@@ -340,6 +340,9 @@ export function crmInfoSheet(restaurant: CrmRestaurant, data: CrmData): { sheet:
   if (menu) {
     sheet.resumeCarte = menu;
     locked.push("resumeCarte");
+    // Lien direct vers le produit recommandé : nom → id des produits disponibles (jamais montré à l'IA).
+    sheet.produits = data.produits.filter((p) => p.restaurant_id === restaurant.id && p.disponible).map((p) => ({ id: p.id, nom: p.nom.trim() }));
+    locked.push("produits");
   }
   return { sheet, locked };
 }
