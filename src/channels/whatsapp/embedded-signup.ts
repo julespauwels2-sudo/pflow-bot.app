@@ -10,13 +10,15 @@
  *   5. coexistence : synchronisation des contacts puis de l'historique (à faire dans les 24 h, une seule fois) ;
  *      jamais d'enregistrement du numéro (il l'est déjà par l'appli) ;
  *   6. canal créé en « test » (le bot ne répond qu'aux numéros de test tant que Jules ne l'a pas passé en actif) ;
- *   7. les 10 modèles de la livraison créés sur le compte du client (ceux qui existent déjà sont laissés tels quels).
+ *   7. si le resto a l'option livraison : les 11 modèles de la livraison créés sur le compte du client (ceux qui
+ *      existent déjà sont laissés tels quels).
  * Chaque étape est notée (page État). Les étapes 1, 2 et 6 sont indispensables ; les autres sont notées en erreur
  * sans tout arrêter (elles se refont à la main depuis la page État ou WhatsApp Manager).
  */
 import { chiffrerJeton } from "@/lib/jetons-chiffres";
 import type { Canal, ChannelStore } from "../core/types";
 import type { Connexion, ConnexionEtape, ConnexionStore } from "../core/connexions";
+import type { OptionLivraison } from "./livraison-restos";
 import { ANCIENS_NOMS_LIVRAISON, LIVRAISON_TEMPLATES, templateComponents, templatePayload } from "./livraison-templates";
 
 /** Seul numéro de test des canaux créés par l'Embedded Signup : le bot ne répond qu'à Jules tant qu'il est en test. */
@@ -49,6 +51,11 @@ export interface SignupDeps {
   now?: () => Date;
   /** Chiffrement (injecté dans les tests). */
   chiffrer?: (jeton: string) => string;
+  /**
+   * Option livraison du resto (lecture du CRM). Les modèles de la livraison ne sont créés que si elle est active
+   * (demande de Jules du 23/11) ; sinon, ils le seront depuis la page État quand l'option sera activée.
+   */
+  optionLivraison?: (restaurantId: string) => Promise<OptionLivraison>;
 }
 
 class MetaError extends Error {}
@@ -270,13 +277,18 @@ export async function terminerConnexion(deps: SignupDeps, connexion: Connexion, 
     return fail(`Canal non créé : ${(error as Error).message}`);
   }
 
-  // 7. Modèles de la livraison
-  try {
-    const r = await modelesLivraison(deps.meta, input.wabaId, token, true);
-    const deja = r.etat.filter((t) => t.status && !r.crees.includes(t.name)).length;
-    note("modeles_livraison", r.echecs.length === 0, `${r.crees.length} créé(s), ${deja} déjà là${r.echecs.length ? `, ${r.echecs.length} en échec (${r.echecs[0].name} : ${r.echecs[0].erreur})` : ""}`);
-  } catch (error) {
-    note("modeles_livraison", false, (error as Error).message);
+  // 7. Modèles de la livraison : seulement si le resto a l'option livraison.
+  const option = c.restaurantId && deps.optionLivraison ? await deps.optionLivraison(c.restaurantId).catch((): OptionLivraison => "inconnue") : "inconnue";
+  if (option !== "active") {
+    note("modeles_livraison", true, "pas créés : le resto n'a pas l'option livraison (à créer depuis la page État une fois l'option activée)");
+  } else {
+    try {
+      const r = await modelesLivraison(deps.meta, input.wabaId, token, true);
+      const deja = r.etat.filter((t) => t.status && !r.crees.includes(t.name)).length;
+      note("modeles_livraison", r.echecs.length === 0, `${r.crees.length} créé(s), ${deja} déjà là${r.echecs.length ? `, ${r.echecs.length} en échec (${r.echecs[0].name} : ${r.echecs[0].erreur})` : ""}`);
+    } catch (error) {
+      note("modeles_livraison", false, (error as Error).message);
+    }
   }
 
   c.etat = "terminee";

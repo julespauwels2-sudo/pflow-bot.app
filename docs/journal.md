@@ -1287,3 +1287,13 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
 - **Corrigé** : comptes en parallèle, 4 créations à la fois par compte, et plus aucune création lancée après 40 s ; les
   restants sont signalés « Pas eu le temps : clique à nouveau ». La lecture (Actualiser) lit aussi les comptes en parallèle.
   580 tests.
+
+## 23 novembre 2026 (suite) — modèles de la livraison : seulement les restos avec l'option
+
+- Demande de Jules : ne créer les modèles que pour les restos qui ont l'option livraison.
+- Option lue dans le CRM par `page_livraison(slug)` (qg83, la fonction de la page de commande : lecture seule, ajoutée
+  aux fonctions autorisées) ; « actif » = option activée, Stripe prêt, zone ouverte.
+- **Page État** : seuls ces restos (et le numéro PFlow des démos) sont lus chez Meta et touchés par le bouton global ;
+  les autres sont listés par leur nom. Lecture impossible : le compte reste affiché (« option non vérifiée »).
+- **Embedded Signup** : les modèles ne sont créés à la connexion que si l'option est déjà active ; sinon, depuis la page
+  État une fois l'option activée. Aucun SQL. 584 tests.
