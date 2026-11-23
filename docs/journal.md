@@ -1247,6 +1247,15 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
   en mode mots-clés, la conversation reste ouverte 30 min après chaque réponse du bot (réglable dans la fiche) ; pauses
   prioritaires ; un ami du gérant jamais servi par le bot reste ignoré. 560 tests.
 
+## 22 novembre 2026 — boîte de réception : recherche, temps réel, non-lus synchronisés (PR, migration non appliquée)
+
+- Recherche par nom, numéro ou contenu (bot_messages, sans casse ni accents), extrait affiché.
+- Temps réel (Supabase Realtime sur bot_messages et bot_contacts), repli sur le rafraîchissement toutes les 5 s, filet
+  à 60 s ; indicateur à l'écran.
+- Non-lus côté serveur par utilisateur (bot_lectures) : synchronisés ordinateur / iPhone ; mémoire locale tant que la
+  table n'existe pas.
+- Migration `20261122010000_bot_inbox_lectures_realtime.sql` montrée, non appliquée. 563 tests.
+
 ## 22 novembre 2026 — tournées récurrentes de Cookies (PR, migration non appliquée)
 
 - Fiche : planning hebdomadaire de tournées (lieux et créneau par jour, pré-rempli par les horaires du CRM) ;

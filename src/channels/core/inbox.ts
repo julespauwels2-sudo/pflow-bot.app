@@ -74,7 +74,21 @@ export interface InboxConversation {
   updatedAt: string;
   /** Numéro PFlow : nom de la démo en cours (absent = bot PFlow de base). */
   demoEnCours?: string;
+  /** Non-lus synchronisés : dernière lecture de cette conversation par l'utilisateur (tous ses appareils). */
+  luJusqua?: string;
+  /** Recherche : extrait du message qui correspond (recherche dans le contenu). */
+  correspondance?: string;
 }
+
+/** Options de la liste : recherche (nom, numéro ou contenu d'un message) et lectures de l'utilisateur. */
+export interface InboxListOptions {
+  q?: string;
+  userId?: string;
+  /** Appelé avec la disponibilité des lectures synchronisées (table bot_lectures). */
+  onLectures?: (available: boolean) => void;
+}
+
+const foldSearch = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 export interface InboxCanal {
   canalId: string;
@@ -142,8 +156,20 @@ export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (it
 const LIST_CONCURRENCY = 8;
 
 /** `workspace` peut être une promesse : sa lecture se fait en même temps que celle des numéros. */
-export async function listInbox(store: ChannelStore, workspace: WorkspaceData | Promise<WorkspaceData>, now: Date): Promise<InboxCanal[]> {
-  const [data, canaux] = await Promise.all([workspace, store.listCanaux()]);
+export async function listInbox(store: ChannelStore, workspace: WorkspaceData | Promise<WorkspaceData>, now: Date, options: InboxListOptions = {}): Promise<InboxCanal[]> {
+  const q = options.q?.trim() ?? "";
+  const [data, canaux, lectures, trouves] = await Promise.all([
+    workspace,
+    store.listCanaux(),
+    options.userId ? store.getLectures(options.userId) : Promise.resolve({ available: false, lu: {} as Record<string, string> }),
+    q ? store.searchMessages(q, 200) : Promise.resolve([] as StoredMessage[]),
+  ]);
+  options.onLectures?.(lectures.available);
+  // Recherche dans le contenu : le message le plus récent qui correspond, par conversation.
+  const parContenu = new Map<string, string>();
+  for (const m of trouves) if (!parContenu.has(m.contactId)) parContenu.set(m.contactId, messageText(m));
+  const needle = foldSearch(q);
+  const digits = q.replace(/\D/g, "");
   const names = new Map(data.clients.map((c) => [c.id, c.nomResto]));
   // Contacts et transferts de tous les numéros en même temps, puis le dernier message de chaque conversation.
   const perCanal = await Promise.all(canaux.map((canal) => Promise.all([store.listContacts(canal.id), store.listTransferts(canal.id)])));
@@ -179,7 +205,15 @@ export async function listInbox(store: ChannelStore, workspace: WorkspaceData | 
         transfertOuvert: open.has(contact.id) && etat.code === "transfert",
         updatedAt: last?.at ?? contact.updatedAt,
         ...(contact.demo?.clientId ? { demoEnCours: names.get(contact.demo.clientId) ?? "démo supprimée" } : {}),
+        ...(lectures.available && lectures.lu[contact.id] ? { luJusqua: lectures.lu[contact.id] } : {}),
+        ...(parContenu.has(contact.id) ? { correspondance: parContenu.get(contact.id) } : {}),
       };
+    }).filter((conv) => {
+      if (!q) return true;
+      // Nom, numéro (chiffres seulement, sans indicatif imposé) ou contenu d'un message.
+      if (conv.nom && foldSearch(conv.nom).includes(needle)) return true;
+      if (digits.length >= 3 && conv.waId.includes(digits)) return true;
+      return Boolean(conv.correspondance);
     });
     conversations.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     return {

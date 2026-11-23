@@ -6,7 +6,8 @@ import { MobileConversation, MobileInboxList } from "@/components/inbox-mobile";
 import { MobileHeader, useIsMobile } from "@/components/mobile";
 import { OPEN_CONVERSATION_EVENT, PushControls } from "@/components/pwa";
 import { FILTRE_PAR_DEFAUT, filtrerCanaux, isUnread, lastAt, markSeen, plainExtract, readSeen, shortTime, sortConversations, type InboxFiltre, type SeenState } from "@/lib/inbox-view";
-import { BarreEtat, EtatBadge, FiltresInbox, ListeMessages } from "@/components/inbox-parts";
+import { BarreEtat, EtatBadge, FiltresInbox, ListeMessages, RechercheInbox } from "@/components/inbox-parts";
+import { POLL_MS, useInboxRealtime } from "@/lib/inbox-realtime";
 import { fusionnerConversation, majConversationListe, nouvelEnvoi, reglerEnvoi, type EnvoiLocal, type LigneConversation, type MessageAffiche } from "@/lib/inbox-envoi";
 import { Button, Card, Loading, Notice, Textarea } from "@/components/ui";
 import type { InboxCanal, InboxConversation } from "@/channels/core/inbox";
@@ -40,7 +41,6 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 /** Réponse de POST /api/inbox/[contactId]. */
 type ActionResponse = { ok?: boolean; pause?: InboxConversation["pause"]; message?: MessageAffiche };
 
-const REFRESH_MS = 5000;
 const who = (canal: InboxCanal, conv: InboxConversation) => conv.nom || (canal.plateforme === "instagram" ? `Instagram ${conv.waId.slice(-4)}` : `+${conv.waId}`);
 /** Qui a écrit le dernier message, pour l'extrait de la liste. */
 const prefixe = (d: NonNullable<InboxConversation["dernierMessage"]>) => (d.sens === "entrant" ? "" : d.sens === "echo" || d.auteur === "humain" ? "👩‍🍳 Équipe : " : "🤖 ");
@@ -65,9 +65,18 @@ export default function InboxPage() {
     void Promise.resolve().then(() => setSeen(readSeen()));
   }, []);
 
+  // Recherche (nom, numéro ou contenu d'un message) : envoyée au serveur 300 ms après la dernière frappe.
+  const [recherche, setRecherche] = useState("");
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setQ(recherche.trim()), 300);
+    return () => clearTimeout(t);
+  }, [recherche]);
+  const qRef = useRef("");
   const refresh = useCallback(async () => {
     try {
-      const data = await api<{ available: boolean; missing?: string[]; mode?: "supabase" | "memory"; canaux?: InboxCanal[] }>("/api/inbox");
+      const query = qRef.current ? `?q=${encodeURIComponent(qRef.current)}` : "";
+      const data = await api<{ available: boolean; missing?: string[]; mode?: "supabase" | "memory"; canaux?: InboxCanal[] }>(`/api/inbox${query}`);
       if (!data.available) setState({ status: "off", missing: data.missing ?? [] });
       else setState({ status: "ready", mode: data.mode!, canaux: data.canaux ?? [] });
     } catch (error) {
@@ -138,6 +147,22 @@ export default function InboxPage() {
     const last = thread?.messages.at(-1)?.at;
     if (selected && last) void Promise.resolve().then(() => setSeen((s) => markSeen(s, selected, last)));
   }, [selected, thread]);
+  // Lu aussi pour l'utilisateur sur le serveur (ordinateur et iPhone synchronisés), une fois par nouveau message.
+  const luEnvoye = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const last = thread?.messages.at(-1)?.at;
+    if (!selected || !last || luEnvoye.current[selected] === last) return;
+    luEnvoye.current[selected] = last;
+    void call(`/api/inbox/${encodeURIComponent(selected)}`, { method: "POST", body: JSON.stringify({ type: "lu", at: last }) }).catch(() => undefined);
+  }, [selected, thread]);
+
+  // Temps réel : un message ou un changement de pause recharge tout de suite ; sinon rafraîchissement toutes les 5 s.
+  const sync = useInboxRealtime(
+    useCallback(() => {
+      void refresh();
+      if (selectedRef.current) void loadThread(selectedRef.current);
+    }, [refresh, loadThread]),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -146,13 +171,14 @@ export default function InboxPage() {
       // Liste et conversation en même temps : la conversation n'attend plus la liste (plus lente).
       await Promise.all([refresh(), selected ? loadThread(selected) : null]);
     };
+    qRef.current = q;
     void tick();
-    const timer = setInterval(tick, REFRESH_MS);
+    const timer = setInterval(tick, POLL_MS[sync]);
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [refresh, loadThread, selected]);
+  }, [refresh, loadThread, selected, sync, q]);
 
   /** Reprendre la main / rendre au bot : la pause s'affiche dès la réponse, la liste se recharge ensuite. */
   async function act(action: { type: "reprendre" | "relancer" }, success: string): Promise<void> {
@@ -223,7 +249,12 @@ export default function InboxPage() {
           <>
             <MobileInboxList
               canaux={visibles}
-              filtres={<FiltresInbox canaux={state.canaux} filtre={filtre} onChange={setFiltre} sombre />}
+              filtres={
+                <div className="space-y-2">
+                  <RechercheInbox value={recherche} onChange={setRecherche} sync={sync} sombre />
+                  <FiltresInbox canaux={state.canaux} filtre={filtre} onChange={setFiltre} sombre />
+                </div>
+              }
               seen={seen}
               notice={current ? null : notice}
               onCloseNotice={() => setNotice(null)}
@@ -277,6 +308,7 @@ export default function InboxPage() {
             {state.mode === "memory" && role === "admin" && <SimulateForm plateformes={[...new Set(state.canaux.map((c) => c.plateforme))]} onSent={refresh} onError={(text) => setNotice({ tone: "error", text })} />}
             <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
               <Card title="Conversations">
+                <RechercheInbox value={recherche} onChange={setRecherche} sync={sync} />
                 <FiltresInbox canaux={state.canaux} filtre={filtre} onChange={setFiltre} />
                 {rows.length === 0 && <p className="mt-3 text-sm text-muted">Aucune conversation.</p>}
                 <ul className="mt-3 divide-y divide-rule" data-testid="inbox-list">
@@ -296,11 +328,17 @@ export default function InboxPage() {
                             {unread && <span className="bg-brand size-2.5 shrink-0 self-center rounded-full" aria-label="non lu" />}
                             <span className={`shrink-0 text-xs ${unread ? "font-bold text-rose" : "text-muted"}`}>{shortTime(lastAt(conv))}</span>
                           </span>
-                          {d && (
-                            <span className={`block truncate text-xs ${unread ? "font-semibold text-ink" : "text-muted"}`}>
-                              {prefixe(d)}
-                              {plainExtract(d.texte)}
+                          {conv.correspondance ? (
+                            <span className="block truncate text-xs text-ink" data-testid="inbox-correspondance">
+                              🔎 « {plainExtract(conv.correspondance)} »
                             </span>
+                          ) : (
+                            d && (
+                              <span className={`block truncate text-xs ${unread ? "font-semibold text-ink" : "text-muted"}`}>
+                                {prefixe(d)}
+                                {plainExtract(d.texte)}
+                              </span>
+                            )
                           )}
                           <span className="mt-1 flex flex-wrap items-center gap-1.5">
                             <EtatBadge conv={conv} />

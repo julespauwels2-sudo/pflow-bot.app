@@ -14,6 +14,8 @@ export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: 
   const contacts = new Map<string, ChannelContact>();
   const sessions = new Map<string, { session: Session; version: number }>();
   const messages: StoredMessage[] = [];
+  /** Non-lus synchronisés : « utilisateur|conversation » → dernière lecture. */
+  const lectures = new Map<string, string>();
   const transferts: Transfert[] = [];
   const pushSubscriptions = new Map<string, PushSubscriptionRecord>();
   let demoKnowledge: DemoKnowledge | null = null;
@@ -147,6 +149,25 @@ export function createMemoryChannelStore(canaux: Canal[] = [], options: { now?: 
     },
     async listContacts(canalId) {
       return clone([...contacts.values()].filter((c) => c.canalId === canalId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+    },
+    async searchMessages(q, limit = 100) {
+      const fold = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      const needle = fold(q.trim());
+      if (!needle) return [];
+      return clone(
+        messages
+          .filter((m) => fold(JSON.stringify(m.contenu ?? "")).includes(needle))
+          .sort((a, b) => b.at.localeCompare(a.at))
+          .slice(0, limit),
+      );
+    },
+    async getLectures(userId) {
+      return { available: true, lu: Object.fromEntries([...lectures].filter(([k]) => k.startsWith(`${userId}|`)).map(([k, v]) => [k.split("|")[1]!, v])) };
+    },
+    async markLu(userId, contactId, at) {
+      const key = `${userId}|${contactId}`;
+      if ((lectures.get(key) ?? "") < at) lectures.set(key, at);
+      return true;
     },
     async listPausesEcheues(after, before) {
       return clone(

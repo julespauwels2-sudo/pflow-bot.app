@@ -100,10 +100,16 @@ export interface SeenState {
   seen: Record<string, string>;
 }
 
+/**
+ * Non lu : dernier message du client, arrivé après la dernière lecture. La lecture la plus récente gagne : celle de cet
+ * appareil (localStorage) ou celle enregistrée pour l'utilisateur sur le serveur (lue sur un autre appareil).
+ */
 export function isUnread(conv: InboxConversation, state: SeenState): boolean {
   const last = conv.dernierMessage;
   if (!last || last.sens !== "entrant") return false;
-  return last.at > (state.seen[conv.contactId] ?? state.initAt);
+  const local = state.seen[conv.contactId] ?? state.initAt;
+  const serveur = conv.luJusqua ?? "";
+  return last.at > (serveur > local ? serveur : local);
 }
 
 const KEY = "pflow-inbox-vu";

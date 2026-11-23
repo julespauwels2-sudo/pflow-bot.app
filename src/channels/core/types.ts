@@ -204,6 +204,14 @@ export interface ChannelStore {
    * (la tâche planifiée regarde ceux qui viennent d'échoir).
    */
   listPausesEcheues(after: string, before: string): Promise<ChannelContact[]>;
+  /** Boîte de réception : messages dont le texte contient `q` (sans casse), les plus récents d'abord. */
+  searchMessages(q: string, limit?: number): Promise<StoredMessage[]>;
+  /**
+   * Non-lus synchronisés entre appareils (table bot_lectures) : dernière lecture de chaque conversation par cet
+   * utilisateur. `available` faux tant que la table n'existe pas (l'écran garde alors sa mémoire locale).
+   */
+  getLectures(userId: string): Promise<{ available: boolean; lu: Record<string, string> }>;
+  markLu(userId: string, contactId: string, at: string): Promise<boolean>;
   listMessages(contactId: string, limit?: number): Promise<StoredMessage[]>;
   listTransferts(canalId: string): Promise<Transfert[]>;
   resolveTransferts(contactId: string): Promise<void>;

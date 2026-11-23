@@ -10,7 +10,13 @@ export async function GET(request: Request) {
   const access = await inboxAccess(request);
   if (!access.ok) return access.response;
   const { runtime } = access;
+  // Recherche (nom, numéro ou contenu d'un message) : 100 caractères au plus.
+  const q = (new URL(request.url).searchParams.get("q") ?? "").slice(0, 100);
+  let lectures = false;
   // Données des bots, numéros et conversations lus en même temps (plus de lectures à la file).
-  const [canaux, pflow] = await Promise.all([listInbox(runtime.store, runtime.workspace(), new Date()), idsCanauxPflow(runtime)]);
-  return NextResponse.json({ available: true, mode: runtime.mode, role: access.role, canaux: canauxVisibles(access.role, canaux, pflow) });
+  const [canaux, pflow] = await Promise.all([
+    listInbox(runtime.store, runtime.workspace(), new Date(), { q, userId: access.userId, onLectures: (a) => (lectures = a) }),
+    idsCanauxPflow(runtime),
+  ]);
+  return NextResponse.json({ available: true, mode: runtime.mode, role: access.role, lectures, canaux: canauxVisibles(access.role, canaux, pflow) });
 }
