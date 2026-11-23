@@ -5,7 +5,7 @@
  * - write() compare avec la dernière lecture et n'écrit que les différences, uniquement dans les
  *   tables bot_. Les champs venant du CRM ne sont jamais écrits.
  */
-import { DEFAULT_TIMEZONE, type DeliveryRound, type InfoSheet } from "@/engine";
+import { DEFAULT_TIMEZONE, type DeliveryRound, type InfoSheet, type WeeklyRound } from "@/engine";
 import type { WorkspaceStore } from "../local/store";
 import type { AiCallLog, BotClient, BotFolder, BotTemplate, DemoRecord, StoredFlow, WorkspaceData } from "../types";
 import { normalizeKeyword } from "@/demos/keyword";
@@ -28,6 +28,8 @@ interface Snapshot {
   rows: Record<string, Map<string, Row>>;
   locked: Map<string, CrmSheetField[]>;
   demosAvailable: boolean;
+  /** bot_tournees_hebdo existe (migration du 22 novembre 2026 appliquée) : sinon, rien n'y est lu ni écrit. */
+  hebdoAvailable: boolean;
 }
 
 export interface SupabaseStore extends WorkspaceStore {
@@ -153,6 +155,7 @@ function rowToAiCall(r: Row): AiCallLog {
 function botSheetPart(sheet: InfoSheet, locked: CrmSheetField[]): Record<string, unknown> {
   const part: Record<string, unknown> = { ...sheet };
   delete part.tournees;
+  delete part.tourneesHebdo;
   for (const key of locked) delete part[key];
   for (const [k, v] of Object.entries(part)) if (v === undefined) delete part[k];
   return part;
@@ -181,6 +184,14 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
     ]);
     const crm = await readCrm(db, clients.map((c) => String(c.restaurant_id)));
     // bot_demos arrive avec la migration C : tant qu'elle n'existe pas, les démos sont en lecture seule.
+    // Planning hebdomadaire des tournées (table partagée avec le CRM) : absent tant que la migration n'est pas appliquée.
+    let hebdo: Row[] = [];
+    let hebdoAvailable = true;
+    try {
+      hebdo = await db.select("bot_tournees_hebdo", "*", { order: { column: "ordre" } });
+    } catch {
+      hebdoAvailable = false;
+    }
     let demos: Row[] = [];
     let demosAvailable = true;
     try {
@@ -219,12 +230,24 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
       const botPart = (fichesById.get(r.id)?.donnees as Partial<InfoSheet> | undefined) ?? {};
       const rounds: DeliveryRound[] = tournees
         .filter((t) => String(t.restaurant_id) === r.id)
-        .map((t) => ({ id: String(t.id), date: String(t.date).slice(0, 10), ...(t.de ? { de: hhmm(t.de) } : {}), ...(t.a ? { a: hhmm(t.a) } : {}), lieux: String(t.lieux) }));
+        .map((t) => ({
+          id: String(t.id),
+          date: String(t.date).slice(0, 10),
+          ...(t.de ? { de: hhmm(t.de) } : {}),
+          ...(t.a ? { a: hhmm(t.a) } : {}),
+          lieux: String(t.lieux),
+          ...(t.annulee === true ? { annulee: true } : {}),
+        }));
+      const weekly: WeeklyRound[] = hebdo
+        .filter((h) => String(h.restaurant_id) === r.id)
+        .sort((x, y) => Number(x.jour) - Number(y.jour) || Number(x.ordre ?? 0) - Number(y.ordre ?? 0))
+        .map((h) => ({ id: String(h.id), jour: Number(h.jour) as WeeklyRound["jour"], lieux: String(h.lieux), ...(h.de ? { de: hhmm(h.de) } : {}), ...(h.a ? { a: hhmm(h.a) } : {}) }));
       data.infoSheets[r.id] = {
         horaires: [],
         ...botPart,
         ...fromCrm.sheet,
         ...(rounds.length ? { tournees: rounds } : {}),
+        ...(weekly.length ? { tourneesHebdo: weekly } : {}),
       };
     }
     const visible = new Set(data.clients.map((c) => c.id));
@@ -248,17 +271,30 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
         "restaurant_id",
       ),
       bot_tournees: index(tournees.filter((t) => visible.has(String(t.restaurant_id))).map(tourneeRowOf)),
+      bot_tournees_hebdo: index(hebdo.filter((h) => visible.has(String(h.restaurant_id))).map(hebdoRowOf)),
       bot_appels_ia: index(data.aiCalls.map(aiCallToRow)),
       bot_demos: index(data.demos.map(demoToRow), "restaurant_id"),
     };
-    return { data, rows, locked, demosAvailable };
+    return { data, rows, locked, demosAvailable, hebdoAvailable };
   }
 
   function clientRowOf(c: Row): Row {
     return { restaurant_id: c.restaurant_id, mode_declenchement: c.mode_declenchement, modele_id: c.modele_id ?? null, lie_le: toIso(c.lie_le) };
   }
+  // « annulee » seulement quand elle est vraie : rien ne change pour les tournées existantes (et avant la migration).
   function tourneeRowOf(t: Row): Row {
-    return { id: t.id, restaurant_id: t.restaurant_id, date: String(t.date).slice(0, 10), de: hhmm(t.de) ?? null, a: hhmm(t.a) ?? null, lieux: t.lieux };
+    return {
+      id: t.id,
+      restaurant_id: t.restaurant_id,
+      date: String(t.date).slice(0, 10),
+      de: hhmm(t.de) ?? null,
+      a: hhmm(t.a) ?? null,
+      lieux: t.lieux,
+      ...(t.annulee === true ? { annulee: true } : {}),
+    };
+  }
+  function hebdoRowOf(h: Row): Row {
+    return { id: h.id, restaurant_id: h.restaurant_id, jour: Number(h.jour), lieux: h.lieux, de: hhmm(h.de) ?? null, a: hhmm(h.a) ?? null, ordre: Number(h.ordre ?? 0) };
   }
 
   async function fresh(): Promise<Snapshot> {
@@ -281,6 +317,7 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
     const clientRows: Row[] = [];
     const ficheRows: Row[] = [];
     const tourneeRows: Row[] = [];
+    const hebdoRows: Row[] = [];
     for (const c of data.clients) {
       const sheet = data.infoSheets[c.id] ?? { horaires: [] };
       const part = botSheetPart(sheet, locked.get(c.id) ?? []);
@@ -291,11 +328,21 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
         de: t.de ?? null,
         a: t.a ?? null,
         lieux: t.lieux,
+        ...(t.annulee ? { annulee: true } : {}),
+      }));
+      const weekly = (sheet.tourneesHebdo ?? []).map((w, i) => ({
+        id: isUuid(w.id) ? w.id : newId(),
+        restaurant_id: c.id,
+        jour: w.jour,
+        lieux: w.lieux,
+        de: w.de ?? null,
+        a: w.a ?? null,
+        ordre: i,
       }));
       const hasSheet = Object.entries(part).some(([k, v]) => !(k === "horaires" && Array.isArray(v) && v.length === 0));
       // Une ligne existante est toujours gardée : sans elle, le bot serait recréé automatiquement.
       const hasBot =
-        Boolean(c.template) || Boolean(c.botDisabledAt) || Boolean(c.hasBotRecord) || c.triggerMode !== DEFAULT_TRIGGER || owned.has(c.id) || hasSheet || rounds.length > 0;
+        Boolean(c.template) || Boolean(c.botDisabledAt) || Boolean(c.hasBotRecord) || c.triggerMode !== DEFAULT_TRIGGER || owned.has(c.id) || hasSheet || rounds.length > 0 || weekly.length > 0;
       if (hasBot) {
         clientRows.push({
           restaurant_id: c.id,
@@ -306,6 +353,7 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
       }
       if (hasSheet) ficheRows.push({ restaurant_id: c.id, donnees: part });
       tourneeRows.push(...rounds);
+      hebdoRows.push(...weekly);
     }
     return {
       bot_modeles: index(data.templates.map(templateToRow)),
@@ -314,6 +362,7 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
       bot_flux: index(data.flows.map(flowToRow)),
       bot_fiches: index(ficheRows, "restaurant_id"),
       bot_tournees: index(tourneeRows),
+      bot_tournees_hebdo: index(hebdoRows),
       bot_appels_ia: index(data.aiCalls.map(aiCallToRow)),
       bot_demos: index(data.demos.map(demoToRow), "restaurant_id"),
     };
@@ -338,6 +387,7 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
     { table: "bot_flux", key: "id" },
     { table: "bot_fiches", key: "restaurant_id" },
     { table: "bot_tournees", key: "id" },
+    { table: "bot_tournees_hebdo", key: "id" },
     { table: "bot_appels_ia", key: "id" },
     { table: "bot_demos", key: "restaurant_id" },
   ];
@@ -354,6 +404,8 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
       // Sans la table bot_demos (migration C pas encore appliquée) : rien n'y est écrit. Les actions
       // sur les démos sont refusées plus haut (demos.available()), la création automatique n'en crée pas.
       if (!base.demosAvailable) after.bot_demos = before.bot_demos;
+      // Sans la table bot_tournees_hebdo (migration non appliquée) : le planning hebdomadaire n'est pas enregistré.
+      if (!base.hebdoAvailable) after.bot_tournees_hebdo = before.bot_tournees_hebdo;
 
       for (const { table, key } of ORDER) {
         const changed = [...after[table].values()].filter((row) => {
@@ -375,8 +427,12 @@ export function createSupabaseStore(db: Db, options: { newId?: () => string; now
           const ids = [...after.bot_tournees.values()].filter((t) => t.restaurant_id === clientId).map((t) => String(t.id));
           sheet.tournees = sheet.tournees.map((t, i) => ({ ...t, id: ids[i] ?? t.id }));
         }
+        if (sheet.tourneesHebdo) {
+          const ids = [...after.bot_tournees_hebdo.values()].filter((t) => t.restaurant_id === clientId).map((t) => String(t.id));
+          sheet.tourneesHebdo = sheet.tourneesHebdo.map((t, i) => ({ ...t, id: ids[i] ?? t.id }));
+        }
       }
-      snapshot = { data: next, rows: after, locked: base.locked, demosAvailable: base.demosAvailable };
+      snapshot = { data: next, rows: after, locked: base.locked, demosAvailable: base.demosAvailable, hebdoAvailable: base.hebdoAvailable };
       cachedAt = clock();
     },
 

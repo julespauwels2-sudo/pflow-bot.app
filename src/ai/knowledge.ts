@@ -6,6 +6,7 @@
 import {
   fixedDeliveryDays,
   formatFixedDelivery,
+  formatWeeklyRounds,
   formatPayment,
   formatRound,
   formatWeeklyHours,
@@ -78,6 +79,14 @@ export function buildKnowledgeBase({ nomResto, infoSheet: sheet, lienCommande }:
         section(
           "Livraison sur planning (tournées à venir)",
           [
+            ...(sheet.tourneesHebdo?.length
+              ? [
+                  "Planning de chaque semaine :",
+                  formatWeeklyRounds(sheet.tourneesHebdo),
+                  "",
+                  "Prochains passages (planning de la semaine, exceptions comprises : tournées annulées ou ajoutées) :",
+                ]
+              : []),
             rounds.length ? rounds.map(formatRound).join("\n") : NO_ROUND_TEXT,
             "Le resto livre uniquement à ces dates et à ces endroits. Ne propose jamais une autre date ou un autre lieu.",
             rounds.length ? ROUND_QUESTION_RULE : NO_ROUND_QUESTION_RULE,
