@@ -5,7 +5,7 @@
  */
 import type { OutgoingMessage } from "@/engine";
 import { allowedMediaUrl, fetchMedia, MediaError } from "../core/media";
-import type { MediaRef, SendOptions } from "../core/types";
+import type { MediaRef, SendOptions, TemplateMessage } from "../core/types";
 
 export interface GraphConfig {
   token: string;
@@ -30,6 +30,8 @@ export class GraphError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** Code d'erreur de Meta (error.code), ex. 132001 modèle inconnu, 131026 numéro sans WhatsApp. */
+    readonly code?: number,
   ) {
     super(message);
   }
@@ -79,6 +81,20 @@ export function toGraphPayload(to: string, message: OutgoingMessage): Record<str
   }
 }
 
+/** Corps de l'appel Graph pour un modèle approuvé : variables du corps, puis suffixe de l'URL du bouton (index 0). */
+export function toTemplatePayload(to: string, template: TemplateMessage): Record<string, unknown> {
+  const components: Record<string, unknown>[] = [];
+  if (template.variables.length) components.push({ type: "body", parameters: template.variables.map((text) => ({ type: "text", text })) });
+  if (template.urlSuffix) components.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: template.urlSuffix }] });
+  return {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to,
+    type: "template",
+    template: { name: template.name, language: { code: template.language }, ...(components.length ? { components } : {}) },
+  };
+}
+
 /** Texte d'une erreur de Meta : message, code, sous-code, détail et identifiant de trace (pour le support Meta). */
 export function graphErrorText(json: Record<string, unknown>): string {
   const error = (json.error ?? {}) as { message?: string; code?: number; error_subcode?: number; error_data?: { details?: string }; fbtrace_id?: string };
@@ -109,7 +125,8 @@ export function createGraphClient(config: GraphConfig) {
       });
       const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
       if (!response.ok) {
-        throw new GraphError(`Meta a refusé l'envoi (${response.status}) : ${graphErrorText(json)}`, response.status);
+        const code = (json.error as { code?: unknown } | undefined)?.code;
+        throw new GraphError(`Meta a refusé l'envoi (${response.status}) : ${graphErrorText(json)}`, response.status, typeof code === "number" ? code : undefined);
       }
       return json;
     } catch (error) {
@@ -125,6 +142,13 @@ export function createGraphClient(config: GraphConfig) {
     async send(accountId: string, to: string, message: OutgoingMessage, options: SendOptions = {}): Promise<string | undefined> {
       const payload = toGraphPayload(to, message);
       if (!payload) return undefined;
+      const json = await post(accountId, options.messagingAccountId ? { ...payload, messaging_account_id: options.messagingAccountId } : payload);
+      const first = (json.messages as { id?: string }[] | undefined)?.[0];
+      return first?.id;
+    },
+    /** Envoie un modèle approuvé (hors fenêtre de 24 h) et renvoie son identifiant WhatsApp (wamid). */
+    async sendTemplate(accountId: string, to: string, template: TemplateMessage, options: SendOptions = {}): Promise<string | undefined> {
+      const payload = toTemplatePayload(to, template);
       const json = await post(accountId, options.messagingAccountId ? { ...payload, messaging_account_id: options.messagingAccountId } : payload);
       const first = (json.messages as { id?: string }[] | undefined)?.[0];
       return first?.id;
