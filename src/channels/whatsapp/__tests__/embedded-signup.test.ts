@@ -154,7 +154,8 @@ describe("fin du parcours (coexistence)", () => {
     const { connexions, store, c } = await nouvelleConnexion();
     // Un ancien nom refusé (ignoré) et une version _v2 déjà là : seuls les 9 autres sont créés, jamais l'ancien nom.
     existingTemplates = ["pflow_livraison_confirmee", "pflow_livraison_confirmee_v2", "autre_modele"];
-    const done = await terminerConnexion({ meta: meta(), connexions, store, chiffrer: (t) => chiffrerJeton(t, KEY) }, c, input);
+    // Le resto a l'option livraison : les modèles sont créés.
+    const done = await terminerConnexion({ meta: meta(), connexions, store, chiffrer: (t) => chiffrerJeton(t, KEY), optionLivraison: async (rid) => (rid === "resto-1" ? "active" : "inactive") }, c, input);
 
     expect(done.etat).toBe("terminee");
     expect(done.erreur).toBeUndefined();
@@ -191,6 +192,18 @@ describe("fin du parcours (coexistence)", () => {
     expect(canal).toMatchObject({ restaurantId: "resto-1", accountId: "1234567890", wabaId: "9876543210", etat: "test", coexistence: true, role: "resto", testNumeros: ["590690938108"] });
     expect(done.canalId).toBe(canal.id);
     expect(done.etapes.find((e) => e.etape === "modeles_livraison")?.detail).toBe("10 créé(s), 1 déjà là");
+  });
+
+  it("resto SANS l'option livraison (ou option inconnue) : aucun modèle créé, étape notée réussie", async () => {
+    for (const optionLivraison of [async () => "inactive" as const, async () => "inconnue" as const, undefined]) {
+      calls.length = 0;
+      const { connexions, store, c } = await nouvelleConnexion();
+      const done = await terminerConnexion({ meta: meta(), connexions, store, chiffrer: (t) => chiffrerJeton(t, KEY), ...(optionLivraison ? { optionLivraison } : {}) }, c, input);
+      expect(done.etat).toBe("terminee");
+      expect(done.erreur).toBeUndefined();
+      expect(calls.some((x) => x.path.includes("message_templates"))).toBe(false);
+      expect(done.etapes.find((e) => e.etape === "modeles_livraison")).toMatchObject({ ok: true, detail: expect.stringContaining("pas créés") });
+    }
   });
 
   it("deuxième connexion du même numéro : canal existant laissé tel quel (aucun doublon)", async () => {
