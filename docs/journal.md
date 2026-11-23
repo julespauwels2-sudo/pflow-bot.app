@@ -1247,6 +1247,20 @@ PR n° 37 (non fusionnée), sans migration. Détails, audit et captures : `docs/
   en mode mots-clés, la conversation reste ouverte 30 min après chaque réponse du bot (réglable dans la fiche) ; pauses
   prioritaires ; un ami du gérant jamais servi par le bot reste ignoré. 560 tests.
 
+## 22 novembre 2026 — démo Mint Bun : présentation PFlow, puis accueil comme un vrai resto (PR)
+
+- Premier contact ET redémarrage (salutation seule en plein parcours, bouton « Recommencer la démo ») : la présentation
+  PFlow et son bouton [Tester la démo]. Avant, le redémarrage enchaînait présentation (sans bouton) et étape 1.
+- [Tester la démo] : l'accueil de Mint Bun sur la même trame que le modèle maître des restos (« 👋 Hello … ! Bienvenue
+  chez Mint Bun 🍔 Une petite faim ?… » [Je commande], puis « ✨ Besoin d'un petit coup de main ? » [⭐ Me conseiller]
+  [ℹ️ Infos pratiques]). Décision de Jules : la démo marche pour de vrai. « Me conseiller » : choix (Burgers, Matcha &
+  desserts, Surprenez-moi), puis 2 ou 3 vrais produits de la carte Mint Bun avec leur prix, [🛒 Commander],
+  [🔄 Autre chose]. « Infos pratiques » : horaires, livraison et retrait (adresse fictive signalée), paiement, puis
+  [😋 Je commande]. Carte copiée de celle du CRM (`src/demos/mint-bun.ts`), écrite à l'avance : aucun appel à l'IA.
+  Les questions libres restent sur l'IA de la démo PFlow.
+- Étapes 2/3 et 3/3, dashboard, « Je veux le mien », rappels : inchangés. Restos : inchangés (seul le bot PFlow de base
+  change). Captures du simulateur : `docs/etape-c/captures-demo-ordre/`. 560 tests.
+
 ## 22 novembre 2026 — mise à jour de sécurité de Next.js (PR)
 
 - Next.js 16.4.2 → **16.4.5** (et eslint-config-next), même série, sans saut majeur : première version corrigée des
