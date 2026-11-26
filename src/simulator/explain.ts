@@ -115,6 +115,7 @@ export function explainTurn(input: EngineInput, result: EngineResult): JournalLi
           fenetre_fermee: `Événement ignoré : fenêtre de 24 h fermée (${input.contact.lastInboundAt ? `dernier message du client : ${formatShort(new Date(input.contact.lastInboundAt), tz, input.now)}` : "le client n'a jamais écrit au bot"})`,
           aucun_flux_evenement: "Événement ignoré : aucun flux actif pour cet événement (option non activée ?)",
           retour_commande: "Retour depuis la page de commande (« Commande n° … passée ») : pas de réponse, la confirmation part par l'événement",
+          suivi_commande: "« Suivi de ma commande n° … » (commande passée sur la page) : pas de réponse du flux, la commande est reliée et la confirmation part par l'événement",
         };
         lines.push({ tone: "skip", text: reasons[e.reason] });
         break;

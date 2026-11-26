@@ -560,11 +560,15 @@ export type OrderAction = "suivi" | "annulable" | "annulation";
 
 /** Pont vers PFlow Order (suivi, annulation) : la réponse est le texte à envoyer au client. */
 export interface OrderBridgeRequest {
-  action: "suivi" | "annulation";
+  /** suivi_web : relier une commande de la page à ce numéro WhatsApp (puis PFlow Order envoie les événements). */
+  action: "suivi" | "annulation" | "suivi_web";
   /** Slug du resto dans PFlow Order. */
   slug: string;
   /** Numéro WhatsApp du client (identifiant du contact). */
   tel: string;
+  /** suivi_web : numéro de la commande et référence de la page (6 caractères). */
+  numero?: string;
+  ref?: string;
 }
 export interface OrderBridgeResult {
   ok: boolean;
@@ -578,6 +582,8 @@ export interface OrderBridgeResult {
   statut?: string;
   /** Suivi : numéro de la dernière commande. */
   numero?: string;
+  /** suivi_web : PFlow Order a déjà envoyé la confirmation par les événements (sinon « texte » est à envoyer). */
+  envoye?: boolean;
 }
 export type OrderBridge = (request: OrderBridgeRequest) => Promise<OrderBridgeResult>;
 
@@ -593,8 +599,10 @@ export type EngineEvent =
   | { type: "conseil_choisi"; titre: string }
   | {
       type: "ignored";
-      reason: "pause" | "aucun_declencheur" | "media_non_gere" | "echo" | "fenetre_fermee" | "aucun_flux_evenement" | "retour_commande";
+      reason: "pause" | "aucun_declencheur" | "media_non_gere" | "echo" | "fenetre_fermee" | "aucun_flux_evenement" | "retour_commande" | "suivi_commande";
     }
+  /** « Suivi de ma commande n° … » (commande passée sur la page sans le bot) : le canal la relie dans PFlow Order. */
+  | { type: "suivi_commande_web"; numero: string; ref?: string }
   | { type: "pause_expired"; reason?: PauseReason }
   /** Transfert levé par un mot-clé du client (bonjour, commande, menu…) : le bot reprend, le transfert est résolu. */
   | { type: "pause_lifted"; by: "mot_cle"; keyword: string }

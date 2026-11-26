@@ -13,17 +13,17 @@ export const DEFAULT_PFLOW_ORDER_URL = "https://order.pflow.fr";
 export function createOrderBridge(config: { baseUrl: string; cle: string; fetch?: typeof fetch; timeoutMs?: number }): OrderBridge {
   const doFetch = config.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
   const url = `${config.baseUrl.replace(/\/$/, "")}/api/pont`;
-  return async ({ action, slug, tel }) => {
+  return async ({ action, slug, tel, numero, ref }) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), config.timeoutMs ?? 8000);
     try {
       const response = await doFetch(url, {
         method: "POST",
         headers: { "content-type": "application/json", "x-pflow-cle": config.cle },
-        body: JSON.stringify({ action, slug, client_tel: tel }),
+        body: JSON.stringify({ action, slug, client_tel: tel, ...(numero ? { numero_commande: numero } : {}), ...(ref ? { ref } : {}) }),
         signal: controller.signal,
       });
-      const json = (await response.json().catch(() => null)) as { ok?: boolean; texte?: string; code?: string; trouve?: boolean; statut?: string; numero?: unknown } | null;
+      const json = (await response.json().catch(() => null)) as { ok?: boolean; texte?: string; code?: string; trouve?: boolean; statut?: string; numero?: unknown; envoye?: unknown } | null;
       if (!json || typeof json.texte !== "string") throw new Error(`réponse illisible (HTTP ${response.status})`);
       return {
         ok: response.ok && json.ok !== false,
@@ -33,6 +33,7 @@ export function createOrderBridge(config: { baseUrl: string; cle: string; fetch?
         ...(typeof json.trouve === "boolean" ? { trouve: json.trouve } : {}),
         ...(typeof json.statut === "string" ? { statut: json.statut } : {}),
         ...(json.numero !== undefined && json.numero !== null ? { numero: String(json.numero) } : {}),
+        ...(typeof json.envoye === "boolean" ? { envoye: json.envoye } : {}),
       };
     } finally {
       clearTimeout(timer);

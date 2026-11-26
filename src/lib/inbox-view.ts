@@ -80,6 +80,7 @@ export function noteLabel(note: string | undefined): string | null {
       pause_manuel: "Pas de réponse : tu as repris la main",
       media_non_gere: "Pas de réponse : type de message non géré",
       retour_commande: "Pas de réponse : retour de la page de commande",
+      suivi_commande: "Suivi d'une commande passée sur la page : la confirmation part par la commande",
       fenetre_fermee: "Pas de réponse : fenêtre de 24 h fermée",
     }[code] ?? `Pas de réponse (${code})`
   );
