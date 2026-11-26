@@ -21,7 +21,7 @@ import type { Canal, InboundEvent } from "../types";
 
 const T0 = new Date("2026-11-25T23:00:00Z"); // 19 h en Guadeloupe
 const CLIENT = "590690115668";
-const TEXTE = "Suivi de ma commande n° 12 (réf. a1b2c3)";
+const TEXTE = "Suivi de ma commande n° 12 (code commande : A1B2C3)";
 
 type Mode = "bridge_ok" | "bridge_texte" | "bridge_panne" | "sans_bridge";
 
@@ -149,6 +149,13 @@ describe("suivi d'une commande passée sur la page (bouton « Recevoir le suivi 
     const s = await setup({ triggerMode: "toujours", bridge: "bridge_texte" });
     await s.send("📦 SUIVI COMMANDE N°7");
     expect(s.calls.at(-1)).toEqual({ action: "suivi_web", slug: "mexico", tel: CLIENT, numero: "7" });
+    await s.send("Suivi de ma commande n° 50 (code commande : 7A158C)");
+    expect(s.calls.at(-1)).toEqual({ action: "suivi_web", slug: "mexico", tel: CLIENT, numero: "50", ref: "7a158c" });
+    // L'ancien texte (pages encore ouvertes avant la mise à jour) reste reconnu.
+    await s.send("Suivi de ma commande n° 52 (réf. 7a158c)");
+    expect(s.calls.at(-1)).toEqual({ action: "suivi_web", slug: "mexico", tel: CLIENT, numero: "52", ref: "7a158c" });
+    await s.send("suivi de ma commande n°51 code 7a158c");
+    expect(s.calls.at(-1)).toEqual({ action: "suivi_web", slug: "mexico", tel: CLIENT, numero: "51", ref: "7a158c" });
     const avant = s.calls.length;
     await s.send("je voudrais le suivi de ma commande n° 7 svp, elle arrive quand ?");
     expect(s.calls).toHaveLength(avant);
