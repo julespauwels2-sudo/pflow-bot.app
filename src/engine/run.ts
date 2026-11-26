@@ -64,6 +64,20 @@ export const DEMO_SANS_CARTE_HIDDEN_FUNCTIONS = ["lancer_commande", PROPOSE_ORDE
  * le bot ne relance ni l'accueil ni l'IA, la confirmation part déjà par l'événement de commande.
  */
 export const ORDER_RETURN_PATTERN = /^✅?\s*commande\s+n°?\s*\d+\s+pass[ée]e\s*[.!]?$/iu;
+/**
+ * Texte prérempli du bouton « Recevoir le suivi sur WhatsApp » de PFlow Order, pour un client qui a commandé sur la
+ * page SANS passer par le bot (« Suivi de ma commande n° 42 (réf. a1b2c3) »). Ce message ouvre la fenêtre de 24 h :
+ * le bot ne relance ni l'accueil ni l'IA (même en mode « toujours », même en pause) ; le canal demande à PFlow Order
+ * de relier la commande à ce numéro, puis la confirmation et le suivi partent par les événements de commande.
+ */
+export const ORDER_FOLLOW_PATTERN = /^\s*📦?\s*suivi\s+(?:de\s+)?(?:ma\s+)?commande\s+n°?\s*(\d{1,9})\s*(?:\(?\s*r[ée]f\.?\s*:?\s*([a-z0-9]{4,12})\s*\)?)?\s*[.!]?\s*$/iu;
+
+/** Numéro et référence d'un message « Suivi de ma commande n° … », ou null. */
+export function parseOrderFollow(text: string): { numero: string; ref?: string } | null {
+  const m = ORDER_FOLLOW_PATTERN.exec(text);
+  if (!m) return null;
+  return { numero: m[1], ...(m[2] ? { ref: m[2].toLowerCase() } : {}) };
+}
 
 export const TEXTS = {
   handoff: "Je transmets votre message à l'équipe, on vous répond très vite 🙏",
@@ -282,6 +296,15 @@ class EngineRun {
     }
 
     this.contact.lastInboundAt = now.toISOString();
+
+    // Suivi d'une commande passée sur la page sans le bot : aucune réponse du moteur (ni accueil, ni IA), même en
+    // pause. Le canal relie la commande (PFlow Order) et les messages de commande partent par les événements.
+    const follow = message.kind === "text" ? parseOrderFollow(message.text) : null;
+    if (follow) {
+      this.events.push({ type: "suivi_commande_web", ...follow });
+      this.events.push({ type: "ignored", reason: "suivi_commande" });
+      return;
+    }
 
     // 1. Contact en pause : on ne fait rien. Exception (bots des restos) : pendant un transfert, un mot-clé du client
     //    (bonjour, commande, menu…) rend la main au bot. Jamais si l'équipe a répondu (pause « l'équipe a répondu »)

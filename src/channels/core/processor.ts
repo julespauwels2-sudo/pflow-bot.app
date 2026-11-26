@@ -317,6 +317,12 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
     report.errors.push(`Conversation de ${event.waId} modifiée en parallèle : état gardé tel quel`);
   }
 
+  // « Suivi de ma commande n° … » (commande passée sur la page sans le bot) : la fenêtre de 24 h est ouverte et le
+  // contact enregistré. PFlow Order relie la commande à ce numéro et envoie la confirmation par les événements
+  // (/api/webhooks/pflow-order) ; s'il n'a rien envoyé (commande terminée, introuvable…), son texte part ici.
+  const follow = result.events.find((e): e is Extract<EngineResult["events"][number], { type: "suivi_commande_web" }> => e.type === "suivi_commande_web");
+  if (follow && canal.role !== "pflow") sent += await followWebOrder(deps, canal, contact.id, event.waId, bot.client.orderSlug, follow, report);
+
   // Alertes au gérant (Jules pour PFlow Démo) : notification push seulement (src/channels/core/alerts.ts). Le
   // transfert ouvert garde l'alerte visible dans la boîte de réception, même si le push n'est pas parti.
   const alertDeps = { store, config: deps.alerts, now };
@@ -361,6 +367,43 @@ async function processInbound(event: InboundEvent, deps: ProcessorDeps, report: 
 }
 
 /** Raison d'un message reçu laissé sans réponse (null si le bot a répondu). Codes lus par la boîte de réception. */
+/** Texte quand PFlow Order ne répond pas : le client sait que c'est noté, et qui appeler. */
+export const FOLLOW_FALLBACK_TEXT = (numero: string) =>
+  `C'est noté ✅ Je n'arrive pas à consulter la commande n° ${numero} pour l'instant 🙏 Si besoin, appelez directement le restaurant.`;
+
+async function followWebOrder(
+  deps: ProcessorDeps,
+  canal: Canal,
+  contactId: string,
+  waId: string,
+  slug: string | undefined,
+  follow: { numero: string; ref?: string },
+  report: ProcessReport,
+): Promise<number> {
+  let text: string | null = null;
+  if (!deps.orderBridge || !slug) text = FOLLOW_FALLBACK_TEXT(follow.numero);
+  else {
+    try {
+      const r = await deps.orderBridge({ action: "suivi_web", slug, tel: waId, numero: follow.numero, ...(follow.ref ? { ref: follow.ref } : {}) });
+      if (!r.envoye) text = r.texte?.trim() || FOLLOW_FALLBACK_TEXT(follow.numero);
+    } catch (error) {
+      report.errors.push(`Suivi de commande (PFlow Order) : ${message(error)}`);
+      text = FOLLOW_FALLBACK_TEXT(follow.numero);
+    }
+  }
+  if (!text) return 0;
+  const out = { kind: "text" as const, text };
+  try {
+    const wamid = await deps.graph.send(canal.accountId, waId, out, sendOptions(canal));
+    await deps.store.addMessage({ canalId: canal.id, contactId, sens: "sortant", auteur: "bot", wamid, type: "text", contenu: out, statut: "envoye" });
+    return 1;
+  } catch (error) {
+    await deps.store.addMessage({ canalId: canal.id, contactId, sens: "sortant", auteur: "bot", type: "text", contenu: out, statut: "echec", erreur: message(error) });
+    report.errors.push(`Envoi à ${waId} : ${message(error)}`);
+    return 0;
+  }
+}
+
 export function ignoredNote(result: EngineResult, pauseBefore: PauseReason | undefined): string | null {
   if (result.outgoing.some((m) => m.kind !== "typing")) return null;
   const ignored = result.events.find((e): e is Extract<EngineResult["events"][number], { type: "ignored" }> => e.type === "ignored");
