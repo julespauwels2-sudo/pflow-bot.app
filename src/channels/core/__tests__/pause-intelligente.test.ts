@@ -173,6 +173,17 @@ describe("pause intelligente après une réponse de l'équipe", () => {
     expect(s.aiRequests).toEqual([]);
   });
 
+  it("numéro « mots-clés uniquement » : un client que le bot ne connaît pas écrit « Commande » pendant la pause : le bot reprend à 10 min", async () => {
+    const s = await setup();
+    await s.equipe("Salut Teddy, merci pour ton soutien", T0);
+    await s.client("Commande", at(60));
+    expect(s.sent).toEqual([]);
+    expect((await s.cron(at(65))).reprises).toBe(0); // pas encore l'heure
+    const report = await s.cron(at(70));
+    expect(report).toMatchObject({ reprises: 1, erreurs: [] });
+    expect(texts(s.sent)[0]).toMatch(/Bienvenue chez Mexico/);
+  });
+
   it("transfert inchangé : la tâche ne reprend jamais un client en attente de l'équipe après un transfert", async () => {
     const s = await setup();
     await s.client("bonjour", T0);
