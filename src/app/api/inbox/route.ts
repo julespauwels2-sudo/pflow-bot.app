@@ -1,6 +1,6 @@
 /** Boîte de réception : les conversations de chaque numéro (resto). */
 import { NextResponse } from "next/server";
-import { canauxVisibles, idsCanauxPflow, inboxAccess } from "@/channels/core/api-helpers";
+import { canauxVisibles, idsCanauxVisibles, inboxAccess } from "@/channels/core/api-helpers";
 import { listInbox } from "@/channels/core/inbox";
 
 export const runtime = "nodejs";
@@ -14,9 +14,9 @@ export async function GET(request: Request) {
   const q = (new URL(request.url).searchParams.get("q") ?? "").slice(0, 100);
   let lectures = false;
   // Données des bots, numéros et conversations lus en même temps (plus de lectures à la file).
-  const [canaux, pflow] = await Promise.all([
+  const [canaux, permis] = await Promise.all([
     listInbox(runtime.store, runtime.workspace(), new Date(), { q, userId: access.userId, onLectures: (a) => (lectures = a) }),
-    idsCanauxPflow(runtime),
+    idsCanauxVisibles(access),
   ]);
-  return NextResponse.json({ available: true, mode: runtime.mode, role: access.role, lectures, canaux: canauxVisibles(access.role, canaux, pflow) });
+  return NextResponse.json({ available: true, mode: runtime.mode, role: access.role, lectures, canaux: canauxVisibles(access.role, canaux, permis) });
 }

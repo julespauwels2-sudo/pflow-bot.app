@@ -26,11 +26,15 @@ export async function checkBotAdmin(authorization: string | null): Promise<Calle
 }
 
 /**
- * Accès de la boîte de réception : un administrateur du bot (tout), ou un **examinateur** (examen de l'app par Meta,
- * table bot_examinateurs) qui ne voit et ne répond qu'aux conversations du numéro PFlow (démos). Un examinateur n'a
- * aucun autre droit : toutes les autres routes restent réservées aux administrateurs (checkBotAdmin).
+ * Accès de la boîte de réception : un administrateur du bot (tout), un **examinateur** (examen de l'app par Meta,
+ * table bot_examinateurs) qui ne voit et ne répond qu'aux conversations du numéro PFlow (démos), ou un **resto** (son
+ * compte du CRM, table acces_restos) qui ne voit et ne répond qu'aux conversations des numéros de SON resto. Ni l'un ni
+ * l'autre n'a d'autre droit : toutes les autres routes restent réservées aux administrateurs (checkBotAdmin).
  */
-export type AccesBoite = { ok: true; userId: string | null; role: "admin" | "examinateur" } | { ok: false; status: number; error: string };
+export type RoleBoite = "admin" | "examinateur" | "resto";
+export type AccesBoite =
+  | { ok: true; userId: string | null; role: RoleBoite; /** role « resto » : ses restos (acces_restos). */ restaurantIds?: string[] }
+  | { ok: false; status: number; error: string };
 
 export async function checkAccesBoite(authorization: string | null): Promise<AccesBoite> {
   const admin = await checkBotAdmin(authorization);
@@ -48,5 +52,9 @@ export async function checkAccesBoite(authorization: string | null): Promise<Acc
   if (!userData.user) return admin;
   // Avec son propre jeton, le compte ne voit que sa ligne de bot_examinateurs (RLS) ; table absente : refus.
   const { data: examinateur } = await sb.from("bot_examinateurs").select("user_id").eq("user_id", userData.user.id).maybeSingle();
-  return examinateur ? { ok: true, userId: userData.user.id, role: "examinateur" } : admin;
+  if (examinateur) return { ok: true, userId: userData.user.id, role: "examinateur" };
+  // Le compte d'un resto (CRM) : il ne voit que ses propres lignes d'acces_restos (RLS « chacun voit ses acces »).
+  const { data: restos } = await sb.from("acces_restos").select("restaurant_id").eq("user_id", userData.user.id);
+  const restaurantIds = [...new Set((restos ?? []).map((r: { restaurant_id: string }) => String(r.restaurant_id)))];
+  return restaurantIds.length ? { ok: true, userId: userData.user.id, role: "resto", restaurantIds } : admin;
 }

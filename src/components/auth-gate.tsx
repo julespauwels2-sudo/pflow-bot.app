@@ -7,12 +7,12 @@
 import type { Session } from "@supabase/supabase-js";
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { getSupabase, isBotAdmin, isBotExaminateur, isSupabaseConfigured } from "@/lib/supabase";
+import { getSupabase, isBotAdmin, isBotExaminateur, isRestoBoite, isSupabaseConfigured } from "@/lib/supabase";
 import { Button, Loading } from "./ui";
 
 export const LOGIN_PATH = "/connexion";
 
-export type Role = "admin" | "examinateur";
+export type Role = "admin" | "examinateur" | "resto";
 type AuthState =
   | { status: "loading" }
   | { status: "signed_out" }
@@ -20,7 +20,7 @@ type AuthState =
   | { status: "ok"; email: string; role: Role }
   | { status: "error"; message: string };
 
-/** Pages ouvertes à un examinateur (examen Meta) : la boîte de réception, limitée au numéro PFlow (démos). */
+/** Pages ouvertes à un examinateur (examen Meta) et au compte d'un resto : la boîte de réception, limitée au numéro PFlow (démos) ou aux numéros du resto. */
 export const PAGES_EXAMINATEUR = ["/inbox"];
 
 const AuthContext = createContext<{ email: string | null; role: Role; signOut: () => Promise<void> }>({ email: null, role: "admin", signOut: async () => {} });
@@ -51,9 +51,11 @@ function SupabaseGate({ children }: { children: ReactNode }) {
       try {
         const admin = await isBotAdmin(sb, session.user.id);
         const examinateur = !admin && (await isBotExaminateur(sb, session.user.id));
+        const resto = !admin && !examinateur && (await isRestoBoite(sb, session.user.id));
         if (cancelled) return;
         const email = session.user.email ?? "";
-        setState(admin ? { status: "ok", email, role: "admin" } : examinateur ? { status: "ok", email, role: "examinateur" } : { status: "not_admin", email });
+        const role: Role | null = admin ? "admin" : examinateur ? "examinateur" : resto ? "resto" : null;
+        setState(role ? { status: "ok", email, role } : { status: "not_admin", email });
       } catch (error) {
         if (!cancelled) setState({ status: "error", message: error instanceof Error ? error.message : String(error) });
       }
@@ -77,7 +79,7 @@ function SupabaseGate({ children }: { children: ReactNode }) {
 
   const pageExaminateur = PAGES_EXAMINATEUR.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   useEffect(() => {
-    if (state.status === "ok" && state.role === "examinateur" && !pageExaminateur && !onLogin && !publicPage) router.replace("/inbox");
+    if (state.status === "ok" && state.role !== "admin" && !pageExaminateur && !onLogin && !publicPage) router.replace("/inbox");
   }, [state, pageExaminateur, onLogin, publicPage, router]);
 
   if (onLogin || publicPage) return <>{children}</>;
@@ -100,7 +102,7 @@ function SupabaseGate({ children }: { children: ReactNode }) {
       </Blocked>
     );
   }
-  if (state.role === "examinateur" && !pageExaminateur) return <Loading />;
+  if (state.role !== "admin" && !pageExaminateur) return <Loading />;
   return <AuthContext.Provider value={{ email: state.email, role: state.role, signOut }}>{children}</AuthContext.Provider>;
 }
 
