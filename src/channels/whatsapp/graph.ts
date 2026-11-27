@@ -271,3 +271,32 @@ export async function setAppSubscription(config: GraphConfig, accountId: string,
     clearTimeout(timer);
   }
 }
+
+/**
+ * Enregistre un numéro DÉDIÉ sur l'API Cloud (POST /{numéro}/register), après son ajout et sa vérification (SMS ou
+ * appel) dans WhatsApp Manager. Le code PIN à 6 chiffres devient le code de la validation en deux étapes du numéro.
+ * Jamais pour un numéro en coexistence : il est déjà enregistré par l'appli WhatsApp Business.
+ */
+export async function registerPhoneNumber(config: GraphConfig, phoneNumberId: string, pin: string): Promise<{ ok: boolean; detail: string }> {
+  if (!/^\d{5,25}$/.test(phoneNumberId)) return { ok: false, detail: "Identifiant du numéro invalide (chiffres uniquement)." };
+  if (!/^\d{6}$/.test(pin)) return { ok: false, detail: "Le code PIN doit faire exactement 6 chiffres." };
+  const doFetch = config.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
+  const url = `${config.base.replace(/\/$/, "")}/${config.version}/${encodeURIComponent(phoneNumberId)}/register`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), config.timeoutMs ?? 20_000);
+  try {
+    const response = await doFetch(url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${config.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", pin }),
+      signal: controller.signal,
+    });
+    const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!response.ok || json.success === false) return { ok: false, detail: `Refus de Meta (${response.status}) : ${graphErrorText(json)}` };
+    return { ok: true, detail: "Numéro enregistré sur l'API. Garde le code PIN : c'est sa validation en deux étapes." };
+  } catch (error) {
+    return { ok: false, detail: `Meta injoignable : ${error instanceof Error ? error.message : String(error)}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
