@@ -7,7 +7,7 @@ import { MobileHeader } from "@/components/mobile";
 import { PushControls } from "@/components/pwa";
 import { ConnexionsWhatsAppCard, ModelesLivraisonCard } from "@/components/connexions-whatsapp-card";
 import { useAuth } from "@/components/auth-gate";
-import { Badge, Button, Card, Loading, Notice } from "@/components/ui";
+import { Badge, Button, Card, Field, Input, Loading, Notice } from "@/components/ui";
 import { errorText, useLoad } from "@/data/browser";
 import type { AiCallLog } from "@/data/types";
 import { accessToken } from "@/lib/supabase";
@@ -266,6 +266,7 @@ function ServerCards({ data }: { data: SystemStatus }) {
       {data.comptes.length > 0 && <CanauxCard comptes={data.comptes} />}
       {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && <WhatsAppAccessCard />}
       {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && <WhatsAppAccountsCard />}
+      {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && <EnregistrerNumeroCard />}
       {data.horsListe && data.horsListe.length > 0 && <HorsListeCard items={data.horsListe} />}
       {data.canaux.some((c) => c.plateforme === "whatsapp" && c.configure) && data.comptes.some((c) => c.plateforme === "whatsapp" && c.etat === "test") && <OrderEventTestCard canaux={data.comptes.filter((c) => c.plateforme === "whatsapp" && c.etat === "test" && c.role === "resto" && c.testNumeros > 0)} />}
 
@@ -381,6 +382,50 @@ const PUSH: Record<string, { label: string; tone: "success" | "warning" | "neutr
 
 /** Alertes au gérant (« un client attend une réponse ») : par où elles sont parties, et les échecs. */
 /** « Envoyer une alerte de test » : par l'appli PFlow et par le Web Push, et le résultat de chaque voie. */
+/** Numéro dédié ajouté à la main dans WhatsApp Manager (ex. le fixe d'un resto) : l'enregistrer sur l'API. */
+function EnregistrerNumeroCard() {
+  const [numeroId, setNumeroId] = useState("");
+  const [pin, setPin] = useState("");
+  const [etat, setEtat] = useState<{ status: "idle" } | { status: "loading" } | { status: "done"; ok: boolean; detail: string }>({ status: "idle" });
+  async function enregistrer() {
+    setEtat({ status: "loading" });
+    try {
+      const token = await accessToken();
+      const response = await fetch("/api/etat/enregistrer-numero", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ phoneNumberId: numeroId, pin }),
+      });
+      const body = (await response.json().catch(() => ({}))) as { ok?: boolean; detail?: string; error?: string };
+      setEtat({ status: "done", ok: Boolean(body.ok), detail: body.detail ?? body.error ?? `Erreur ${response.status}` });
+    } catch (error) {
+      setEtat({ status: "done", ok: false, detail: errorText(error) });
+    }
+  }
+  const pret = /^\d{5,25}$/.test(numeroId.replace(/\s/g, "")) && /^\d{6}$/.test(pin.replace(/\s/g, ""));
+  return (
+    <Card title="Enregistrer un numéro dédié (sans appli WhatsApp)" className="lg:col-span-2">
+      <p className="mb-3 text-sm text-muted">
+        Après l&apos;ajout et la vérification du numéro dans WhatsApp Manager (SMS ou appel). Jamais pour un numéro en
+        coexistence. L&apos;identifiant du numéro est dans WhatsApp Manager, sous le numéro. Choisis un code PIN à 6
+        chiffres et garde-le : c&apos;est la validation en deux étapes du numéro.
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <Field label="Identifiant du numéro" className="w-56">
+          <Input inputMode="numeric" value={numeroId} onChange={(e) => setNumeroId(e.target.value)} data-testid="enregistrer-id" />
+        </Field>
+        <Field label="Code PIN (6 chiffres)" className="w-40">
+          <Input inputMode="numeric" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value)} data-testid="enregistrer-pin" />
+        </Field>
+        <Button onClick={enregistrer} disabled={!pret || etat.status === "loading"}>
+          {etat.status === "loading" ? "Enregistrement…" : "Enregistrer le numéro"}
+        </Button>
+      </div>
+      {etat.status === "done" && <div className="mt-3"><Notice tone={etat.ok ? "success" : "error"}>{etat.detail}</Notice></div>}
+    </Card>
+  );
+}
+
 function AlerteTest() {
   const [etat, setEtat] = useState<{ status: "idle" } | { status: "loading" } | { status: "error"; error: string } | { status: "ready"; data: AlerteTestResult }>({ status: "idle" });
   async function envoyer() {
