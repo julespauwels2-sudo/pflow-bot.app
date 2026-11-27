@@ -38,6 +38,15 @@ export async function isBotExaminateur(sb: SupabaseClient, userId: string): Prom
   return !error && Boolean(data);
 }
 
+/**
+ * Compte d'un resto (CRM, table acces_restos ; il ne voit que ses propres lignes) : il n'ouvre que la boîte de
+ * réception, limitée aux numéros de son resto. Erreur de lecture : non.
+ */
+export async function isRestoBoite(sb: SupabaseClient, userId: string): Promise<boolean> {
+  const { data, error } = await sb.from("acces_restos").select("restaurant_id").eq("user_id", userId).limit(1);
+  return !error && Array.isArray(data) && data.length > 0;
+}
+
 /** Vrai si le compte connecté est dans bot_admins (il ne voit que sa propre ligne). */
 export async function isBotAdmin(sb: SupabaseClient, userId: string): Promise<boolean> {
   const { data, error } = await sb.from("bot_admins").select("user_id").eq("user_id", userId).maybeSingle();

@@ -1,7 +1,7 @@
 /** Une conversation : ses messages (GET) et les actions de la personne (POST). */
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { idsCanauxPflow, inboxAccess, type InboxAccess } from "@/channels/core/api-helpers";
+import { canauxPermis, idsCanauxVisibles, inboxAccess, type InboxAccess } from "@/channels/core/api-helpers";
 import { applyInboxAction, InboxError, InboxSendError, messageText } from "@/channels/core/inbox";
 
 export const runtime = "nodejs";
@@ -9,12 +9,12 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ contactId: string }> };
 
-/** Un examinateur n'ouvre que les conversations du numéro PFlow (démos) ; les autres : « introuvable ». */
+/** Un examinateur n'ouvre que les conversations du numéro PFlow (démos), un resto que celles de ses numéros ; les autres : « introuvable ». */
 async function contactVisible(access: Extract<InboxAccess, { ok: true }>, contactId: string) {
   const contact = await access.runtime.store.getContact(contactId);
   if (!contact) return null;
   if (access.role === "admin") return contact;
-  return (await idsCanauxPflow(access.runtime)).has(contact.canalId) ? contact : null;
+  return (await idsCanauxVisibles(access)).has(contact.canalId) ? contact : null;
 }
 
 export async function GET(request: Request, { params }: Params) {
@@ -46,7 +46,7 @@ export async function POST(request: Request, { params }: Params) {
   const { store } = access.runtime;
   // Contact et numéros lus en même temps (une seule attente), puis transmis à l'action (pas relus).
   const [contact, canaux] = await Promise.all([store.getContact(contactId), store.listCanaux()]);
-  const visible = contact && (access.role === "admin" || canaux.some((c) => c.id === contact.canalId && c.role === "pflow"));
+  const visible = contact && (access.role === "admin" || canauxPermis(canaux, access).has(contact.canalId));
   if (!contact || !visible) return NextResponse.json({ error: "Conversation introuvable" }, { status: 404 });
   const parsed = actionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Action invalide" }, { status: 400 });
