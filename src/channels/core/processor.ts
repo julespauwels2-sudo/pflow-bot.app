@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import { conversationOuverteMinutes, repriseMinutes, runEngine, type AiPort, type OrderBridge, type AiRequest, type AiResult, type EngineResult, type PauseReason, type RecentTurn } from "@/engine";
 import { createContactToken } from "@/channels/pflow-order/contact-token";
 import type { LoadedBot } from "./bot-loader";
+import { matchKeyword } from "@/engine/match";
 import { parseWebhook } from "../whatsapp/parse";
 import type { Canal, ChannelSender, ChannelStore, InboundEvent, StatusEvent, StoredMessage } from "./types";
 import { sendOptions } from "./send-options";
@@ -563,13 +564,19 @@ export async function processReprises(
       }
       // Numéro « mots-clés uniquement » (aussi utilisé par le gérant pour ses conversations perso) : reprise seulement
       // pour un client à qui le bot a déjà parlé. Un ami qui répond au gérant n'aura jamais de réponse du bot.
-      if (canal.triggerMode === "mots_cles_uniquement" && !messages.some((m) => m.sens === "sortant" && m.auteur === "bot")) {
-        report.ignorees += 1;
-        continue;
-      }
+      // Exception : le client a écrit un mot-clé pendant la pause (« Commande », « Menu »…) : c'est une demande pour
+      // le bot, il reprend comme pour un client connu.
       let i = messages.length;
       while (i > 0 && messages[i - 1]!.sens === "entrant") i -= 1;
       const attente = messages.slice(i).map(messageText).filter(Boolean);
+      if (canal.triggerMode === "mots_cles_uniquement" && !messages.some((m) => m.sens === "sortant" && m.auteur === "bot")) {
+        const deps = depsFor(canal.plateforme);
+        const bot = deps && canal.restaurantId ? await deps.loadBot(canal.restaurantId) : null;
+        if (!bot || !attente.some((texte) => matchKeyword(bot.flows, texte))) {
+          report.ignorees += 1;
+          continue;
+        }
+      }
       const depuis = now.getTime() - REPRISE_HISTORIQUE_HEURES * 3_600_000;
       const conversation: RecentTurn[] = messages
         .filter((m) => Date.parse(m.at) >= depuis && m.statut !== "echec")
